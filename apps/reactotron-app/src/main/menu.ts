@@ -1,25 +1,32 @@
 import { Menu, app, shell } from "electron"
 import Store from "electron-store"
 
-const configStore = new Store()
-
 const isDarwin = process.platform === "darwin"
+let configStore: Store | null = null
+
+function getConfigStore() {
+  if (!configStore) {
+    configStore = new Store()
+  }
+  return configStore
+}
 
 function buildFileMenu() {
+  const appName = app.getName()
   const fileMenu = {
-    label: isDarwin ? "Reactotron" : "&File",
+    label: isDarwin ? appName : "&File",
     submenu: [],
   }
 
   if (isDarwin) {
     fileMenu.submenu.push(
       {
-        label: "About Reactotron",
+        label: `About ${appName}`,
         selector: "orderFrontStandardAboutPanel:",
       } as any,
       { type: "separator" },
       {
-        label: "Hide Reactotron",
+        label: `Hide ${appName}`,
         accelerator: "Command+H",
         selector: "hide:",
       },
@@ -37,7 +44,7 @@ function buildFileMenu() {
     {
       label: "Preferences",
       click: () => {
-        configStore.openInEditor()
+        getConfigStore().openInEditor()
       },
     },
     { type: "separator" },

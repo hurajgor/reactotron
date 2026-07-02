@@ -8,6 +8,7 @@ import { IoReloadOutline as ReloadAppIcon } from "react-icons/io5"
 import { EmptyState, Tooltip } from "reactotron-core-ui"
 import { FaAndroid } from "react-icons/fa"
 import { ItemContainer, ItemIconContainer } from "../SharedStyles"
+import { getConfiguredServerPort } from "../../../config"
 
 const Container = styled.div`
   margin: 50px 0px;
@@ -103,7 +104,7 @@ const PortSettingsIconContainer = styled.div`
 function AndroidDeviceHelp() {
   const [androidDevices, setAndroidDevices] = React.useState([])
   const [portsVisible, setPortsVisible] = React.useState(false)
-  const [reactotronPort, setReactotronPort] = React.useState("9090")
+  const [reactotronPort, setReactotronPort] = React.useState(String(getConfiguredServerPort()))
   const [metroPort, setMetroPort] = React.useState("8081")
 
   // When the page loads, get the list of devices from ADB to help users debug android issues.

@@ -4,7 +4,7 @@ import { createMcpServer, type ReactotronMcpServer, type McpRedactionServerConfi
 import type { McpRedactionConfig } from "reactotron-core-contract"
 
 import ReactotronBrain from "../../ReactotronBrain"
-import config from "../../config"
+import config, { getConfiguredMcpPort, getConfiguredServerPort } from "../../config"
 
 import useStandalone, { Connection, ServerStatus } from "./useStandalone"
 
@@ -75,7 +75,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   } = useStandalone()
 
   useEffect(() => {
-    reactotronServer.current = createServer({ port: config.get("serverPort") as number })
+    reactotronServer.current = createServer({ port: getConfiguredServerPort() })
 
     reactotronServer.current.on("start", serverStarted)
     reactotronServer.current.on("stop", serverStopped)
@@ -165,7 +165,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setMcpStatus("stopped")
       setMcpPort(null)
     } else {
-      const port = config.get("mcpPort") as number
+      const port = getConfiguredMcpPort()
       const mcp = createMcpServer(reactotronServer.current, mcpRedactionConfig)
       mcp.start(port).then(() => {
         mcpServerRef.current = mcp

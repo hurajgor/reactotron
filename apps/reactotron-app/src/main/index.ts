@@ -1,7 +1,8 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, ipcMain } from "electron"
 import path from "path"
 import { format as formatUrl } from "url"
 import log from "electron-log"
+import Store from "electron-store"
 import { autoUpdater } from "electron-updater"
 import windowStateKeeper from "electron-window-state"
 
@@ -9,6 +10,26 @@ import createMenu from "./menu"
 import { setupAndroidDeviceIPCCommands } from "./utils"
 
 const isDevelopment = process.env.NODE_ENV !== "production"
+const isDevApp = process.env.REACTOTRON_DEV_APP === "1"
+const appName = isDevApp ? "Reactotron Dev" : "Reactotron"
+
+Store.initRenderer()
+
+if (isDevApp) {
+  app.setName(appName)
+  app.setPath("userData", path.join(app.getPath("appData"), appName))
+}
+
+ipcMain.on("get-runtime-config", (event) => {
+  const defaultServerPort = Number(process.env.REACTOTRON_SERVER_PORT ?? (isDevApp ? 9091 : 9090))
+  const defaultMcpPort = Number(process.env.REACTOTRON_MCP_PORT ?? (isDevApp ? 4568 : 4567))
+
+  event.returnValue = {
+    isDevApp,
+    defaultServerPort,
+    defaultMcpPort,
+  }
+})
 
 class AppUpdater {
   constructor() {
@@ -22,13 +43,13 @@ let mainWindow: BrowserWindow | null
 
 function createMainWindow() {
   const mainWindowState = windowStateKeeper({
-    file: "reactotron-window-state.json",
+    file: isDevApp ? "reactotron-dev-window-state.json" : "reactotron-window-state.json",
     defaultWidth: 650,
     defaultHeight: 800,
   })
 
   const window = new BrowserWindow({
-    title: "Reactotron",
+    title: appName,
     x: mainWindowState.x,
     y: mainWindowState.y,
     width: mainWindowState.width,

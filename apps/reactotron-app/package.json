@@ -21,6 +21,8 @@
   "scripts": {
     "compile": "tsc",
     "start": "electron-webpack dev",
+    "start:dev": "env -u ELECTRON_RUN_AS_NODE REACTOTRON_DEV_APP=1 REACTOTRON_SERVER_PORT=${REACTOTRON_SERVER_PORT:-9091} REACTOTRON_MCP_PORT=${REACTOTRON_MCP_PORT:-4568} electron-webpack dev",
+    "start:dev:9090": "REACTOTRON_SERVER_PORT=9090 yarn start:dev",
     "clean": "rimraf ./dist",
     "build": "electron-webpack",
     "build:release": "node scripts/build.release.js",

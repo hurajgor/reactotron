@@ -77,6 +77,8 @@
     "copy-prettier-ignore": "zx scripts/copy-prettier-ignore.mjs",
     "remove-local-tags": "git tag -l | xargs git tag -d && git fetch -t",
     "build-and-test:local": "yarn build && yarn package:validate && yarn lint && yarn format:check && yarn test && yarn typecheck",
+    "start:dev-app": "yarn workspace reactotron-app start:dev",
+    "start:dev-app:9090": "REACTOTRON_SERVER_PORT=9090 yarn start:dev-app",
     "package:validate": "zx scripts/package.validate.mjs"
   },
   "packageManager": "yarn@4.14.1"

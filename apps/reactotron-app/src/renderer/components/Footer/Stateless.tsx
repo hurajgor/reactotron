@@ -2,7 +2,7 @@ import React from "react"
 import styled from "styled-components"
 import { MdSwapVert as ExpandIcon, MdSettings as SettingsIcon, MdShield as ShieldIcon } from "react-icons/md"
 
-import config from "../../config"
+import { getConfiguredServerPort } from "../../config"
 import {
   getPlatformName,
   getPlatformDetails,
@@ -139,10 +139,10 @@ function renderCollapsed(
   return (
     <>
       <ConnectionInfo>
-        port {config.get("serverPort")} | {connections.length} connections
+        port {getConfiguredServerPort()} | {connections.length} connections
       </ConnectionInfo>
       {serverStatus === "portUnavailable" && (
-        <ConnectionInfo>Port 9090 unavailable.</ConnectionInfo>
+        <ConnectionInfo>Port {getConfiguredServerPort()} unavailable.</ConnectionInfo>
       )}
       {serverStatus === "started" && (
         <ConnectionInfo>{renderConnectionInfo(selectedConnection)}</ConnectionInfo>
