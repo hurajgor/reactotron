@@ -7,6 +7,7 @@ import {
   MdWarning,
   MdOutlineMobileFriendly,
   MdMobiledataOff,
+  MdNetworkCheck,
 } from "react-icons/md"
 import { FaMagic } from "react-icons/fa"
 import styled from "styled-components"
@@ -14,6 +15,7 @@ import styled from "styled-components"
 import SideBarButton from "../SideBarButton"
 import { reactotronLogo } from "../../images"
 import { ServerStatus } from "../../contexts/Standalone/useStandalone"
+import { getConfiguredServerPort } from "../../config"
 
 interface SideBarContainerProps {
   $isOpen: boolean
@@ -44,7 +46,7 @@ function SideBar({ isOpen, serverStatus }: { isOpen: boolean; serverStatus: Serv
   if (serverStatus === "portUnavailable") {
     serverIcon = MdWarning
     iconColor = "yellow"
-    serverText = "Port 9090 unavailable"
+    serverText = `Port ${getConfiguredServerPort()} unavailable`
   }
 
   const retryConnection = () => {
@@ -58,6 +60,7 @@ function SideBar({ isOpen, serverStatus }: { isOpen: boolean; serverStatus: Serv
     <SideBarContainer $isOpen={isOpen}>
       <SideBarButton image={reactotronLogo} path="/" text="Home" hideTopBar />
       <SideBarButton icon={MdReorder} path="/timeline" text="Timeline" />
+      <SideBarButton icon={MdNetworkCheck} path="/network" text="Network" />
       <SideBarButton
         icon={MdAssignment}
         path="/state/subscriptions"
