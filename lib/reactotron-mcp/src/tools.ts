@@ -417,6 +417,55 @@ export function registerTools(
     return textResult(response)
   })
 
+  mcp.registerTool("agent_ui_scroll", {
+    description: "Scroll a registered ScrollView, FlatList, or SectionList testID through Reactotron agent runtime. Shortcut for agent_ui_action with action='scroll'.",
+    inputSchema: {
+      testID: z.string().describe("Target React Native ScrollView, FlatList, or SectionList testID."),
+      y: z.number().optional().describe("Y position for ScrollView, or fallback offset for virtualized lists."),
+      offset: z.number().optional().describe("FlatList offset. Overrides y for FlatList-style refs."),
+      x: z.number().optional().describe("X position for ScrollView. Default 0."),
+      sectionIndex: z.number().optional().describe("SectionList section index. Default 0."),
+      itemIndex: z.number().optional().describe("SectionList item index. Default 0."),
+      viewOffset: z.number().optional().describe("SectionList view offset."),
+      viewPosition: z.number().optional().describe("SectionList view position."),
+      animated: z.boolean().optional().describe("Whether to animate scrolling. Default true."),
+      clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
+      timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
+    },
+  }, async (args) => {
+    const { clientId, error } = resolveClientId(server, args.clientId)
+    if (error) return textResult({ status: "error", message: error })
+
+    const requestId = createRequestId("agent-ui-scroll")
+    server.send("agent.ui.action.request", {
+      requestId,
+      testID: args.testID,
+      action: "scroll",
+      args: {
+        y: args.y,
+        offset: args.offset,
+        x: args.x,
+        sectionIndex: args.sectionIndex,
+        itemIndex: args.itemIndex,
+        viewOffset: args.viewOffset,
+        viewPosition: args.viewPosition,
+        animated: args.animated,
+      },
+    }, clientId)
+
+    const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
+    if (!response) {
+      return textResult({
+        status: "no_response",
+        action: "scroll",
+        testID: args.testID,
+        message: "The app did not answer scroll. Ensure the testID is mounted on a scrollable component with a captured ref.",
+      })
+    }
+
+    return textResult(response)
+  })
+
   mcp.registerTool("show_overlay", {
     description: [
       "Show an image overlay on top of the running app.",

@@ -21,6 +21,10 @@ function flush() {
 }
 
 describe("agentRuntime", () => {
+  beforeEach(() => {
+    ;(globalThis as any).__REACTOTRON_AGENT_RUNTIME_CAPTURE__?.elements?.clear()
+  })
+
   test("automatically snapshots elements with testIDs", async () => {
     const { plugin, sent } = createPlugin()
 
@@ -69,6 +73,30 @@ describe("agentRuntime", () => {
     expect(sent[0].payload.action).toBe("press")
   })
 
+  test("prefers an actionable press candidate when a native child duplicates testID", async () => {
+    const { plugin, sent } = createPlugin()
+    const onPress = jest.fn(() => ({ pressed: true }))
+
+    React.createElement("RNGHPressable", {
+      testID: "abc.backButton",
+      onPress,
+    })
+    React.createElement("RNGestureHandlerButton", {
+      testID: "abc.backButton",
+      accessibilityRole: "button",
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: { requestId: "press-duplicate-1", testID: "abc.backButton", action: "press" },
+    } as any)
+    await flush()
+
+    expect(onPress).toHaveBeenCalledTimes(1)
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.action).toBe("press")
+  })
+
   test("infers fill from captured onChangeText props", async () => {
     const { plugin, sent } = createPlugin()
     const onChangeText = jest.fn()
@@ -92,5 +120,138 @@ describe("agentRuntime", () => {
     expect(onChangeText).toHaveBeenCalledWith("qa@example.com")
     expect(sent[0].payload.status).toBe("success")
     expect(sent[0].payload.action).toBe("fill")
+  })
+
+  test("prefers an actionable fill candidate when a native child duplicates testID", async () => {
+    const { plugin, sent } = createPlugin()
+    const onChangeText = jest.fn()
+
+    React.createElement("TextInputWrapper", {
+      testID: "agent-search-input",
+      onChangeText,
+    })
+    React.createElement("RCTTextInput", {
+      testID: "agent-search-input",
+      value: "",
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "fill-duplicate-1",
+        testID: "agent-search-input",
+        action: "fill",
+        value: "toyota",
+      },
+    } as any)
+    await flush()
+
+    expect(onChangeText).toHaveBeenCalledWith("toyota")
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.action).toBe("fill")
+  })
+
+  test("infers scroll on a captured ScrollView ref", async () => {
+    const { plugin, sent } = createPlugin()
+    const scrollTo = jest.fn()
+
+    const element = React.createElement("ScrollView", {
+      testID: "results-scroll",
+      ref: jest.fn(),
+    } as any)
+    ;(element as any).ref({ scrollTo })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "scroll-1",
+        testID: "results-scroll",
+        action: "scroll",
+        args: { y: 240, animated: false },
+      },
+    } as any)
+    await flush()
+
+    expect(scrollTo).toHaveBeenCalledWith({ x: 0, y: 240, animated: false })
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.action).toBe("scroll")
+  })
+
+  test("infers scroll on a captured FlatList ref", async () => {
+    const { plugin, sent } = createPlugin()
+    const scrollToOffset = jest.fn()
+
+    const element = React.createElement("FlatList", {
+      testID: "results-list",
+      ref: jest.fn(),
+    } as any)
+    ;(element as any).ref({ scrollToOffset })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "scroll-2",
+        testID: "results-list",
+        action: "scroll",
+        args: { offset: 480 },
+      },
+    } as any)
+    await flush()
+
+    expect(scrollToOffset).toHaveBeenCalledWith({ offset: 480, animated: true })
+    expect(sent[0].payload.status).toBe("success")
+  })
+
+  test("infers scroll on a captured SectionList ref", async () => {
+    const { plugin, sent } = createPlugin()
+    const scrollToLocation = jest.fn()
+
+    const element = React.createElement("SectionList", {
+      testID: "section-list",
+      ref: jest.fn(),
+    } as any)
+    ;(element as any).ref({ scrollToLocation })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "scroll-3",
+        testID: "section-list",
+        action: "scroll",
+        args: { sectionIndex: 2, itemIndex: 4, viewOffset: 16, viewPosition: 0.5 },
+      },
+    } as any)
+    await flush()
+
+    expect(scrollToLocation).toHaveBeenCalledWith({
+      sectionIndex: 2,
+      itemIndex: 4,
+      viewOffset: 16,
+      viewPosition: 0.5,
+      animated: true,
+    })
+    expect(sent[0].payload.status).toBe("success")
+  })
+
+  test("returns a clear error when scroll ref is unavailable", async () => {
+    const { plugin, sent } = createPlugin()
+
+    React.createElement("ScrollView", {
+      testID: "missing-scroll-ref",
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "scroll-4",
+        testID: "missing-scroll-ref",
+        action: "scroll",
+        args: { y: 100 },
+      },
+    } as any)
+    await flush()
+
+    expect(sent[0].payload.status).toBe("error")
+    expect(sent[0].payload.message).toContain("scroll ref not available")
   })
 })

@@ -284,6 +284,7 @@ describe("tools", () => {
     expect(names).toContain("agent_ui_action")
     expect(names).toContain("agent_ui_press")
     expect(names).toContain("agent_ui_fill")
+    expect(names).toContain("agent_ui_scroll")
     expect(names).toContain("show_overlay")
     expect(names).toContain("clear_timeline")
     expect(names).toContain("subscribe_state")
@@ -469,6 +470,49 @@ describe("tools", () => {
       expect(data.status).toBe("success")
       expect(data.action).toBe("fill")
       expect(data.result.value).toBe("qa@example.com")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_scroll sends scroll args to app handler", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              testID: parsed.payload.testID,
+              result: parsed.payload.args,
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 25,
+        params: {
+          name: "agent_ui_scroll",
+          arguments: { testID: "results-list", offset: 320, animated: false },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("scroll")
+      expect(data.result.offset).toBe(320)
+      expect(data.result.animated).toBe(false)
+      expect(received[0].payload.action).toBe("scroll")
+      expect(received[0].payload.args.offset).toBe(320)
     } finally {
       app.close()
     }

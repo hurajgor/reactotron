@@ -42,12 +42,13 @@ const AUTO_CAPTURE_KEY = "__REACTOTRON_AGENT_RUNTIME_CAPTURE__"
 type CapturedElement = {
   node: AgentUiNode
   props: Record<string, any>
+  ref?: any
   seenAt: number
 }
 
 type AgentRuntimeGlobalState = {
   installed: boolean
-  elements: Map<string, CapturedElement>
+  elements: Map<string, CapturedElement[]>
 }
 
 function getGlobalState(): AgentRuntimeGlobalState {
@@ -55,9 +56,16 @@ function getGlobalState(): AgentRuntimeGlobalState {
   if (!target[AUTO_CAPTURE_KEY]) {
     target[AUTO_CAPTURE_KEY] = {
       installed: false,
-      elements: new Map<string, CapturedElement>(),
+      elements: new Map<string, CapturedElement[]>(),
     } satisfies AgentRuntimeGlobalState
   }
+
+  const state = target[AUTO_CAPTURE_KEY] as AgentRuntimeGlobalState
+  ;(state.elements as Map<string, CapturedElement[] | CapturedElement>).forEach((value, testID) => {
+    if (!Array.isArray(value)) {
+      state.elements.set(testID, [value])
+    }
+  })
 
   return target[AUTO_CAPTURE_KEY]
 }
@@ -94,6 +102,75 @@ function visibleFromProps(props: Record<string, any>) {
   return !(props.accessibilityElementsHidden || props.importantForAccessibility === "no-hide-descendants")
 }
 
+function hasPressHandler(props: Record<string, any>) {
+  return typeof props.onPress === "function" || typeof props.onClick === "function"
+}
+
+function hasFillHandler(props: Record<string, any>) {
+  return typeof props.onChangeText === "function" || typeof props.onChange === "function"
+}
+
+function hasScrollRef(candidate: CapturedElement) {
+  return Boolean(
+    candidate.ref &&
+      (typeof candidate.ref.scrollTo === "function" ||
+        typeof candidate.ref.scrollToOffset === "function" ||
+        typeof candidate.ref.scrollToLocation === "function")
+  )
+}
+
+function scoreCandidate(candidate: CapturedElement, action?: string) {
+  if (action === "press") return hasPressHandler(candidate.props) ? 100 : 0
+  if (action === "fill") return hasFillHandler(candidate.props) ? 100 : 0
+  if (action === "scroll") return hasScrollRef(candidate) ? 100 : 0
+
+  let score = 0
+  if (hasPressHandler(candidate.props)) score += 10
+  if (hasFillHandler(candidate.props)) score += 10
+  if (hasScrollRef(candidate)) score += 10
+  if (candidate.node.role) score += 1
+  if (candidate.node.type) score += 1
+  return score
+}
+
+function bestCandidate(candidates: CapturedElement[] = [], action?: string) {
+  return candidates
+    .slice()
+    .sort((a, b) => scoreCandidate(b, action) - scoreCandidate(a, action) || b.seenAt - a.seenAt)[0]
+}
+
+function bestCandidateNode(candidates: CapturedElement[]) {
+  return bestCandidate(candidates)?.node
+}
+
+function addCapturedElement(
+  elements: Map<string, CapturedElement[]>,
+  candidate: CapturedElement
+) {
+  const candidates = elements.get(candidate.node.testID) ?? []
+  const existingIndex = candidates.findIndex((entry) => entry.props === candidate.props)
+
+  if (existingIndex >= 0) {
+    candidates[existingIndex] = candidate
+  } else {
+    candidates.push(candidate)
+  }
+
+  candidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a) || b.seenAt - a.seenAt)
+  elements.set(candidate.node.testID, candidates.slice(0, 20))
+}
+
+function assignOriginalRef(ref: any, value: any) {
+  if (typeof ref === "function") {
+    ref(value)
+    return
+  }
+
+  if (ref && typeof ref === "object") {
+    ref.current = value
+  }
+}
+
 function nodeFromProps(type: unknown, props: Record<string, any>): AgentUiNode | null {
   const testID = props.testID
   if (typeof testID !== "string" || testID.length === 0) return null
@@ -110,16 +187,43 @@ function nodeFromProps(type: unknown, props: Record<string, any>): AgentUiNode |
   }
 }
 
-function captureElement(type: unknown, props: Record<string, any> | null | undefined) {
-  if (!props) return
+function captureElement(
+  type: unknown,
+  props: Record<string, any> | null | undefined
+): CapturedElement | undefined {
+  if (!props) return undefined
   const node = nodeFromProps(type, props)
-  if (!node) return
+  if (!node) return undefined
 
-  getGlobalState().elements.set(node.testID, {
+  const candidate: CapturedElement = {
     node,
     props,
     seenAt: Date.now(),
-  })
+  }
+  addCapturedElement(getGlobalState().elements, candidate)
+  return candidate
+}
+
+function captureElementProps(
+  type: unknown,
+  props: Record<string, any> | null | undefined,
+  children: unknown[]
+) {
+  if (!props) return props
+
+  const captureProps = children.length > 0 ? { ...props, children } : props
+  const candidate = captureElement(type, captureProps)
+  const originalRef = props.ref
+
+  if (!candidate || originalRef == null) return props
+
+  return {
+    ...props,
+    ref: (value: any) => {
+      candidate.ref = value
+      assignOriginalRef(originalRef, value)
+    },
+  }
 }
 
 function installCreateElementCapture() {
@@ -139,8 +243,8 @@ function installCreateElementCapture() {
       props: Record<string, any>,
       ...children: unknown[]
     ) {
-      captureElement(type, children.length > 0 ? { ...props, children } : props)
-      return originalCreateElement.apply(this, [type, props, ...children])
+      const nextProps = captureElementProps(type, props, children)
+      return originalCreateElement.apply(this, [type, nextProps, ...children])
     }
 
     state.installed = true
@@ -149,9 +253,9 @@ function installCreateElementCapture() {
   }
 }
 
-function collectFiberNodes(): { nodes: AgentUiNode[]; elements: Map<string, CapturedElement> } {
+function collectFiberNodes(): { nodes: AgentUiNode[]; elements: Map<string, CapturedElement[]> } {
   const hook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__
-  const elements = new Map<string, CapturedElement>()
+  const elements = new Map<string, CapturedElement[]>()
 
   if (!hook?.renderers || typeof hook.getFiberRoots !== "function") {
     return { nodes: [], elements }
@@ -163,9 +267,10 @@ function collectFiberNodes(): { nodes: AgentUiNode[]; elements: Map<string, Capt
     const props = fiber.memoizedProps ?? fiber.pendingProps
     const node = props ? nodeFromProps(fiber.elementType ?? fiber.type, props) : null
     if (node) {
-      elements.set(node.testID, {
+      addCapturedElement(elements, {
         node,
         props,
+        ref: fiber.stateNode,
         seenAt: Date.now(),
       })
     }
@@ -181,14 +286,25 @@ function collectFiberNodes(): { nodes: AgentUiNode[]; elements: Map<string, Capt
     }
   }
 
-  return { nodes: Array.from(elements.values()).map((entry) => entry.node), elements }
+  return {
+    nodes: Array.from(elements.values())
+      .map(bestCandidateNode)
+      .filter((node): node is AgentUiNode => Boolean(node)),
+    elements,
+  }
 }
 
 async function runInferredAction(
-  elements: Map<string, CapturedElement>,
+  elements: Map<string, CapturedElement[]>,
   request: AgentUiActionRequestPayload
 ) {
-  const element = elements.get(request.testID) ?? getGlobalState().elements.get(request.testID)
+  const element = bestCandidate(
+    [
+      ...(elements.get(request.testID) ?? []),
+      ...(getGlobalState().elements.get(request.testID) ?? []),
+    ],
+    request.action
+  )
   const props = element?.props
 
   if (!props) {
@@ -223,6 +339,38 @@ async function runInferredAction(
     }
 
     throw new Error(`Element "${request.testID}" does not expose onChangeText or onChange.`)
+  }
+
+  if (request.action === "scroll") {
+    const ref = element?.ref
+    if (!ref) {
+      throw new Error(`Element "${request.testID}" scroll ref not available.`)
+    }
+
+    const args = request.args ?? {}
+    const animated = args.animated !== false
+    const y = Number(args.y ?? request.value ?? 0)
+    const offset = Number(args.offset ?? args.y ?? request.value ?? 0)
+
+    if (typeof ref.scrollTo === "function") {
+      return ref.scrollTo({ x: Number(args.x ?? 0), y, animated })
+    }
+
+    if (typeof ref.scrollToOffset === "function") {
+      return ref.scrollToOffset({ offset, animated })
+    }
+
+    if (typeof ref.scrollToLocation === "function") {
+      return ref.scrollToLocation({
+        sectionIndex: Number(args.sectionIndex ?? 0),
+        itemIndex: Number(args.itemIndex ?? 0),
+        viewOffset: args.viewOffset == null ? undefined : Number(args.viewOffset),
+        viewPosition: args.viewPosition == null ? undefined : Number(args.viewPosition),
+        animated,
+      })
+    }
+
+    throw new Error(`Element "${request.testID}" scroll ref not available.`)
   }
 
   throw new Error(`No inferred handler exists for action "${request.action}".`)
@@ -261,7 +409,9 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
     if (snapshotProvider) return snapshotProvider()
 
     const fiberSnapshot = autoCapture ? collectFiberNodes() : { nodes: [], elements: new Map() }
-    const capturedNodes = Array.from(getGlobalState().elements.values()).map((entry) => entry.node)
+    const capturedNodes = Array.from(getGlobalState().elements.values())
+      .map(bestCandidateNode)
+      .filter((node): node is AgentUiNode => Boolean(node))
     const mergedNodes = new Map<string, AgentUiNode>()
 
     ;[...capturedNodes, ...fiberSnapshot.nodes, ...Array.from(nodes.values())].forEach((node) => {
