@@ -280,6 +280,10 @@ describe("tools", () => {
     expect(names).toContain("swap_state")
     expect(names).toContain("send_custom_command")
     expect(names).toContain("list_custom_commands")
+    expect(names).toContain("agent_ui_snapshot")
+    expect(names).toContain("agent_ui_action")
+    expect(names).toContain("agent_ui_press")
+    expect(names).toContain("agent_ui_fill")
     expect(names).toContain("show_overlay")
     expect(names).toContain("clear_timeline")
     expect(names).toContain("subscribe_state")
@@ -349,6 +353,122 @@ describe("tools", () => {
       expect(data.status).toBe("success")
       expect(data.commands.length).toBe(1)
       expect(data.commands[0].command).toBe("reload")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_snapshot returns app semantic UI tree", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.snapshot.request") {
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              snapshot: {
+                route: "Login",
+                nodes: [
+                  { testID: "login-email-input", type: "TextInput", enabled: true, visible: true },
+                  { testID: "login-submit-button", type: "Pressable", text: "Sign In", enabled: true, visible: true },
+                ],
+              },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 22,
+        params: { name: "agent_ui_snapshot", arguments: {} },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.snapshot.route).toBe("Login")
+      expect(data.snapshot.nodes.map((node: any) => node.testID)).toContain("login-submit-button")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_press sends a testID action and returns app result", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              testID: parsed.payload.testID,
+              result: { pressed: true },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 23,
+        params: { name: "agent_ui_press", arguments: { testID: "login-submit-button" } },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("press")
+      expect(data.testID).toBe("login-submit-button")
+      expect(data.result.pressed).toBe(true)
+      expect(received[0].payload.action).toBe("press")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_fill sends text value to app handler", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              testID: parsed.payload.testID,
+              result: { value: parsed.payload.value },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 24,
+        params: {
+          name: "agent_ui_fill",
+          arguments: { testID: "login-email-input", text: "qa@example.com" },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("fill")
+      expect(data.result.value).toBe("qa@example.com")
     } finally {
       app.close()
     }

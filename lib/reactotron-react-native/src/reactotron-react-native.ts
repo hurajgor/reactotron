@@ -20,6 +20,7 @@ import networking, { NetworkingOptions } from "./plugins/networking"
 import storybook from "./plugins/storybook"
 import devTools from "./plugins/devTools"
 import trackGlobalLogs from "./plugins/trackGlobalLogs"
+import agentRuntime from "./plugins/agentRuntime"
 import { getHostFromUrl } from "./helpers/parseURL"
 import getReactNativePlatformConstants from "./helpers/getReactNativePlatformConstants"
 
@@ -197,9 +198,21 @@ export {
   networking,
   storybook,
   devTools,
+  agentRuntime,
 }
 
 export type { ClientOptions }
-export type { McpRedactionConfig, McpRedactionRules } from "reactotron-core-contract"
+export type {
+  AgentUiNode,
+  AgentUiSnapshot,
+  McpRedactionConfig,
+  McpRedactionRules,
+} from "reactotron-core-contract"
+export type {
+  AgentRuntimeActionHandler,
+  AgentRuntimeOptions,
+  AgentRuntimePlugin,
+  AgentRuntimeSnapshotProvider,
+} from "./plugins/agentRuntime"
 
 export default reactotron

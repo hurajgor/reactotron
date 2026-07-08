@@ -40,6 +40,7 @@ export const LoggingScreen: React.FC<LoggingScreenProps> = function LoggingScree
         </View>
         <View style={{ marginTop: spacing.lg }}>
           <Button
+            testID="logging-console-log-button"
             text="console.log"
             textStyle={$darkText}
             style={$button}

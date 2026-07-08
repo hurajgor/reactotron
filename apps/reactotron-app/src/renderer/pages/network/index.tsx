@@ -8,18 +8,14 @@ import {
   MdSearch,
 } from "react-icons/md"
 import styled from "styled-components"
-import {
-  ContentView,
-  EmptyState,
-  Header,
-  ReactotronContext,
-} from "reactotron-core-ui"
+import { ContentView, EmptyState, Header, ReactotronContext } from "reactotron-core-ui"
 import type { ApiResponsePayload, Command, LogPayload } from "reactotron-core-contract"
 
 type ConsoleKind = "network" | "log"
 type BodyMode = "pretty" | "tree" | "raw"
 type InspectorTab = "summary" | "request" | "response" | "headers" | "raw"
-type LogLevelFilter = "all" | "debug" | "warn" | "error"
+type LogLevel = "debug" | "info" | "warn" | "error"
+type LogLevelSelection = Record<LogLevel, boolean>
 
 type ConsoleItem = {
   id: string
@@ -27,6 +23,7 @@ type ConsoleItem = {
   command: Command
   title: string
   subtitle: string
+  searchText: string
   method: string
   status: string
   tone: "good" | "warn" | "bad" | "muted" | "redirect"
@@ -36,6 +33,27 @@ type ConsoleItem = {
 
 type ApiRequest = Partial<ApiResponsePayload["request"]>
 type ApiResponse = Partial<ApiResponsePayload["response"]>
+
+const defaultLogLevels: LogLevelSelection = {
+  debug: false,
+  info: true,
+  warn: true,
+  error: true,
+}
+
+const verboseLogLevels: LogLevelSelection = {
+  debug: true,
+  info: true,
+  warn: true,
+  error: true,
+}
+
+const logLevelOptions: Array<{ level: LogLevel; label: string }> = [
+  { level: "debug", label: "Verbose" },
+  { level: "info", label: "Info" },
+  { level: "warn", label: "Warnings" },
+  { level: "error", label: "Errors" },
+]
 
 const Container = styled.div`
   display: flex;
@@ -48,6 +66,7 @@ const Container = styled.div`
 
 const Toolbar = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
@@ -55,11 +74,21 @@ const Toolbar = styled.div`
   background-color: ${(props) => props.theme.backgroundSubtleDark};
 `
 
+const ToolbarControls = styled.div`
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+  margin-left: auto;
+  min-width: 0;
+`
+
 const SearchBox = styled.label`
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 1;
+  flex-basis: 0;
   min-width: 220px;
   min-height: 34px;
   padding: 0 10px;
@@ -82,6 +111,7 @@ const SearchInput = styled.input`
 const Toggle = styled.label`
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 6px;
   min-height: 34px;
   padding: 0 10px;
@@ -98,25 +128,96 @@ const Toggle = styled.label`
   }
 `
 
-const SelectControl = styled.label`
+const LogLevelMenu = styled.details`
+  position: relative;
+  flex: 0 0 190px;
+  width: 190px;
+  min-width: 0;
+  color: ${(props) => props.theme.foreground};
+  font-size: 12px;
+`
+
+const LogLevelSummary = styled.summary`
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
   border-radius: 4px;
-  color: ${(props) => props.theme.foreground};
   background-color: ${(props) => props.theme.background};
-  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
 `
 
-const Select = styled.select`
+const LogLevelValue = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  color: ${(props) => props.theme.foregroundDark};
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const LogLevelPanel = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 4;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 6px;
+  background-color: ${(props) => props.theme.background};
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+`
+
+const LogLevelAction = styled.button`
+  display: block;
+  width: 100%;
+  padding: 7px 8px;
   border: 0;
-  outline: 0;
+  border-radius: 3px;
   background: transparent;
   color: ${(props) => props.theme.foreground};
+  text-align: left;
   font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundHighlight};
+  }
+`
+
+const LogLevelDivider = styled.div`
+  height: 1px;
+  margin: 5px 0;
+  background-color: ${(props) => props.theme.chromeLine};
+`
+
+const LogLevelOption = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 3px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundHighlight};
+  }
+
+  input {
+    margin: 0;
+    accent-color: ${(props) => props.theme.highlight};
+  }
 `
 
 const Workspace = styled.div`
@@ -145,7 +246,7 @@ const TableHeader = styled.div`
   top: 0;
   z-index: 1;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 92px 84px;
+  grid-template-columns: 92px minmax(0, 1fr) 72px 96px;
   gap: 12px;
   padding: 9px 14px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
@@ -158,7 +259,7 @@ const TableHeader = styled.div`
 
 const EventRow = styled.button<{ $selected: boolean; $tone: ConsoleItem["tone"] }>`
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 92px 84px;
+  grid-template-columns: 92px minmax(0, 1fr) 72px 96px;
   gap: 12px;
   width: 100%;
   min-height: 54px;
@@ -224,6 +325,10 @@ const Status = styled.i<{ $tone: ConsoleItem["tone"] }>`
   font-weight: 700;
 `
 
+const EmptyStatus = styled.span`
+  align-self: center;
+`
+
 const Time = styled.small`
   align-self: center;
   justify-self: end;
@@ -268,6 +373,12 @@ const InspectorTitle = styled.div`
   }
 `
 
+const InspectorMeta = styled.div`
+  margin-top: 6px;
+  color: ${(props) => props.theme.foregroundDark};
+  font-size: 12px;
+`
+
 const ActionBar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -280,6 +391,7 @@ const ActionBar = styled.div`
 const ActionButton = styled.button`
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 6px;
   min-height: 30px;
   padding: 0 10px;
@@ -306,8 +418,7 @@ const Tabs = styled.div`
 const TabButton = styled.button<{ $active: boolean }>`
   padding: 8px 10px;
   border: 0;
-  border-bottom: 2px solid
-    ${(props) => (props.$active ? props.theme.highlight : "transparent")};
+  border-bottom: 2px solid ${(props) => (props.$active ? props.theme.highlight : "transparent")};
   background: transparent;
   color: ${(props) => (props.$active ? props.theme.foreground : props.theme.foregroundDark)};
   font-size: 12px;
@@ -418,7 +529,8 @@ const ModeButton = styled.button<{ $active: boolean }>`
   padding: 4px 8px;
   border: 1px solid ${(props) => (props.$active ? props.theme.highlight : props.theme.chromeLine)};
   border-radius: 3px;
-  background-color: ${(props) => (props.$active ? props.theme.backgroundHighlight : props.theme.background)};
+  background-color: ${(props) =>
+    props.$active ? props.theme.backgroundHighlight : props.theme.background};
   color: ${(props) => props.theme.foreground};
   font-size: 11px;
   cursor: pointer;
@@ -450,13 +562,72 @@ const TreeBody = styled.div`
   max-height: 520px;
   overflow: auto;
   padding: 12px;
+  color: ${(props) => props.theme.foreground};
   background-color: ${(props) => props.theme.backgroundSubtleDark};
+  font-size: 12px;
+  line-height: 20px;
+  user-select: text;
+`
+
+const TreeNode = styled.div<{ $depth: number }>`
+  margin-left: ${(props) => props.$depth * 14}px;
+`
+
+const TreeNodeSummary = styled.summary`
+  cursor: pointer;
+  list-style: disclosure-closed;
+
+  &::-webkit-details-marker {
+    color: ${(props) => props.theme.foregroundDark};
+  }
+`
+
+const TreeKey = styled.span`
+  color: ${(props) => props.theme.foregroundDark};
+`
+
+const TreeValue = styled.span`
+  color: ${(props) => props.theme.foreground};
+`
+
+const TreePrimitiveRow = styled.div<{ $depth: number }>`
+  margin-left: ${(props) => props.$depth * 14}px;
 `
 
 const ArgumentList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+`
+
+const LogHighlights = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+`
+
+const LogHighlightItem = styled.button`
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 4px;
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  color: ${(props) => props.theme.foreground};
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${(props) => props.theme.foregroundDark};
+    background-color: ${(props) => props.theme.backgroundHighlight};
+  }
+
+  span {
+    margin-right: 6px;
+    color: ${(props) => props.theme.foregroundDark};
+  }
 `
 
 const ArgumentHeader = styled.div`
@@ -482,7 +653,7 @@ function Network() {
   const [query, setQuery] = useState("")
   const [showNetwork, setShowNetwork] = useState(true)
   const [showLogs, setShowLogs] = useState(true)
-  const [logLevel, setLogLevel] = useState<LogLevelFilter>("all")
+  const [logLevels, setLogLevels] = useState<LogLevelSelection>(defaultLogLevels)
   const [selectedId, setSelectedId] = useState<string>("")
 
   const items = useMemo(() => buildItems(commands), [commands])
@@ -490,12 +661,12 @@ function Network() {
     const needle = query.trim().toLowerCase()
     return items
       .filter((item) => (item.kind === "network" ? showNetwork : showLogs))
-      .filter((item) => item.kind !== "log" || logLevel === "all" || item.status === logLevel)
+      .filter((item) => item.kind !== "log" || logLevels[item.status as LogLevel])
       .filter((item) => {
         if (!needle) return true
-        return `${item.method} ${item.title} ${item.subtitle} ${item.status}`.toLowerCase().includes(needle)
+        return item.searchText.toLowerCase().includes(needle)
       })
-  }, [items, logLevel, query, showLogs, showNetwork])
+  }, [items, logLevels, query, showLogs, showNetwork])
 
   const selectedItem =
     visibleItems.find((item) => item.id === selectedId) ?? visibleItems[0] ?? null
@@ -512,50 +683,41 @@ function Network() {
             placeholder="Search endpoints, logs, status, hosts"
           />
         </SearchBox>
-        <Toggle>
-          <input
-            type="checkbox"
-            checked={showNetwork}
-            onChange={(event) => setShowNetwork(event.target.checked)}
-          />
-          Network
-        </Toggle>
-        <Toggle>
-          <input
-            type="checkbox"
-            checked={showLogs}
-            onChange={(event) => setShowLogs(event.target.checked)}
-          />
-          Logs
-        </Toggle>
-        <SelectControl>
-          Log level
-          <Select
-            value={logLevel}
-            onChange={(event) => setLogLevel(event.target.value as LogLevelFilter)}
+        <ToolbarControls>
+          <Toggle>
+            <input
+              type="checkbox"
+              checked={showNetwork}
+              onChange={(event) => setShowNetwork(event.target.checked)}
+            />
+            Network
+          </Toggle>
+          <Toggle>
+            <input
+              type="checkbox"
+              checked={showLogs}
+              onChange={(event) => setShowLogs(event.target.checked)}
+            />
+            Logs
+          </Toggle>
+          <LogLevelFilter levels={logLevels} setLevels={setLogLevels} />
+          <ActionButton
+            type="button"
+            onClick={() => {
+              clearCommands()
+              setSelectedId("")
+            }}
           >
-            <option value="all">All</option>
-            <option value="debug">Log & debug</option>
-            <option value="warn">Warnings</option>
-            <option value="error">Errors</option>
-          </Select>
-        </SelectControl>
-        <ActionButton
-          type="button"
-          onClick={() => {
-            clearCommands()
-            setSelectedId("")
-          }}
-        >
-          <MdDeleteSweep size={14} />
-          Clear
-        </ActionButton>
+            <MdDeleteSweep size={14} />
+            Clear
+          </ActionButton>
+        </ToolbarControls>
       </Toolbar>
       <Workspace>
         <EventTable>
           <TableHeader>
             <span>Kind</span>
-            <span>Endpoint / log</span>
+            <span>Event</span>
             <span>Status</span>
             <span>Time</span>
           </TableHeader>
@@ -576,14 +738,22 @@ function Network() {
                 onClick={() => setSelectedId(item.id)}
               >
                 <Method $kind={item.kind}>
-                  {item.kind === "network" ? <MdNetworkCheck size={14} /> : <MdInsertDriveFile size={14} />}
+                  {item.kind === "network" ? (
+                    <MdNetworkCheck size={14} />
+                  ) : (
+                    <MdInsertDriveFile size={14} />
+                  )}
                   {item.method}
                 </Method>
                 <EventTitle>
                   <b>{item.title}</b>
-                  <small>{item.subtitle}</small>
+                  {item.subtitle ? <small>{item.subtitle}</small> : null}
                 </EventTitle>
-                <Status $tone={item.tone}>{item.status}</Status>
+                {item.kind === "network" ? (
+                  <Status $tone={item.tone}>{item.status}</Status>
+                ) : (
+                  <EmptyStatus />
+                )}
                 <Time>{item.time}</Time>
               </EventRow>
             ))
@@ -600,6 +770,46 @@ function Network() {
         </Inspector>
       </Workspace>
     </Container>
+  )
+}
+
+function LogLevelFilter({
+  levels,
+  setLevels,
+}: {
+  levels: LogLevelSelection
+  setLevels: React.Dispatch<React.SetStateAction<LogLevelSelection>>
+}) {
+  const toggleLevel = (level: LogLevel) => {
+    setLevels((current) => ({ ...current, [level]: !current[level] }))
+  }
+
+  return (
+    <LogLevelMenu>
+      <LogLevelSummary>
+        <span>Log level</span>
+        <LogLevelValue>{logLevelSelectionLabel(levels)}</LogLevelValue>
+      </LogLevelSummary>
+      <LogLevelPanel>
+        <LogLevelAction type="button" onClick={() => setLevels(defaultLogLevels)}>
+          Default
+        </LogLevelAction>
+        <LogLevelAction type="button" onClick={() => setLevels(verboseLogLevels)}>
+          Verbose
+        </LogLevelAction>
+        <LogLevelDivider />
+        {logLevelOptions.map((option) => (
+          <LogLevelOption key={option.level}>
+            <input
+              type="checkbox"
+              checked={levels[option.level]}
+              onChange={() => toggleLevel(option.level)}
+            />
+            {option.label}
+          </LogLevelOption>
+        ))}
+      </LogLevelPanel>
+    </LogLevelMenu>
   )
 }
 
@@ -630,7 +840,12 @@ function NetworkInspector({ item }: { item: ConsoleItem }) {
       </ActionBar>
       <Tabs>
         {(["summary", "request", "response", "headers", "raw"] as InspectorTab[]).map((value) => (
-          <TabButton key={value} type="button" $active={tab === value} onClick={() => setTab(value)}>
+          <TabButton
+            key={value}
+            type="button"
+            $active={tab === value}
+            onClick={() => setTab(value)}
+          >
             {labelForTab(value)}
           </TabButton>
         ))}
@@ -651,8 +866,11 @@ function LogInspector({ item }: { item: ConsoleItem }) {
         <InspectorEyebrow>Log event</InspectorEyebrow>
         <InspectorTitle>
           <strong>{item.title}</strong>
-          <Status $tone={item.tone}>{item.status}</Status>
         </InspectorTitle>
+        <InspectorMeta>
+          {displayLogLevel(payload.level)} - {formatDate(item.command.date)} - message{" "}
+          {item.command.messageId}
+        </InspectorMeta>
       </InspectorHeader>
       <ActionBar>
         <CopyButton text={formatLogForCopy(args)}>Copy log</CopyButton>
@@ -669,19 +887,8 @@ function LogInspector({ item }: { item: ConsoleItem }) {
       <ScrollPane>
         {tab === "message" ? (
           <>
-            <Section>
-              <SectionTitle>Summary</SectionTitle>
-              <FieldTable
-                rows={[
-                  ["Level", payload.level],
-                  ["Arguments", args.length],
-                  ["Time", formatDate(item.command.date)],
-                  ["Message ID", item.command.messageId],
-                ]}
-              />
-            </Section>
             {args.length > 1 ? (
-              <LogArguments args={args} />
+              <LogDetails args={args} />
             ) : (
               <PayloadViewer label="Message" value={args[0]?.value} />
             )}
@@ -699,24 +906,80 @@ type LogArgument = {
   value: unknown
   parsedFromString: boolean
   original: unknown
+  role?: "message" | "payload" | "event" | "extra"
 }
 
-function LogArguments({ args }: { args: LogArgument[] }) {
+type ExpandedLogPart = {
+  __reactotronLogPart: true
+  role: LogArgument["role"]
+  value: unknown
+}
+
+function logParts(args: LogArgument[]) {
+  const payload =
+    args.find((arg) => arg.role === "payload") ??
+    args.find((arg, index) => index > 0 && arg.value && typeof arg.value === "object")
+  const event =
+    args.find((arg) => arg.role === "event") ??
+    args.find((arg, index) => index > 0 && arg !== payload && typeof arg.value === "string")
+  const rest = args.filter((arg, index) => index > 0 && arg !== event && arg !== payload)
+
+  return { event, payload, rest }
+}
+
+function LogDetails({ args }: { args: LogArgument[] }) {
+  const parts = logParts(args)
+  const highlightItems = buildLogHighlightItems(parts.event?.value, parts.payload?.value)
+
   return (
-    <Section>
-      <SectionTitle>Arguments</SectionTitle>
-      <ArgumentList>
-        {args.map((arg, index) => (
-          <div key={index}>
-            <ArgumentHeader>
-              <ArgumentBadge>arg {index + 1}</ArgumentBadge>
-              <span>{argumentTypeLabel(arg)}</span>
-            </ArgumentHeader>
-            <PayloadViewer label="" value={arg.value} />
-          </div>
-        ))}
-      </ArgumentList>
-    </Section>
+    <>
+      {highlightItems.length > 0 ? (
+        <Section>
+          <SectionTitle>Highlights</SectionTitle>
+          <LogHighlights>
+            {highlightItems.map((item) => (
+              <LogHighlightChip key={item.label} label={item.label} value={item.value} />
+            ))}
+          </LogHighlights>
+        </Section>
+      ) : null}
+      <PayloadViewer label="Payload" value={parts.payload?.value ?? args[args.length - 1]?.value} />
+      {parts.rest.length > 0 ? (
+        <Section>
+          <SectionTitle>More</SectionTitle>
+          <ArgumentList>
+            {parts.rest.map((arg, index) => (
+              <div key={index}>
+                <ArgumentHeader>
+                  <ArgumentBadge>{logArgumentLabel(index + 3, args.length)}</ArgumentBadge>
+                  <span>{argumentTypeLabel(arg)}</span>
+                </ArgumentHeader>
+                <PayloadViewer label="" value={arg.value} />
+              </div>
+            ))}
+          </ArgumentList>
+        </Section>
+      ) : null}
+    </>
+  )
+}
+
+function LogHighlightChip({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+
+  return (
+    <LogHighlightItem
+      type="button"
+      title={`Copy ${label}`}
+      onClick={() => {
+        clipboard.writeText(value)
+        setCopied(true)
+        window.setTimeout(() => setCopied(false), 900)
+      }}
+    >
+      <span>{label}</span>
+      {copied ? "Copied" : value}
+    </LogHighlightItem>
   )
 }
 
@@ -738,10 +1001,19 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
         <ViewerHeader>
           <ViewerTools>
             <ViewerModes>
-              <ModeButton type="button" $active={mode === "pretty"} onClick={() => setMode("pretty")}>
+              <ModeButton
+                type="button"
+                $active={mode === "pretty"}
+                onClick={() => setMode("pretty")}
+              >
                 Pretty
               </ModeButton>
-              <ModeButton type="button" $active={mode === "tree"} onClick={() => setMode("tree")} disabled={!canTree}>
+              <ModeButton
+                type="button"
+                $active={mode === "tree"}
+                onClick={() => setMode("tree")}
+                disabled={!canTree}
+              >
                 Tree
               </ModeButton>
               <ModeButton type="button" $active={mode === "raw"} onClick={() => setMode("raw")}>
@@ -762,7 +1034,7 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
         </ViewerHeader>
         {mode === "tree" && canTree ? (
           <TreeBody>
-            <ContentView value={treeValue} treeLevel={search ? 8 : 1} copyToClipboard={clipboard.writeText} />
+            <JsonTree value={treeValue} />
           </TreeBody>
         ) : (
           <CodeBlock>{highlightText(visibleText, search)}</CodeBlock>
@@ -770,6 +1042,44 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
       </ViewerContainer>
     </Section>
   )
+}
+
+function JsonTree({ value, depth = 0, name }: { value: unknown; depth?: number; name?: string }) {
+  if (!value || typeof value !== "object") {
+    return (
+      <TreePrimitiveRow $depth={depth}>
+        {name ? <TreeKey>{name}: </TreeKey> : null}
+        <TreeValue>{formatTreePrimitive(value)}</TreeValue>
+      </TreePrimitiveRow>
+    )
+  }
+
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => [String(index), item] as const)
+    : Object.entries(value as Record<string, unknown>)
+  const label = name ?? (Array.isArray(value) ? "Array" : "Object")
+  const summary = Array.isArray(value) ? `Array(${entries.length})` : `{${entries.length}}`
+
+  return (
+    <TreeNode $depth={depth}>
+      <details open={depth < 2}>
+        <TreeNodeSummary>
+          {name ? <TreeKey>{label}: </TreeKey> : null}
+          <TreeValue>{summary}</TreeValue>
+        </TreeNodeSummary>
+        {entries.map(([key, item]) => (
+          <JsonTree key={key} name={key} value={item} depth={depth + 1} />
+        ))}
+      </details>
+    </TreeNode>
+  )
+}
+
+function formatTreePrimitive(value: unknown) {
+  if (typeof value === "string") return `"${value}"`
+  if (value === null) return "null"
+  if (value === undefined) return "undefined"
+  return String(value)
 }
 
 function CopyButton({ text, children }: { text: string; children: ReactNode }) {
@@ -857,9 +1167,7 @@ function FieldTable({ rows }: { rows: Array<[string, unknown]> }) {
 function buildItems(commands: Command[]): ConsoleItem[] {
   return commands
     .filter((command) => command.type === "api.response" || command.type === "log")
-    .map((command) => command.type === "api.response"
-      ? networkItem(command)
-      : logItem(command))
+    .map((command) => (command.type === "api.response" ? networkItem(command) : logItem(command)))
 }
 
 function networkItem(command: Command): ConsoleItem {
@@ -875,10 +1183,21 @@ function networkItem(command: Command): ConsoleItem {
     command,
     title: urlPath(url),
     subtitle: hostName(url),
+    searchText: [
+      request.method,
+      url,
+      hostName(url),
+      response.status,
+      payload.duration,
+      request.data,
+      response.body,
+    ]
+      .map(searchableText)
+      .join(" "),
     method: String(request.method ?? "HTTP").toUpperCase(),
     status: status == null ? "pending" : String(status),
     tone: toneForStatus(status),
-    time: payload.duration != null ? `${payload.duration} ms` : formatTime(command.date),
+    time: payload.duration != null ? formatDuration(payload.duration) : formatTime(command.date),
     duration: payload.duration,
   }
 }
@@ -887,13 +1206,24 @@ function logItem(command: Command): ConsoleItem {
   const payload = command.payload as LogPayload
   const level = payload?.level ?? "log"
   const message = payload?.message
+  const args = normalizeLogArgs(message)
+  const normalizedArgs = args.map(normalizeLogArgument)
 
   return {
     id: String(command.messageId),
     kind: "log",
     command,
     title: formatLogPreview(message),
-    subtitle: formatDate(command.date),
+    subtitle: formatLogSubtitle(args),
+    searchText: [
+      displayLogLevel(level),
+      normalizeLogLevel(level),
+      formatLogPreview(message),
+      formatLogSubtitle(args),
+      ...normalizedArgs.map((arg) => arg.value),
+    ]
+      .map(searchableText)
+      .join(" "),
     method: displayLogLevel(level),
     status: normalizeLogLevel(level),
     tone: toneForLogLevel(level),
@@ -933,26 +1263,76 @@ function toneForLogLevel(level: unknown): ConsoleItem["tone"] {
   return "muted"
 }
 
-function normalizeLogLevel(level: unknown): LogLevelFilter {
+function normalizeLogLevel(level: unknown): LogLevel {
   const text = String(level ?? "").toLowerCase()
   if (text === "error") return "error"
   if (text === "warn" || text === "warning") return "warn"
+  if (text === "info" || text === "log") return "info"
   return "debug"
 }
 
 function displayLogLevel(level: unknown) {
   const normalized = normalizeLogLevel(level)
-  if (normalized === "debug") return "LOG"
+  if (normalized === "debug") return "DEBUG"
+  if (normalized === "info") return "INFO"
   if (normalized === "warn") return "WARN"
   return "ERROR"
 }
 
+function logLevelSelectionLabel(levels: LogLevelSelection) {
+  if (logLevelSelectionsEqual(levels, defaultLogLevels)) return "Default"
+  if (logLevelSelectionsEqual(levels, verboseLogLevels)) return "Verbose"
+
+  const selected = logLevelOptions
+    .filter((option) => levels[option.level])
+    .map((option) => option.label)
+
+  return selected.length > 0 ? selected.join(", ") : "None"
+}
+
+function logLevelSelectionsEqual(left: LogLevelSelection, right: LogLevelSelection) {
+  return logLevelOptions.every((option) => left[option.level] === right[option.level])
+}
+
 function normalizeLogArgs(message: unknown) {
   const value = unwrapSerializedLogMessage(message)
-  return Array.isArray(value) ? value : [value]
+  const args = Array.isArray(value) ? value : [value]
+  return args.flatMap(expandEmbeddedJsonArgument)
+}
+
+function expandEmbeddedJsonArgument(value: unknown): unknown[] {
+  if (typeof value !== "string") return [value]
+
+  const embedded = extractEmbeddedJson(value)
+  if (!embedded) return [value]
+
+  const parts: unknown[] = []
+  const messageText = `${embedded.before} ${embedded.after}`.trim()
+  if (messageText) parts.push({ __reactotronLogPart: true, role: "message", value: messageText })
+  parts.push({ __reactotronLogPart: true, role: "payload", value: embedded.value })
+
+  return parts
 }
 
 function normalizeLogArgument(value: unknown): LogArgument {
+  if (
+    value &&
+    typeof value === "object" &&
+    "__reactotronLogPart" in value &&
+    (value as { __reactotronLogPart?: unknown }).__reactotronLogPart === true &&
+    "role" in value &&
+    "value" in value &&
+    isLogArgumentRole((value as { role?: unknown }).role)
+  ) {
+    const expanded = value as ExpandedLogPart
+    return {
+      value: expanded.value,
+      parsedFromString: true,
+      original: value,
+      role: expanded.role,
+    }
+  }
+
   if (typeof value !== "string") {
     return { value, parsedFromString: false, original: value }
   }
@@ -978,11 +1358,93 @@ function normalizeLogArgument(value: unknown): LogArgument {
   }
 }
 
+function isLogArgumentRole(value: unknown): value is LogArgument["role"] {
+  return value === "message" || value === "payload" || value === "event" || value === "extra"
+}
+
+function extractEmbeddedJson(text: string):
+  | {
+      before: string
+      after: string
+      value: unknown
+    }
+  | undefined {
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (char !== "{" && char !== "[") continue
+
+    const end = findJsonEnd(text, index)
+    if (end === -1) continue
+
+    const candidate = text.slice(index, end + 1)
+    try {
+      return {
+        before: text.slice(0, index).trim(),
+        after: text.slice(end + 1).trim(),
+        value: JSON.parse(candidate),
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return undefined
+}
+
+function findJsonEnd(text: string, start: number) {
+  const opening = text[start]
+  const closing = opening === "{" ? "}" : "]"
+  const stack = [closing]
+  let inString = false
+  let escaped = false
+
+  for (let index = start + 1; index < text.length; index += 1) {
+    const char = text[index]
+
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === "\\") {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (char === '"') {
+      inString = true
+      continue
+    }
+
+    if (char === "{" || char === "[") {
+      stack.push(char === "{" ? "}" : "]")
+      continue
+    }
+
+    if (char === "}" || char === "]") {
+      if (char !== stack[stack.length - 1]) return -1
+      stack.pop()
+      if (stack.length === 0) return index
+    }
+  }
+
+  return -1
+}
+
 function argumentTypeLabel(arg: LogArgument) {
+  if (arg.role === "payload") return "JSON parsed from message"
   if (arg.parsedFromString) return "JSON string parsed for viewing"
   if (Array.isArray(arg.value)) return "array"
   if (arg.value === null) return "null"
   return typeof arg.value
+}
+
+function logArgumentLabel(index: number, total: number) {
+  if (total > 1 && index === 0) return "message"
+  if (total > 1 && index === total - 1) return "payload"
+  if (total > 1 && index === 1) return "event"
+  return `arg ${index + 1}`
 }
 
 function formatLogForCopy(args: LogArgument[]) {
@@ -1004,22 +1466,91 @@ function unwrapSerializedLogMessage(message: unknown): unknown {
 
 function formatLogPreview(message: unknown) {
   const args = normalizeLogArgs(message)
+  const firstArg = args[0]
+  const normalizedArg = normalizeLogArgument(firstArg).value
 
-  return args
-    .map((arg) => {
-      const normalizedArg = normalizeLogArgument(arg).value
-      if (typeof normalizedArg === "string") return normalizedArg
-      if (normalizedArg instanceof Error) return normalizedArg.message
-      if (typeof arg === "string") return arg
-      if (arg instanceof Error) return arg.message
-      try {
-        return JSON.stringify(normalizedArg)
-      } catch {
-        return String(normalizedArg)
-      }
-    })
-    .join(" ")
-    .slice(0, 500)
+  if (typeof normalizedArg === "string") return normalizedArg.slice(0, 500)
+  if (normalizedArg instanceof Error) return normalizedArg.message.slice(0, 500)
+  if (typeof firstArg === "string") return firstArg.slice(0, 500)
+  if (firstArg instanceof Error) return firstArg.message.slice(0, 500)
+
+  return formatCompactLogValue(normalizedArg).slice(0, 500)
+}
+
+function formatLogSubtitle(args: unknown[]) {
+  if (args.length <= 1) return ""
+
+  const parts = logParts(args.map(normalizeLogArgument))
+  const payloadSummary = formatPayloadSignal(parts.payload?.value, 3)
+  const eventName = formatCompactLogValue(parts.event?.value)
+
+  if (eventName && payloadSummary) return `${eventName} | ${payloadSummary}`
+  return eventName || payloadSummary || ""
+}
+
+function buildLogHighlightItems(event: unknown, payload: unknown) {
+  const items: Array<{ label: string; value: string }> = []
+  const eventName = formatCompactLogValue(event)
+  if (eventName) items.push({ label: "event", value: eventName })
+
+  for (const item of payloadSignalEntries(payload).slice(0, 6)) {
+    items.push(item)
+  }
+
+  return items
+}
+
+function formatPayloadSignal(value: unknown, limit: number) {
+  return payloadSignalEntries(value)
+    .slice(0, limit)
+    .map((item) => `${item.label} ${item.value}`)
+    .join(" | ")
+}
+
+function payloadSignalEntries(value: unknown): Array<{ label: string; value: string }> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return []
+
+  const record = value as Record<string, unknown>
+  const preferredKeys = [
+    "FORMATNAME",
+    "BID",
+    "ASK",
+    "CURBID",
+    "LOTNO",
+    "ITEMNO",
+    "BUYERNO",
+    "BUYERST",
+    "MINMET",
+    "TYPE",
+  ]
+
+  const preferredEntries = preferredKeys
+    .filter((key) => record[key] != null && String(record[key]) !== "")
+    .map((key) => ({ label: key, value: String(record[key]) }))
+
+  if (preferredEntries.length > 0) return preferredEntries
+
+  return Object.entries(record)
+    .filter(([, entryValue]) => isCompactSignalValue(entryValue))
+    .slice(0, 8)
+    .map(([key, entryValue]) => ({ label: key, value: String(entryValue) }))
+}
+
+function isCompactSignalValue(value: unknown) {
+  if (value == null || value === "") return false
+  return ["string", "number", "boolean"].includes(typeof value)
+}
+
+function formatCompactLogValue(value: unknown) {
+  if (typeof value === "string") return value
+  if (value instanceof Error) return value.message
+  if (Array.isArray(value)) return `Array(${value.length})`
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value).slice(0, 4)
+    const suffix = Object.keys(value).length > keys.length ? ", ..." : ""
+    return `{ ${keys.join(", ")}${suffix} }`
+  }
+  return String(value)
 }
 
 function toneColor(tone: ConsoleItem["tone"]) {
@@ -1083,6 +1614,17 @@ function formatBody(value: unknown) {
   return JSON.stringify(value, null, 2)
 }
 
+function searchableText(value: unknown) {
+  if (value == null) return ""
+  if (typeof value === "string") return value
+  if (value instanceof Error) return `${value.message} ${value.stack ?? ""}`
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
 function formatDate(value: unknown) {
   const date = value instanceof Date ? value : new Date(String(value ?? ""))
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : ""
@@ -1091,6 +1633,13 @@ function formatDate(value: unknown) {
 function formatTime(value: unknown) {
   const date = value instanceof Date ? value : new Date(String(value ?? ""))
   return Number.isFinite(date.getTime()) ? date.toLocaleTimeString() : ""
+}
+
+function formatDuration(value: unknown) {
+  const duration = Number(value)
+  if (!Number.isFinite(duration)) return ""
+  if (duration < 10) return `${duration.toFixed(1)} ms`
+  return `${Math.round(duration)} ms`
 }
 
 function apiRequestToCurl(payload: Partial<ApiResponsePayload> = {}) {
@@ -1174,7 +1723,10 @@ function filterJsonValue(value: unknown, search: string): unknown {
   const needle = search.trim().toLowerCase()
   if (!needle) return value
 
-  const matchesPrimitive = (input: unknown) => String(input ?? "").toLowerCase().includes(needle)
+  const matchesPrimitive = (input: unknown) =>
+    String(input ?? "")
+      .toLowerCase()
+      .includes(needle)
 
   if (Array.isArray(value)) {
     const filtered = value

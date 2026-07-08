@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type ReactotronServer from "reactotron-core-server"
-import type { Command } from "reactotron-core-contract"
+import type { AgentUiActionRequestPayload, AgentUiResponsePayload, Command } from "reactotron-core-contract"
 import { z } from "zod/v4"
 import { promises as fsPromises } from "fs"
 import { extname } from "path"
@@ -64,6 +64,36 @@ function resolveClientId(
 
 function textResult(data: unknown, guidance?: string) {
   return { content: [{ type: "text" as const, text: safeSerialize(data, MAX_RESPONSE_CHARS, guidance) }] }
+}
+
+function createRequestId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function waitForAgentUiResponse(
+  commandBuffer: Command[],
+  requestId: string,
+  clientId: string,
+  timeoutMs = 2000
+): Promise<AgentUiResponsePayload | null> {
+  const start = Date.now()
+  const startLen = commandBuffer.length
+
+  while (Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 50))
+    for (let i = startLen; i < commandBuffer.length; i++) {
+      const cmd = commandBuffer[i]
+      if (
+        cmd.type === "agent.ui.response" &&
+        cmd.clientId === clientId &&
+        (cmd.payload as AgentUiResponsePayload)?.requestId === requestId
+      ) {
+        return cmd.payload as AgentUiResponsePayload
+      }
+    }
+  }
+
+  return null
 }
 
 export function registerTools(
@@ -247,6 +277,144 @@ export function registerTools(
     }
 
     return textResult({ status: "success", commands })
+  })
+
+  mcp.registerTool("agent_ui_snapshot", {
+    description: [
+      "Request a semantic UI snapshot from the connected app's Reactotron agent runtime.",
+      "Requires the app to use the reactotron-react-native agentRuntime plugin.",
+      "This is testID/runtime-tree based and does not use screenshots.",
+    ].join(" "),
+    inputSchema: {
+      clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
+      timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
+    },
+  }, async (args) => {
+    const { clientId, error } = resolveClientId(server, args.clientId)
+    if (error) return textResult({ status: "error", message: error })
+
+    const requestId = createRequestId("agent-ui-snapshot")
+    server.send("agent.ui.snapshot.request", { requestId }, clientId)
+
+    const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
+    if (!response) {
+      return textResult({
+        status: "no_response",
+        message: "The app did not answer agent.ui.snapshot.request. Add Reactotron.use(agentRuntime(...)) in the app.",
+      })
+    }
+
+    return textResult(response)
+  })
+
+  mcp.registerTool("agent_ui_action", {
+    description: [
+      "Run a registered semantic UI action by testID through the connected app's Reactotron agent runtime.",
+      "Requires the app to register a handler for this testID/action pair.",
+      "Use agent_ui_snapshot first to discover available testIDs.",
+    ].join(" "),
+    inputSchema: {
+      testID: z.string().describe("Target React Native testID, e.g. 'login-submit-button'."),
+      action: z.string().describe("Action name registered by the app, e.g. 'press', 'fill', or 'scroll'."),
+      value: z.any().optional().describe("Optional action value. For fill, this is usually the text."),
+      args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
+      clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
+      timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
+    },
+  }, async (args) => {
+    const { clientId, error } = resolveClientId(server, args.clientId)
+    if (error) return textResult({ status: "error", message: error })
+
+    const requestId = createRequestId("agent-ui-action")
+    const payload: AgentUiActionRequestPayload = {
+      requestId,
+      testID: args.testID,
+      action: args.action,
+      value: args.value,
+      args: args.args,
+    }
+
+    server.send("agent.ui.action.request", payload, clientId)
+
+    const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
+    if (!response) {
+      return textResult({
+        status: "no_response",
+        action: args.action,
+        testID: args.testID,
+        message: "The app did not answer agent.ui.action.request. Add Reactotron.use(agentRuntime(...)) and register the action.",
+      })
+    }
+
+    return textResult(response)
+  })
+
+  mcp.registerTool("agent_ui_press", {
+    description: "Press a registered testID through Reactotron agent runtime. Shortcut for agent_ui_action with action='press'.",
+    inputSchema: {
+      testID: z.string().describe("Target React Native testID."),
+      args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
+      clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
+      timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
+    },
+  }, async (args) => {
+    const { clientId, error } = resolveClientId(server, args.clientId)
+    if (error) return textResult({ status: "error", message: error })
+
+    const requestId = createRequestId("agent-ui-press")
+    server.send("agent.ui.action.request", {
+      requestId,
+      testID: args.testID,
+      action: "press",
+      args: args.args,
+    }, clientId)
+
+    const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
+    if (!response) {
+      return textResult({
+        status: "no_response",
+        action: "press",
+        testID: args.testID,
+        message: "The app did not answer press. Register a 'press' handler for this testID in agentRuntime.",
+      })
+    }
+
+    return textResult(response)
+  })
+
+  mcp.registerTool("agent_ui_fill", {
+    description: "Fill a registered text input testID through Reactotron agent runtime. Shortcut for agent_ui_action with action='fill'.",
+    inputSchema: {
+      testID: z.string().describe("Target React Native TextInput testID."),
+      text: z.string().describe("Text to enter."),
+      args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
+      clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
+      timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
+    },
+  }, async (args) => {
+    const { clientId, error } = resolveClientId(server, args.clientId)
+    if (error) return textResult({ status: "error", message: error })
+
+    const requestId = createRequestId("agent-ui-fill")
+    server.send("agent.ui.action.request", {
+      requestId,
+      testID: args.testID,
+      action: "fill",
+      value: args.text,
+      args: args.args,
+    }, clientId)
+
+    const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
+    if (!response) {
+      return textResult({
+        status: "no_response",
+        action: "fill",
+        testID: args.testID,
+        message: "The app did not answer fill. Register a 'fill' handler for this testID in agentRuntime.",
+      })
+    }
+
+    return textResult(response)
   })
 
   mcp.registerTool("show_overlay", {

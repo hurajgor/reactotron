@@ -1,4 +1,9 @@
 import type { ApiResponsePayload } from "./apiResponse"
+import type {
+  AgentUiActionRequestPayload,
+  AgentUiResponsePayload,
+  AgentUiSnapshotRequestPayload,
+} from "./agentUI"
 import type { AsyncStorageMutationPayload } from "./asyncStorage"
 import type { BenchmarkReportPayload } from "./benchmark"
 import type { ClientIntroPayload } from "./clientIntro"
@@ -54,6 +59,9 @@ export const CommandType = {
   EditorOpen: "editor.open",
   Storybook: "storybook",
   Overlay: "overlay",
+  AgentUiSnapshotRequest: "agent.ui.snapshot.request",
+  AgentUiActionRequest: "agent.ui.action.request",
+  AgentUiResponse: "agent.ui.response",
 } as const
 
 export type CommandTypeKey = (typeof CommandType)[keyof typeof CommandType]
@@ -88,6 +96,9 @@ export interface CommandMap {
   [CommandType.EditorOpen]: EditorOpenPayload
   [CommandType.Storybook]: boolean
   [CommandType.Overlay]: boolean
+  [CommandType.AgentUiSnapshotRequest]: AgentUiSnapshotRequestPayload
+  [CommandType.AgentUiActionRequest]: AgentUiActionRequestPayload
+  [CommandType.AgentUiResponse]: AgentUiResponsePayload
 }
 
 export interface Command<

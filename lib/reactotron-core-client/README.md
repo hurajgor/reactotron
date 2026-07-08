@@ -56,14 +56,14 @@ const client = createClient({
 client.connect()
 
 // send a log message as a string
-client.send("log", { level: "debug", message: "hello!" })
+client.send("log", { level: "info", message: "hello!" })
 
 // send a log message as a string that's important
-client.send("log", { level: "debug", message: "hello!" }, true)
+client.send("log", { level: "info", message: "hello!" }, true)
 
 // sending an object log message
 client.send("log", {
-  level: "debug",
+  level: "info",
   message: {
     nested: [1, 2, { hello: "there" }],
     fun: true,

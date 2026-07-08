@@ -7,12 +7,12 @@ import {
 } from "reactotron-core-client"
 
 /**
- * Track calls to console.log, console.warn, and console.debug and send them to Reactotron logger
+ * Track calls to console.log, console.info, console.warn, and console.debug and send them to Reactotron logger
  */
 const trackGlobalLogs = () => (reactotron: ReactotronCore) => {
   assertHasLoggerPlugin(reactotron)
   const client = reactotron as ReactotronCore & InferFeatures<ReactotronCore, LoggerPlugin>
-  const serializeArgs = (args: unknown[]) => args.length === 1 ? args[0] : args
+  const serializeArgs = (args: unknown[]) => (args.length === 1 ? args[0] : args)
 
   return {
     onConnect: () => {
@@ -20,6 +20,12 @@ const trackGlobalLogs = () => (reactotron: ReactotronCore) => {
       console.log = (...args: Parameters<typeof console.log>) => {
         originalConsoleLog(...args)
         client.log(...args)
+      }
+
+      const originalConsoleInfo = console.info
+      console.info = (...args: Parameters<typeof console.info>) => {
+        originalConsoleInfo(...args)
+        client.send("log", { level: "info", message: serializeArgs(args) as any }, false)
       }
 
       const originalConsoleWarn = console.warn

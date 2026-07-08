@@ -10,6 +10,7 @@ import RootModals from "./RootModals"
 import Home from "./pages/home"
 import Timeline from "./pages/timeline"
 import Network from "./pages/network"
+import Agent from "./pages/agent"
 import Subscriptions from "./pages/state/Subscriptions"
 import Snapshots from "./pages/state/Snapshots"
 import Overlay from "./pages/reactNative/Overlay"
@@ -59,6 +60,9 @@ function App() {
 
                 {/* Network */}
                 <Route path="/network" element={<Network />} />
+
+                {/* Agent */}
+                <Route path="/agent" element={<Agent />} />
 
                 {/* State */}
                 <Route path="/state/subscriptions" element={<Subscriptions />} />

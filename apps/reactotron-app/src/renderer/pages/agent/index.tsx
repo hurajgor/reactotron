@@ -1,0 +1,417 @@
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react"
+import {
+  MdBolt,
+  MdContentCopy,
+  MdInput,
+  MdPlayArrow,
+  MdRefresh,
+  MdSearch,
+} from "react-icons/md"
+import { clipboard } from "electron"
+import styled from "styled-components"
+import {
+  ContentView,
+  EmptyState,
+  Header,
+  ReactotronContext,
+} from "reactotron-core-ui"
+import type { AgentUiNode, AgentUiResponsePayload, AgentUiSnapshot } from "reactotron-core-contract"
+
+type Status = "idle" | "loading" | "success" | "error"
+
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+`
+
+const Toolbar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
+`
+
+const SearchBox = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 220px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 4px;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foregroundDark};
+`
+
+const SearchInput = styled.input`
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: ${(props) => props.theme.foreground};
+  font-size: 13px;
+`
+
+const ActionButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 4px;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
+  font-size: 12px;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  &:not(:disabled):hover {
+    border-color: ${(props) => props.theme.foregroundDark};
+    background-color: ${(props) => props.theme.backgroundHighlight};
+  }
+`
+
+const Workspace = styled.div`
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(380px, 1fr) minmax(380px, 520px);
+  min-height: 0;
+  overflow: hidden;
+`
+
+const NodeList = styled.div`
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid ${(props) => props.theme.chromeLine};
+`
+
+const NodeRow = styled.button<{ $selected: boolean }>`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  border-left: 3px solid ${(props) => (props.$selected ? props.theme.highlight : "transparent")};
+  outline: 0;
+  background-color: ${(props) =>
+    props.$selected ? props.theme.backgroundHighlight : "transparent"};
+  color: ${(props) => props.theme.foreground};
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundHighlight};
+  }
+`
+
+const NodeTitle = styled.div`
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    font-size: 13px;
+  }
+
+  small {
+    color: ${(props) => props.theme.foregroundDark};
+    font-size: 11px;
+  }
+`
+
+const Badge = styled.span<{ $muted?: boolean }>`
+  align-self: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: ${(props) => (props.$muted ? props.theme.foregroundDark : props.theme.bold)};
+  background-color: rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  font-weight: 700;
+`
+
+const Inspector = styled.aside`
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: ${(props) => props.theme.background};
+`
+
+const InspectorHeader = styled.div`
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+`
+
+const Eyebrow = styled.div`
+  margin-bottom: 6px;
+  color: ${(props) => props.theme.foregroundDark};
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+`
+
+const InspectorTitle = styled.strong`
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: ${(props) => props.theme.foreground};
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+`
+
+const ActionBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
+`
+
+const ScrollPane = styled.div`
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+`
+
+const FillInput = styled.input`
+  min-height: 34px;
+  width: 180px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 4px;
+  outline: 0;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
+`
+
+const StatusLine = styled.div<{ $tone?: "error" | "success" }>`
+  padding: 8px 16px;
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  color: ${(props) =>
+    props.$tone === "error"
+      ? "#ff6b6b"
+      : props.$tone === "success"
+        ? "#50c878"
+        : props.theme.foregroundDark};
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  font-size: 12px;
+`
+
+function createRequestId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function flattenNodes(nodes: AgentUiNode[] = []): AgentUiNode[] {
+  return nodes.flatMap((node) => [node, ...flattenNodes(node.children ?? [])])
+}
+
+function nodeSubtitle(node: AgentUiNode) {
+  return [node.type, node.role, node.label || node.text].filter(Boolean).join(" | ")
+}
+
+function isFillable(node: AgentUiNode) {
+  const type = String(node.type ?? "").toLowerCase()
+  return type.includes("input") || type.includes("textinput")
+}
+
+function isPressable(node: AgentUiNode) {
+  const type = String(node.type ?? "").toLowerCase()
+  const role = String(node.role ?? "").toLowerCase()
+  return role === "button" || type.includes("pressable") || type.includes("touchable") || type.includes("button")
+}
+
+function Agent() {
+  const { addCommandListener, sendCommand } = useContext(ReactotronContext)
+  const [snapshot, setSnapshot] = useState<AgentUiSnapshot | null>(null)
+  const [selectedTestID, setSelectedTestID] = useState("")
+  const [query, setQuery] = useState("")
+  const [fillValue, setFillValue] = useState("")
+  const [pendingRequestId, setPendingRequestId] = useState("")
+  const [status, setStatus] = useState<Status>("idle")
+  const [message, setMessage] = useState("Request a snapshot to inspect runtime testIDs.")
+
+  const nodes = useMemo(() => flattenNodes(snapshot?.nodes ?? []), [snapshot])
+  const filteredNodes = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return nodes
+    return nodes.filter((node) =>
+      `${node.testID} ${node.type ?? ""} ${node.label ?? ""} ${node.text ?? ""} ${node.role ?? ""}`
+        .toLowerCase()
+        .includes(needle)
+    )
+  }, [nodes, query])
+  const selectedNode = nodes.find((node) => node.testID === selectedTestID) ?? filteredNodes[0] ?? null
+
+  useEffect(() => {
+    addCommandListener((command) => {
+      if (command.type !== "agent.ui.response") return
+      const payload = command.payload as AgentUiResponsePayload
+      if (payload.requestId !== pendingRequestId) return
+
+      setStatus(payload.status === "success" ? "success" : "error")
+      setMessage(payload.message ?? `${payload.action ?? "snapshot"} ${payload.status}`)
+      if (payload.snapshot) {
+        setSnapshot(payload.snapshot)
+      }
+    })
+  }, [addCommandListener, pendingRequestId])
+
+  useEffect(() => {
+    if (!pendingRequestId || status !== "loading") return () => {}
+
+    const timeout = window.setTimeout(() => {
+      setStatus("error")
+      setMessage("No agent runtime response received. Verify the app is using the local reactotron-react-native build and has reloaded after install.")
+    }, 2500)
+
+    return () => window.clearTimeout(timeout)
+  }, [pendingRequestId, status])
+
+  const requestSnapshot = useCallback(() => {
+    const requestId = createRequestId("agent-ui-snapshot")
+    setPendingRequestId(requestId)
+    setStatus("loading")
+    setMessage("Requesting runtime snapshot...")
+    sendCommand("agent.ui.snapshot.request", { requestId })
+  }, [sendCommand])
+
+  const runAction = useCallback((action: "press" | "fill") => {
+    if (!selectedNode) return
+
+    const requestId = createRequestId(`agent-ui-${action}`)
+    setPendingRequestId(requestId)
+    setStatus("loading")
+    setMessage(`Running ${action} on ${selectedNode.testID}...`)
+    sendCommand("agent.ui.action.request", {
+      requestId,
+      testID: selectedNode.testID,
+      action,
+      value: action === "fill" ? fillValue : undefined,
+    })
+  }, [fillValue, selectedNode, sendCommand])
+
+  return (
+    <Container>
+      <Header title="Agent" isDraggable />
+      <Toolbar>
+        <SearchBox>
+          <MdSearch size={16} />
+          <SearchInput
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search testID, type, label, role"
+          />
+        </SearchBox>
+        <ActionButton type="button" onClick={requestSnapshot}>
+          <MdRefresh size={15} />
+          Snapshot
+        </ActionButton>
+      </Toolbar>
+      <StatusLine $tone={status === "error" ? "error" : status === "success" ? "success" : undefined}>
+        {message}
+      </StatusLine>
+      <Workspace>
+        <NodeList>
+          {filteredNodes.length === 0 ? (
+            <EmptyState icon={MdBolt} title="No Runtime testIDs">
+              Connect an app with agentRuntime enabled, open a screen with testIDs, then request a snapshot.
+            </EmptyState>
+          ) : (
+            filteredNodes.map((node) => (
+              <NodeRow
+                key={node.testID}
+                type="button"
+                $selected={selectedNode?.testID === node.testID}
+                onClick={() => setSelectedTestID(node.testID)}
+              >
+                <NodeTitle>
+                  <strong>{node.testID}</strong>
+                  <small>{nodeSubtitle(node)}</small>
+                </NodeTitle>
+                <Badge $muted={!node.enabled}>{node.enabled === false ? "disabled" : node.type ?? "node"}</Badge>
+              </NodeRow>
+            ))
+          )}
+        </NodeList>
+        <Inspector>
+          {selectedNode ? (
+            <>
+              <InspectorHeader>
+                <Eyebrow>Runtime Node</Eyebrow>
+                <InspectorTitle>{selectedNode.testID}</InspectorTitle>
+              </InspectorHeader>
+              <ActionBar>
+                <ActionButton
+                  type="button"
+                  disabled={!isPressable(selectedNode) || status === "loading"}
+                  onClick={() => runAction("press")}
+                >
+                  <MdPlayArrow size={15} />
+                  Press
+                </ActionButton>
+                <FillInput
+                  value={fillValue}
+                  onChange={(event) => setFillValue(event.target.value)}
+                  placeholder="Fill text"
+                />
+                <ActionButton
+                  type="button"
+                  disabled={!isFillable(selectedNode) || status === "loading"}
+                  onClick={() => runAction("fill")}
+                >
+                  <MdInput size={15} />
+                  Fill
+                </ActionButton>
+                <ActionButton
+                  type="button"
+                  onClick={() => clipboard.writeText(JSON.stringify(selectedNode, null, 2))}
+                >
+                  <MdContentCopy size={15} />
+                  Copy node
+                </ActionButton>
+              </ActionBar>
+              <ScrollPane>
+                <ContentView value={selectedNode} copyToClipboard={clipboard.writeText} />
+              </ScrollPane>
+            </>
+          ) : (
+            <EmptyState icon={MdBolt} title="Select A testID">
+              Request a snapshot and choose a runtime node.
+            </EmptyState>
+          )}
+        </Inspector>
+      </Workspace>
+    </Container>
+  )
+}
+
+export default Agent

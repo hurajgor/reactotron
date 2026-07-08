@@ -161,6 +161,8 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
 
 function getLevelName(level: string) {
   switch (level) {
+    case "info":
+      return "INFO"
     case "debug":
       return "DEBUG"
     case "warn":

@@ -75,7 +75,7 @@ import type { LogPayload, ApiResponsePayload, DisplayPayload } from "reactotron-
 
 // Sending a log command
 const logPayload: LogPayload = {
-  level: "debug",
+  level: "info",
   message: "Hello, Reactotron!",
 }
 client.send(CommandType.Log, logPayload)

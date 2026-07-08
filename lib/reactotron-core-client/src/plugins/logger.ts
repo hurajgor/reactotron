@@ -1,18 +1,18 @@
 import type { ReactotronCore, Plugin, InferFeatures } from "../reactotron-core-client"
 
 /**
- * Provides 4 features for logging.  log & debug are the same.
+ * Provides 4 features for logging.
  */
 const logger = () => (reactotron: ReactotronCore) => {
   return {
     features: {
       log: (...args) => {
         const content = args && args.length === 1 ? args[0] : args
-        reactotron.send("log", { level: "debug", message: content }, false)
+        reactotron.send("log", { level: "info", message: content }, false)
       },
       logImportant: (...args) => {
         const content = args && args.length === 1 ? args[0] : args
-        reactotron.send("log", { level: "debug", message: content }, true)
+        reactotron.send("log", { level: "info", message: content }, true)
       },
       debug: (message, important = false) =>
         reactotron.send("log", { level: "debug", message }, !!important),
