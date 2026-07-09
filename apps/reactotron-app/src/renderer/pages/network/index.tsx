@@ -16,6 +16,8 @@ type BodyMode = "pretty" | "tree" | "raw"
 type InspectorTab = "summary" | "request" | "response" | "headers" | "raw"
 type LogLevel = "debug" | "info" | "warn" | "error"
 type LogLevelSelection = Record<LogLevel, boolean>
+type TableColumn = "kind" | "status" | "time"
+type TableColumns = Record<TableColumn, number>
 
 type ConsoleItem = {
   id: string
@@ -39,6 +41,12 @@ const defaultLogLevels: LogLevelSelection = {
   info: true,
   warn: true,
   error: true,
+}
+
+const defaultTableColumns: TableColumns = {
+  kind: 92,
+  status: 72,
+  time: 96,
 }
 
 const verboseLogLevels: LogLevelSelection = {
@@ -220,12 +228,16 @@ const LogLevelOption = styled.label`
   }
 `
 
-const Workspace = styled.div`
+const Workspace = styled.div<{ $inspectorWidth: number }>`
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(420px, 560px);
+  grid-template-columns: minmax(280px, 1fr) 7px minmax(320px, ${(props) => props.$inspectorWidth}px);
   min-height: 0;
   overflow: hidden;
+
+  @media (max-width: 780px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 `
 
 const EmptyTableState = styled.div`
@@ -241,12 +253,42 @@ const EventTable = styled.div`
   border-right: 1px solid ${(props) => props.theme.chromeLine};
 `
 
-const TableHeader = styled.div`
+const SplitResizeHandle = styled.div`
+  position: relative;
+  min-width: 7px;
+  background-color: ${(props) => props.theme.chromeLine};
+  cursor: col-resize;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 1px;
+    background-color: rgba(255, 255, 255, 0.12);
+  }
+
+  &:hover {
+    background-color: ${(props) => props.theme.highlight};
+  }
+
+  @media (max-width: 780px) {
+    display: none;
+  }
+`
+
+const TableGrid = styled.div<{ $columns: TableColumns }>`
+  grid-template-columns:
+    ${(props) => props.$columns.kind}px minmax(120px, 1fr)
+    ${(props) => props.$columns.status}px ${(props) => props.$columns.time}px;
+`
+
+const TableHeader = styled(TableGrid)`
   position: sticky;
   top: 0;
   z-index: 1;
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 72px 96px;
   gap: 12px;
   padding: 9px 14px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
@@ -257,9 +299,30 @@ const TableHeader = styled.div`
   text-transform: uppercase;
 `
 
-const EventRow = styled.button<{ $selected: boolean; $tone: ConsoleItem["tone"] }>`
+const TableHeaderCell = styled.span`
+  position: relative;
+  min-width: 0;
+`
+
+const ColumnResizeHandle = styled.button`
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  bottom: -9px;
+  width: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+
+  &:hover {
+    background-color: ${(props) => props.theme.highlight};
+  }
+`
+
+const EventRow = styled(TableGrid)<{ $selected: boolean; $tone: ConsoleItem["tone"] }>`
   display: grid;
-  grid-template-columns: 92px minmax(0, 1fr) 72px 96px;
   gap: 12px;
   width: 100%;
   min-height: 54px;
@@ -648,6 +711,76 @@ const ArgumentBadge = styled.span`
   font-size: 11px;
 `
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function resizeInspector(
+  event: React.MouseEvent,
+  currentWidth: number,
+  setInspectorWidth: React.Dispatch<React.SetStateAction<number>>
+) {
+  event.preventDefault()
+  const startX = event.clientX
+  const startWidth = currentWidth
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    setInspectorWidth(clamp(startWidth + startX - moveEvent.clientX, 320, 900))
+  }
+
+  const onMouseUp = () => {
+    document.removeEventListener("mousemove", onMouseMove)
+    document.removeEventListener("mouseup", onMouseUp)
+    document.body.style.cursor = ""
+    document.body.style.userSelect = ""
+  }
+
+  document.body.style.cursor = "col-resize"
+  document.body.style.userSelect = "none"
+  document.addEventListener("mousemove", onMouseMove)
+  document.addEventListener("mouseup", onMouseUp)
+}
+
+function resizeTableColumn(
+  event: React.MouseEvent,
+  column: TableColumn,
+  tableColumns: TableColumns,
+  setTableColumns: React.Dispatch<React.SetStateAction<TableColumns>>
+) {
+  event.preventDefault()
+  event.stopPropagation()
+
+  const startX = event.clientX
+  const startWidth = tableColumns[column]
+
+  const limits: Record<TableColumn, { min: number; max: number }> = {
+    kind: { min: 58, max: 150 },
+    status: { min: 58, max: 130 },
+    time: { min: 62, max: 170 },
+  }
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const nextWidth = clamp(
+      startWidth + moveEvent.clientX - startX,
+      limits[column].min,
+      limits[column].max
+    )
+    setTableColumns((columns) => ({ ...columns, [column]: nextWidth }))
+  }
+
+  const onMouseUp = () => {
+    document.removeEventListener("mousemove", onMouseMove)
+    document.removeEventListener("mouseup", onMouseUp)
+    document.body.style.cursor = ""
+    document.body.style.userSelect = ""
+  }
+
+  document.body.style.cursor = "col-resize"
+  document.body.style.userSelect = "none"
+  document.addEventListener("mousemove", onMouseMove)
+  document.addEventListener("mouseup", onMouseUp)
+}
+
 function Network() {
   const { clearCommands, commands } = useContext(ReactotronContext)
   const [query, setQuery] = useState("")
@@ -655,6 +788,8 @@ function Network() {
   const [showLogs, setShowLogs] = useState(true)
   const [logLevels, setLogLevels] = useState<LogLevelSelection>(defaultLogLevels)
   const [selectedId, setSelectedId] = useState<string>("")
+  const [inspectorWidth, setInspectorWidth] = useState(560)
+  const [tableColumns, setTableColumns] = useState<TableColumns>(defaultTableColumns)
 
   const items = useMemo(() => buildItems(commands), [commands])
   const visibleItems = useMemo(() => {
@@ -713,13 +848,40 @@ function Network() {
           </ActionButton>
         </ToolbarControls>
       </Toolbar>
-      <Workspace>
+      <Workspace $inspectorWidth={inspectorWidth}>
         <EventTable>
-          <TableHeader>
-            <span>Kind</span>
-            <span>Event</span>
-            <span>Status</span>
-            <span>Time</span>
+          <TableHeader $columns={tableColumns}>
+            <TableHeaderCell>
+              Kind
+              <ColumnResizeHandle
+                type="button"
+                title="Resize kind column"
+                onMouseDown={(event) =>
+                  resizeTableColumn(event, "kind", tableColumns, setTableColumns)
+                }
+              />
+            </TableHeaderCell>
+            <TableHeaderCell>Event</TableHeaderCell>
+            <TableHeaderCell>
+              Status
+              <ColumnResizeHandle
+                type="button"
+                title="Resize status column"
+                onMouseDown={(event) =>
+                  resizeTableColumn(event, "status", tableColumns, setTableColumns)
+                }
+              />
+            </TableHeaderCell>
+            <TableHeaderCell>
+              Time
+              <ColumnResizeHandle
+                type="button"
+                title="Resize time column"
+                onMouseDown={(event) =>
+                  resizeTableColumn(event, "time", tableColumns, setTableColumns)
+                }
+              />
+            </TableHeaderCell>
           </TableHeader>
           {visibleItems.length === 0 ? (
             <EmptyTableState>
@@ -732,7 +894,9 @@ function Network() {
             visibleItems.map((item) => (
               <EventRow
                 key={item.id}
+                as="button"
                 type="button"
+                $columns={tableColumns}
                 $selected={selectedItem?.id === item.id}
                 $tone={item.tone}
                 onClick={() => setSelectedId(item.id)}
@@ -759,6 +923,12 @@ function Network() {
             ))
           )}
         </EventTable>
+        <SplitResizeHandle
+          role="separator"
+          aria-orientation="vertical"
+          title="Resize inspector"
+          onMouseDown={(event) => resizeInspector(event, inspectorWidth, setInspectorWidth)}
+        />
         <Inspector>
           {selectedItem ? (
             <ConsoleInspector item={selectedItem} />
