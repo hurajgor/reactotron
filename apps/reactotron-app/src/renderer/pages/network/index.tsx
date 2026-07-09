@@ -231,12 +231,15 @@ const LogLevelOption = styled.label`
 const Workspace = styled.div<{ $inspectorWidth: number }>`
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 7px minmax(320px, ${(props) => props.$inspectorWidth}px);
+  grid-template-columns: minmax(120px, 0.75fr) 7px minmax(
+      240px,
+      ${(props) => props.$inspectorWidth}px
+    );
   min-height: 0;
   overflow: hidden;
 
-  @media (max-width: 780px) {
-    grid-template-columns: minmax(0, 1fr);
+  @media (max-width: 520px) {
+    grid-template-columns: minmax(96px, 0.5fr) 7px minmax(220px, 1fr);
   }
 `
 
@@ -410,6 +413,10 @@ const Inspector = styled.aside`
 const InspectorHeader = styled.div`
   padding: 14px 16px 12px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+
+  @media (max-width: 560px) {
+    padding: 12px 10px 10px;
+  }
 `
 
 const InspectorEyebrow = styled.div`
@@ -449,6 +456,10 @@ const ActionBar = styled.div`
   padding: 10px 16px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   background-color: ${(props) => props.theme.backgroundSubtleDark};
+
+  @media (max-width: 560px) {
+    padding: 8px 10px;
+  }
 `
 
 const ActionButton = styled.button`
@@ -473,12 +484,18 @@ const ActionButton = styled.button`
 
 const Tabs = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 10px 16px 0;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+
+  @media (max-width: 560px) {
+    padding: 8px 10px 0;
+  }
 `
 
 const TabButton = styled.button<{ $active: boolean }>`
+  flex: 0 0 auto;
   padding: 8px 10px;
   border: 0;
   border-bottom: 2px solid ${(props) => (props.$active ? props.theme.highlight : "transparent")};
@@ -493,6 +510,10 @@ const ScrollPane = styled.div`
   min-height: 0;
   overflow: auto;
   padding: 16px;
+
+  @media (max-width: 560px) {
+    padding: 10px;
+  }
 `
 
 const Section = styled.section`
@@ -539,6 +560,7 @@ const ViewerContainer = styled.div`
 
 const ViewerHeader = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -549,6 +571,8 @@ const ViewerHeader = styled.div`
 
 const ViewerTools = styled.div`
   display: flex;
+  flex: 1 1 180px;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -556,14 +580,17 @@ const ViewerTools = styled.div`
 
 const ViewerModes = styled.div`
   display: flex;
+  flex: 0 0 auto;
   gap: 4px;
 `
 
 const ViewerSearch = styled.label`
   display: flex;
+  flex: 1 1 130px;
   align-items: center;
   gap: 6px;
-  width: 190px;
+  min-width: 112px;
+  max-width: 220px;
   min-height: 28px;
   padding: 0 8px;
   border: 1px solid ${(props) => props.theme.chromeLine};
@@ -589,6 +616,7 @@ const MatchCount = styled.span`
 `
 
 const ModeButton = styled.button<{ $active: boolean }>`
+  flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid ${(props) => (props.$active ? props.theme.highlight : props.theme.chromeLine)};
   border-radius: 3px;
@@ -725,7 +753,7 @@ function resizeInspector(
   const startWidth = currentWidth
 
   const onMouseMove = (moveEvent: MouseEvent) => {
-    setInspectorWidth(clamp(startWidth + startX - moveEvent.clientX, 320, 900))
+    setInspectorWidth(clamp(startWidth + startX - moveEvent.clientX, 240, 900))
   }
 
   const onMouseUp = () => {
