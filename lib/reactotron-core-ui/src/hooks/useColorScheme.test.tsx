@@ -2,6 +2,7 @@ import { renderHook, act } from "@testing-library/react"
 import useColorScheme from "./useColorScheme"
 
 describe("useColorScheme", () => {
+  const themeModeStorageKey = "reactotron.themeMode"
   const addEventListener = jest.fn()
   const removeEventListener = jest.fn()
 
@@ -9,13 +10,14 @@ describe("useColorScheme", () => {
     matches: false,
     media: query,
     addEventListener,
-    removeEventListener
+    removeEventListener,
   }))
-  
+
   const originalMatchMedia = window.matchMedia
-  
+
   afterEach(() => {
     jest.resetAllMocks()
+    window.localStorage.removeItem(themeModeStorageKey)
     window.matchMedia = originalMatchMedia
   })
 
@@ -31,7 +33,7 @@ describe("useColorScheme", () => {
     mockMatchMedia.mockReturnValue({
       matches: false,
       addEventListener,
-      removeEventListener
+      removeEventListener,
     })
 
     const { result } = renderHook(() => useColorScheme())
@@ -43,7 +45,20 @@ describe("useColorScheme", () => {
     mockMatchMedia.mockReturnValue({
       matches: true,
       addEventListener,
-      removeEventListener
+      removeEventListener,
+    })
+
+    const { result } = renderHook(() => useColorScheme())
+    expect(result.current).toBe("dark")
+  })
+
+  it("should return stored theme preference when one is set", () => {
+    window.localStorage.setItem(themeModeStorageKey, "dark")
+    window.matchMedia = mockMatchMedia
+    mockMatchMedia.mockReturnValue({
+      matches: false,
+      addEventListener,
+      removeEventListener,
     })
 
     const { result } = renderHook(() => useColorScheme())

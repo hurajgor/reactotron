@@ -1,16 +1,30 @@
 import React from "react"
 import { ColorScheme } from "../themes"
 
+const themeModeStorageKey = "reactotron.themeMode"
+const themeModeChangeEvent = "reactotron-theme-mode-changed"
+
 function getColorScheme({ matches }: MediaQueryList | MediaQueryListEvent): ColorScheme {
   return matches ? "dark" : "light"
 }
 
+function getStoredColorScheme(fallback: ColorScheme): ColorScheme {
+  if (typeof window === "undefined") return fallback
+
+  const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
+  if (savedThemeMode === "dark" || savedThemeMode === "light") return savedThemeMode
+
+  return fallback
+}
+
 function useColorScheme(): ColorScheme {
-  const mediaQueryRef = React.useRef<MediaQueryList | null>(window?.matchMedia?.("(prefers-color-scheme: dark)") || null)
+  const mediaQueryRef = React.useRef<MediaQueryList | null>(
+    window?.matchMedia?.("(prefers-color-scheme: dark)") || null
+  )
 
   const [colorScheme, setColorScheme] = React.useState<ColorScheme>(() => {
     if (typeof window === "undefined" || !mediaQueryRef.current) return "dark"
-    return getColorScheme(mediaQueryRef.current)
+    return getStoredColorScheme(getColorScheme(mediaQueryRef.current))
   })
 
   React.useEffect(() => {
@@ -19,11 +33,19 @@ function useColorScheme(): ColorScheme {
     if (!mediaQuery) return () => {}
 
     const handleChange = (e: MediaQueryListEvent) => {
-      setColorScheme(getColorScheme(e))
+      setColorScheme(getStoredColorScheme(getColorScheme(e)))
+    }
+
+    const handleThemeModeChange = () => {
+      setColorScheme(getStoredColorScheme(getColorScheme(mediaQuery)))
     }
 
     mediaQuery.addEventListener("change", handleChange)
-    return () => mediaQuery.removeEventListener("change", handleChange)
+    window.addEventListener(themeModeChangeEvent, handleThemeModeChange)
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange)
+      window.removeEventListener(themeModeChangeEvent, handleThemeModeChange)
+    }
   }, [])
 
   return colorScheme

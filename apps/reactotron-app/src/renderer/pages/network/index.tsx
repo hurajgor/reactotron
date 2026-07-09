@@ -356,8 +356,7 @@ const EventRow = styled(TableGrid)<{ $selected: boolean; $tone: ConsoleItem["ton
   border-bottom: 1px solid ${(props) => props.theme.line};
   border-left: 2px solid ${(props) => toneColor(props.$tone)};
   outline: 0;
-  background-color: ${(props) =>
-    props.$selected ? "rgba(122, 162, 247, 0.18)" : "transparent"};
+  background-color: ${(props) => (props.$selected ? "rgba(122, 162, 247, 0.18)" : "transparent")};
   color: ${(props) => props.theme.foreground};
   text-align: left;
   cursor: pointer;
@@ -918,7 +917,7 @@ function resizeTableColumn(
   document.addEventListener("mouseup", onMouseUp)
 }
 
-function Network() {
+function Network({ title = "Network" }: { title?: string }) {
   const { clearCommands, commands } = useContext(ReactotronContext)
   const [query, setQuery] = useState("")
   const [showNetwork, setShowNetwork] = useState(true)
@@ -929,7 +928,10 @@ function Network() {
   const [tableColumns, setTableColumns] = useState<TableColumns>(defaultTableColumns)
 
   const items = useMemo(() => buildItems(commands), [commands])
-  const networkCount = useMemo(() => items.filter((item) => item.kind === "network").length, [items])
+  const networkCount = useMemo(
+    () => items.filter((item) => item.kind === "network").length,
+    [items]
+  )
   const logCount = useMemo(() => items.filter((item) => item.kind === "log").length, [items])
   const visibleItems = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -949,7 +951,7 @@ function Network() {
 
   return (
     <Container>
-      <Header title="Network" isDraggable />
+      <Header title={title} isDraggable />
       <Toolbar>
         <SearchBox>
           <MdOutlineSearch size={16} />
@@ -1144,7 +1146,9 @@ function NetworkInspector({ item }: { item: ConsoleItem }) {
       <InspectorHeader>
         <InspectorEyebrow>Network request</InspectorEyebrow>
         <InspectorTitle>
-          <InspectorEndpoint title={request.url}>{renderEndpointPath(item.title)}</InspectorEndpoint>
+          <InspectorEndpoint title={request.url}>
+            {renderEndpointPath(item.title)}
+          </InspectorEndpoint>
           <Status $tone={item.tone}>{item.status}</Status>
         </InspectorTitle>
       </InspectorHeader>
@@ -1320,10 +1324,7 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
     () => (search && canTree ? filterJsonValue(parsed, search) : parsed),
     [canTree, parsed, search]
   )
-  const codeContent = useMemo(
-    () => renderCodeText(visibleText, search),
-    [visibleText, search]
-  )
+  const codeContent = useMemo(() => renderCodeText(visibleText, search), [visibleText, search])
 
   return (
     <Section>
@@ -1549,13 +1550,7 @@ function networkItem(command: Command): ConsoleItem {
     command,
     title: urlPath(url),
     subtitle: hostName(url),
-    searchText: [
-      request.method,
-      url,
-      hostName(url),
-      response.status,
-      payload.duration,
-    ]
+    searchText: [request.method, url, hostName(url), response.status, payload.duration]
       .map(searchableText)
       .join(" "),
     method: String(request.method ?? "HTTP").toUpperCase(),
@@ -1579,12 +1574,7 @@ function logItem(command: Command): ConsoleItem {
     command,
     title,
     subtitle,
-    searchText: [
-      displayLogLevel(level),
-      normalizeLogLevel(level),
-      title,
-      subtitle,
-    ]
+    searchText: [displayLogLevel(level), normalizeLogLevel(level), title, subtitle]
       .map(searchableText)
       .join(" "),
     method: displayLogLevel(level),
@@ -2083,7 +2073,9 @@ function renderCodeText(text: string, search: string) {
 
   while ((match = tokenPattern.exec(text)) !== null) {
     if (match.index > cursor) {
-      nodes.push(renderSearchHighlightedText(text.slice(cursor, match.index), search, `plain-${cursor}`))
+      nodes.push(
+        renderSearchHighlightedText(text.slice(cursor, match.index), search, `plain-${cursor}`)
+      )
     }
 
     const token = match[0]

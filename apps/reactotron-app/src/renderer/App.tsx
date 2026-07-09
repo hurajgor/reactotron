@@ -1,9 +1,10 @@
-import React from "react"
+import React, { useContext } from "react"
 import { HashRouter as Router, Route, Routes } from "react-router-dom"
 import styled from "styled-components"
 
 import SideBar from "./components/SideBar"
 import Footer from "./components/Footer"
+import AppPreferencesContext from "./contexts/AppPreferences"
 import RootContextProvider from "./contexts"
 import RootModals from "./RootModals"
 
@@ -16,6 +17,7 @@ import Snapshots from "./pages/state/Snapshots"
 import Overlay from "./pages/reactNative/Overlay"
 import Storybook from "./pages/reactNative/Storybook"
 import CustomCommands from "./pages/customCommands"
+import Settings from "./pages/settings"
 import Help from "./pages/help"
 
 const AppContainer = styled.div`
@@ -42,6 +44,12 @@ const MainContainer = styled.div`
   flex: 1;
 `
 
+function TimelineRoute() {
+  const { enableNewTimeline } = useContext(AppPreferencesContext)
+
+  return enableNewTimeline ? <Network title="Timeline" /> : <Timeline />
+}
+
 function App() {
   return (
     <Router>
@@ -56,7 +64,7 @@ function App() {
                 <Route path="/" element={<Home />} />
 
                 {/* Timeline */}
-                <Route path="/timeline" element={<Timeline />} />
+                <Route path="/timeline" element={<TimelineRoute />} />
 
                 {/* Network */}
                 <Route path="/network" element={<Network />} />
@@ -74,6 +82,9 @@ function App() {
 
                 {/* Custom Commands */}
                 <Route path="/customCommands" element={<CustomCommands />} />
+
+                {/* Settings */}
+                <Route path="/settings" element={<Settings />} />
 
                 {/* Help */}
                 <Route path="/help" element={<Help />} />

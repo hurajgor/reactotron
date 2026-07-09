@@ -7,9 +7,9 @@ import {
   MdOutlineHelpOutline,
   MdOutlineHome,
   MdOutlineMobileOff,
-  MdOutlineNetworkWifi,
   MdOutlinePhoneIphone,
   MdOutlinePhonelinkSetup,
+  MdOutlineSettings,
   MdOutlineSmartToy,
   MdOutlineTimeline,
   MdOutlineWarningAmber,
@@ -114,8 +114,12 @@ function SideBar({
       </SideBarTools>
 
       <SideBarButton icon={MdOutlineHome} path="/" text="Home" hideTopBar isCompact={isCompact} />
-      <SideBarButton icon={MdOutlineTimeline} path="/timeline" text="Timeline" isCompact={isCompact} />
-      <SideBarButton icon={MdOutlineNetworkWifi} path="/network" text="Network" isCompact={isCompact} />
+      <SideBarButton
+        icon={MdOutlineTimeline}
+        path="/timeline"
+        text="Timeline"
+        isCompact={isCompact}
+      />
       <SideBarButton icon={MdOutlineSmartToy} path="/agent" text="Agent" isCompact={isCompact} />
       <SideBarButton
         icon={MdOutlineAssignment}
@@ -146,6 +150,14 @@ function SideBar({
         onPress={retryConnection}
         text={serverText}
         iconColor={iconColor}
+        isCompact={isCompact}
+      />
+
+      <SideBarButton
+        icon={MdOutlineSettings}
+        path="/settings"
+        text="Settings"
+        hideTopBar
         isCompact={isCompact}
       />
 
