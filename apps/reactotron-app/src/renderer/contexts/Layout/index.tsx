@@ -1,9 +1,11 @@
 import React from "react"
 
 import useLayout from "./useLayout"
+import type { SideBarMode } from "./useLayout"
 
 interface Context {
   isSideBarOpen: boolean
+  sideBarMode: SideBarMode
   toggleSideBar: () => void
 }
 
@@ -15,16 +17,18 @@ const noop = (): void => {
 
 const LayoutContext = React.createContext<Context>({
   isSideBarOpen: true,
+  sideBarMode: "expanded",
   toggleSideBar: noop,
 })
 
 const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isSideBarOpen, toggleSideBar } = useLayout()
+  const { isSideBarOpen, sideBarMode, toggleSideBar } = useLayout()
 
   return (
     <LayoutContext.Provider
       value={{
         isSideBarOpen,
+        sideBarMode,
         toggleSideBar,
       }}
     >

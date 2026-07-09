@@ -4,22 +4,25 @@ import useLayout from "./useLayout"
 
 describe("contexts/Layout/useLayout", () => {
   describe("UI Handling", () => {
-    it("should toggle the sidebar", () => {
+    it("should toggle the sidebar between expanded and compact", () => {
       const { result } = renderHook(() => useLayout())
 
       expect(result.current.isSideBarOpen).toBeTruthy()
-
-      act(() => {
-        result.current.toggleSideBar()
-      })
-
-      expect(result.current.isSideBarOpen).toBeFalsy()
+      expect(result.current.sideBarMode).toBe("expanded")
 
       act(() => {
         result.current.toggleSideBar()
       })
 
       expect(result.current.isSideBarOpen).toBeTruthy()
+      expect(result.current.sideBarMode).toBe("compact")
+
+      act(() => {
+        result.current.toggleSideBar()
+      })
+
+      expect(result.current.isSideBarOpen).toBeTruthy()
+      expect(result.current.sideBarMode).toBe("expanded")
     })
   })
 })

@@ -15,12 +15,14 @@ interface SideBarButtonComponentProps {
   isActive: boolean
   hideTopBar?: boolean
   iconSize?: number
+  isCompact?: boolean
   onPress?: () => void
 }
 
 interface SideBarButtonProps {
   $hideTopBar: boolean
   $colorAnimation: number
+  $isCompact?: boolean
 }
 
 const colorInterpolator = colorInterpolate([Theme.highlight, Theme.foregroundLight])
@@ -29,8 +31,10 @@ export const SideBarButtonContainer = styled.div.attrs(() => ({}))<SideBarButton
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px 0;
-  margin: 0 10px;
+  justify-content: center;
+  min-height: ${(props) => (props.$isCompact ? 54 : 69)}px;
+  padding: ${(props) => (props.$isCompact ? "7px 0" : "15px 0")};
+  margin: 0 ${(props) => (props.$isCompact ? 6 : 10)}px;
   cursor: pointer;
   border-top: ${(props) => (props.$hideTopBar ? "none" : `1px solid ${props.theme.line}`)};
   color: ${(props) => colorInterpolator(props.$colorAnimation)};
@@ -59,18 +63,25 @@ function SideBarButton({
   isActive,
   hideTopBar,
   iconSize,
+  isCompact,
   onPress,
 }: SideBarButtonComponentProps) {
+  const resolvedIconSize = iconSize || (isCompact ? 27 : 32)
+
   return (
     <Motion style={{ color: spring(isActive ? 1 : 0) }}>
       {({ color }) => (
-        <Link to={path} style={{ textDecoration: "none" }} onClick={onPress}>
-          <SideBarButtonContainer $hideTopBar={hideTopBar || false} $colorAnimation={color}>
-            {Icon && <Icon size={iconSize || 32} color={iconColor} />}
+        <Link to={path} title={text} style={{ textDecoration: "none" }} onClick={onPress}>
+          <SideBarButtonContainer
+            $hideTopBar={hideTopBar || false}
+            $colorAnimation={color}
+            $isCompact={isCompact}
+          >
+            {Icon && <Icon size={resolvedIconSize} color={iconColor} />}
             {image && (
               <Image src={image} $hideTopBar={hideTopBar || false} $colorAnimation={color} />
             )}
-            <Title>{text}</Title>
+            {!isCompact && <Title>{text}</Title>}
           </SideBarButtonContainer>
         </Link>
       )}
