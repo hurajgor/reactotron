@@ -1,6 +1,11 @@
 import React, { useState, FunctionComponent } from "react"
 import styled from "styled-components"
-import { MdCallReceived, MdCallMade, MdReceipt, MdContentCopy } from "react-icons/md"
+import {
+  MdOutlineCallMade,
+  MdOutlineCallReceived,
+  MdOutlineContentCopy,
+  MdOutlineReceipt,
+} from "react-icons/md"
 import type { ApiResponsePayload } from "reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
@@ -63,7 +68,7 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
   const toolbarItems = []
 
   toolbarItems.push({
-    icon: MdCallReceived,
+    icon: MdOutlineCallReceived,
     onClick: () => {
       const text = JSON.stringify(commandPayload.response.body, null, 2)
       copyToClipboard(text)
@@ -74,7 +79,7 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
   if (commandPayload.request.data) {
     // Is requestBody not empty
     toolbarItems.push({
-      icon: MdCallMade,
+      icon: MdOutlineCallMade,
       onClick: () => {
         try {
           const text = JSON.stringify(JSON.parse(commandPayload.request.data), null, 2)
@@ -89,7 +94,7 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
 
   toolbarItems.push(
     {
-      icon: MdReceipt,
+      icon: MdOutlineReceipt,
       onClick: () => {
         const text = apiToMarkdown(commandPayload)
         copyToClipboard(text)
@@ -97,7 +102,7 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
       tip: "Copy as markdown to clipboard",
     },
     {
-      icon: MdContentCopy,
+      icon: MdOutlineContentCopy,
       onClick: () => {
         const text = apiRequestToCurl(commandPayload)
         copyToClipboard(text)

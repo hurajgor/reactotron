@@ -2,11 +2,11 @@ import React, { useContext } from "react"
 import styled from "styled-components"
 import { Header, ReactNativeContext } from "reactotron-core-ui"
 import {
-  MdCamera,
-  MdBook,
-  MdRadioButtonChecked,
-  MdRadioButtonUnchecked,
-  MdWarning,
+  MdOutlineAutoStories,
+  MdOutlinePhotoCamera,
+  MdOutlineRadioButtonChecked,
+  MdOutlineRadioButtonUnchecked,
+  MdOutlineWarningAmber,
 } from "react-icons/md"
 import { storybookActiveImg, storybookInactiveImg } from "../../images"
 
@@ -31,20 +31,30 @@ const TopSection = styled.div`
 `
 
 const StorybookLogo = styled.img`
-  width: 282px;
-  height: 76px;
+  width: 220px;
+  height: auto;
   padding-bottom: 20;
 `
 
 const ToggleContainer = styled.div`
   display: flex;
+  gap: 6px;
   color: ${(props) => props.theme.foreground};
 `
 const RadioButton = styled.div`
   display: flex;
   align-items: center;
+  gap: 6px;
   cursor: pointer;
-  padding: 10px;
+  padding: 8px 10px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
+  color: ${(props) => props.theme.foregroundDark};
+
+  &:hover {
+    color: ${(props) => props.theme.highlight};
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 
 const WarningContainer = styled.div`
@@ -53,7 +63,7 @@ const WarningContainer = styled.div`
   background-color: ${(props) => props.theme.backgroundDarker};
   border-top: 1px solid ${(props) => props.theme.chromeLine};
   align-items: center;
-  padding: 0 20px;
+  padding: 12px 20px;
 `
 const WarningDescription = styled.div`
   margin-left: 20px;
@@ -69,7 +79,7 @@ function Storybook() {
         tabs={[
           {
             text: "Image Overlay",
-            icon: MdCamera,
+            icon: MdOutlinePhotoCamera,
             isActive: false,
 
             onClick: () => {
@@ -79,7 +89,7 @@ function Storybook() {
           },
           {
             text: "Storybook",
-            icon: MdBook,
+            icon: MdOutlineAutoStories,
             isActive: true,
             // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClick: () => {},
@@ -123,24 +133,24 @@ function Storybook() {
           <ToggleContainer>
             <RadioButton onClick={() => turnOnStorybook()}>
               {isStorybookOn ? (
-                <MdRadioButtonChecked size={32} />
+                <MdOutlineRadioButtonChecked size={18} />
               ) : (
-                <MdRadioButtonUnchecked size={32} />
+                <MdOutlineRadioButtonUnchecked size={18} />
               )}
               <div>On</div>
             </RadioButton>
             <RadioButton onClick={() => turnOffStorybook()}>
               {isStorybookOn ? (
-                <MdRadioButtonUnchecked size={32} />
+                <MdOutlineRadioButtonUnchecked size={18} />
               ) : (
-                <MdRadioButtonChecked size={32} />
+                <MdOutlineRadioButtonChecked size={18} />
               )}
               <div>Off</div>
             </RadioButton>
           </ToggleContainer>
         </TopSection>
         <WarningContainer>
-          <MdWarning size={60} />
+          <MdOutlineWarningAmber size={20} />
           <WarningDescription>
             This is preview feature. It requires a specific setup of Storybook within React Native.
           </WarningDescription>

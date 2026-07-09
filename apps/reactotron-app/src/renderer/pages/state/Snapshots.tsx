@@ -11,13 +11,13 @@ import type { Snapshot } from "reactotron-core-ui"
 import { clipboard } from "electron"
 import styled from "styled-components"
 import {
-  MdCreate,
-  MdDelete,
-  MdFileUpload,
-  MdNotificationsNone,
-  MdImportExport,
-  MdCallReceived,
-  MdFileDownload,
+  MdOutlineCallReceived,
+  MdOutlineCreate,
+  MdOutlineDelete,
+  MdOutlineFileDownload,
+  MdOutlineFileUpload,
+  MdOutlineImportExport,
+  MdOutlineNotificationsNone,
 } from "react-icons/md"
 
 const Container = styled.div`
@@ -39,17 +39,25 @@ const SnapshotDetailRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
+  padding: 14px 18px;
   cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 const SnapshotName = styled.div`
   flex: 1;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.support};
   text-align: left;
 `
 const SnapshotAction = styled.div`
-  color: ${(props) => props.theme.foreground};
+  color: ${(props) => props.theme.foregroundDark};
   padding-left: 10px;
+
+  &:hover {
+    color: ${(props) => props.theme.highlight};
+  }
 `
 const SnapshotPreview = styled.div`
   animation: fade-up 0.25s;
@@ -86,7 +94,7 @@ function SnapshotItem({
             clipboard.writeText(JSON.stringify(snapshot))
           }}
         >
-          <MdCallReceived size={24} />
+          <MdOutlineCallReceived size={18} />
           <Tooltip id="copy-to-clipboard" />
         </SnapshotAction>
         <SnapshotAction
@@ -97,7 +105,7 @@ function SnapshotItem({
             restoreSnapshot(snapshot)
           }}
         >
-          <MdFileUpload size={24} />
+          <MdOutlineFileUpload size={18} />
           <Tooltip id="restore-snapshot" />
         </SnapshotAction>
         <SnapshotAction
@@ -108,7 +116,7 @@ function SnapshotItem({
             openSnapshotRenameModal(snapshot)
           }}
         >
-          <MdCreate size={24} />
+          <MdOutlineCreate size={18} />
           <Tooltip id="rename-snapshot" />
         </SnapshotAction>
         <SnapshotAction
@@ -119,7 +127,7 @@ function SnapshotItem({
             removeSnapshot(snapshot)
           }}
         >
-          <MdDelete size={24} />
+          <MdOutlineDelete size={18} />
           <Tooltip id="delete-snapshot" />
         </SnapshotAction>
       </SnapshotDetailRow>
@@ -152,7 +160,7 @@ function Snapshots() {
         tabs={[
           {
             text: "Subscriptions",
-            icon: MdNotificationsNone,
+            icon: MdOutlineNotificationsNone,
             isActive: false,
             onClick: () => {
               // TODO: Couldn't get react-router-dom to do it for me so I forced it.
@@ -161,7 +169,7 @@ function Snapshots() {
           },
           {
             text: "Snapshots",
-            icon: MdImportExport,
+            icon: MdOutlineImportExport,
             isActive: true,
             // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClick: () => {},
@@ -170,14 +178,14 @@ function Snapshots() {
         actions={[
           {
             tip: "Copy all snapshots to clipboard",
-            icon: MdCallReceived,
+            icon: MdOutlineCallReceived,
             onClick: () => {
               clipboard.writeText(JSON.stringify(snapshots))
             },
           },
           {
             tip: "Add Snapshot",
-            icon: MdFileDownload,
+            icon: MdOutlineFileDownload,
             onClick: () => {
               createSnapshot()
             },
@@ -186,7 +194,7 @@ function Snapshots() {
       />
       <SnapshotsContainer>
         {snapshots.length === 0 ? (
-          <EmptyState icon={MdImportExport} title="No Snapshots">
+          <EmptyState icon={MdOutlineImportExport} title="No Snapshots">
             To take a snapshot of your current redux or mobx-state-tree store, press the Download
             button in the top right corner of this window.
           </EmptyState>

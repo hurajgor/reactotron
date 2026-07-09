@@ -7,7 +7,13 @@ import {
   EmptyState,
 } from "reactotron-core-ui"
 import { CommandType } from "reactotron-core-contract"
-import { MdDelete, MdAdd, MdDeleteSweep, MdNotificationsNone, MdImportExport } from "react-icons/md"
+import {
+  MdOutlineAdd,
+  MdOutlineDelete,
+  MdOutlineDeleteSweep,
+  MdOutlineImportExport,
+  MdOutlineNotificationsNone,
+} from "react-icons/md"
 import styled from "styled-components"
 import { getApplicationKeyMap } from "react-hotkeys"
 
@@ -28,16 +34,20 @@ const SubscriptionsContainer = styled.div`
 
 const SubscriptionContainer = styled.div`
   display: flex;
-  padding: 15px 20px;
+  padding: 14px 18px;
   justify-content: space-between;
   border-bottom: 1px solid ${(props) => props.theme.line};
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 const SubscriptionPath = styled.div`
   flex: 0.3;
   word-break: break-all;
   cursor: text;
   user-select: text;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.support};
 `
 const SubscriptionValue = styled.div`
   flex: 0.7;
@@ -47,7 +57,11 @@ const SubscriptionValue = styled.div`
 const SubscriptionRemove = styled.div`
   cursor: pointer;
   padding-left: 10px;
-  color: ${(props) => props.theme.foreground};
+  color: ${(props) => props.theme.foregroundDark};
+
+  &:hover {
+    color: ${(props) => props.theme.highlight};
+  }
 `
 
 function getLatestChanges(commands: any[]) {
@@ -75,14 +89,14 @@ function Subscriptions() {
         tabs={[
           {
             text: "Subscriptions",
-            icon: MdNotificationsNone,
+            icon: MdOutlineNotificationsNone,
             isActive: true,
             // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClick: () => {},
           },
           {
             text: "Snapshots",
-            icon: MdImportExport,
+            icon: MdOutlineImportExport,
             isActive: false,
             onClick: () => {
               // TODO: Couldn't get react-router-dom to do it for me so I forced it.
@@ -93,14 +107,14 @@ function Subscriptions() {
         actions={[
           {
             tip: "Add",
-            icon: MdAdd,
+            icon: MdOutlineAdd,
             onClick: () => {
               openSubscriptionModal()
             },
           },
           {
             tip: "Clear",
-            icon: MdDeleteSweep,
+            icon: MdOutlineDeleteSweep,
             onClick: () => {
               clearSubscriptions()
             },
@@ -109,7 +123,7 @@ function Subscriptions() {
       />
       <SubscriptionsContainer>
         {subscriptionValues.length === 0 ? (
-          <EmptyState icon={MdNotificationsNone} title="No Subscriptions">
+          <EmptyState icon={MdOutlineNotificationsNone} title="No Subscriptions">
             You can subscribe to state changes in your redux or mobx-state-tree store by pressing{" "}
             {subscriptionModalSequence && (
               <KeybindKeys
@@ -133,8 +147,8 @@ function Subscriptions() {
                   <ContentView value={value} />
                 </SubscriptionValue>
                 <SubscriptionRemove>
-                  <MdDelete
-                    size={24}
+                  <MdOutlineDelete
+                    size={18}
                     onClick={() => {
                       removeSubscription(subscription.path)
                     }}

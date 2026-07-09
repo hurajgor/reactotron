@@ -15,14 +15,14 @@ import {
   RandomJoke,
 } from "reactotron-core-ui"
 import {
-  MdSearch,
-  MdDeleteSweep,
-  MdFilterList,
-  MdSwapVert,
-  MdReorder,
-  MdDownload,
+  MdClose,
+  MdOutlineDeleteSweep,
+  MdOutlineDownload,
+  MdOutlineFilterList,
+  MdOutlineSearch,
+  MdOutlineSwapVert,
+  MdOutlineTimeline,
 } from "react-icons/md"
-import { FaTimes } from "react-icons/fa"
 import styled from "styled-components"
 
 const Container = styled.div`
@@ -48,12 +48,12 @@ const SearchLabel = styled.p`
   color: ${(props) => props.theme.foregroundDark};
 `
 const SearchInput = styled.input`
-  border-radius: 4px;
+  border-radius: 7px;
   padding: 10px;
   flex: 1;
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
-  border: none;
-  color: ${(props) => props.theme.foregroundDark};
+  background-color: ${(props) => props.theme.background};
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  color: ${(props) => props.theme.foreground};
   font-size: 14px;
 `
 const HelpMessage = styled.div`
@@ -63,17 +63,18 @@ const QuickStartButtonContainer = styled.div`
   display: flex;
   padding: 4px 8px;
   margin: 30px 20px;
-  border-radius: 4px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
   cursor: pointer;
   background-color: ${(props) => props.theme.backgroundLighter};
-  color: ${(props) => props.theme.foreground};
+  color: ${(props) => props.theme.highlight};
   align-items: center;
   justify-content: center;
   text-align: center;
 `
 const Divider = styled.div`
   height: 1px;
-  background-color: ${(props) => props.theme.foregroundDark};
+  background-color: ${(props) => props.theme.chromeLine};
   margin: 40px 10px;
 `
 
@@ -140,35 +141,35 @@ function Timeline() {
         actions={[
           {
             tip: "Export Log",
-            icon: MdDownload,
+            icon: MdOutlineDownload,
             onClick: () => {
               downloadLog()
             },
           },
           {
             tip: "Search",
-            icon: MdSearch,
+            icon: MdOutlineSearch,
             onClick: () => {
               toggleSearch()
             },
           },
           {
             tip: "Filter",
-            icon: MdFilterList,
+            icon: MdOutlineFilterList,
             onClick: () => {
               openFilter()
             },
           },
           {
             tip: "Reverse Order",
-            icon: MdSwapVert,
+            icon: MdOutlineSwapVert,
             onClick: () => {
               toggleReverse()
             },
           },
           {
             tip: "Clear",
-            icon: MdDeleteSweep,
+            icon: MdOutlineDeleteSweep,
             onClick: () => {
               clearCommands()
             },
@@ -188,14 +189,14 @@ function Timeline() {
                 }
               }}
             >
-              <FaTimes size={24} />
+              <MdClose size={18} />
             </ButtonContainer>
           </SearchContainer>
         )}
       </Header>
       <TimelineContainer>
         {filteredCommands.length === 0 ? (
-          <EmptyState icon={MdReorder} title="No Activity">
+          <EmptyState icon={MdOutlineTimeline} title="No Activity">
             <HelpMessage>
               Once your app connects and starts sending events, they will appear here.
             </HelpMessage>

@@ -5,10 +5,9 @@ import ActionButton from "../ActionButton"
 import HeaderTabButton from "../HeaderTabButton"
 
 const Container = styled.div`
-  background-color: ${(props) => props.theme.backgroundSubtleLight};
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   color: ${(props) => props.theme.foregroundDark};
-  box-shadow: 0 30px 30px -25px ${(props) => props.theme.glow};
 `
 
 interface ContentContainerProps {
@@ -17,7 +16,7 @@ interface ContentContainerProps {
 const ContentContainer = styled.div.attrs(() => ({}))<ContentContainerProps>`
   -webkit-app-region: ${(props) => (props.$isDraggable ? "drag" : "")};
   height: 70px;
-  padding: 0 10px;
+  padding: 0 16px;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
@@ -49,6 +48,8 @@ const RightContainer = styled.div`
 const Title = styled.div`
   color: ${(props) => props.theme.foregroundLight};
   text-align: center;
+  font-size: 13px;
+  font-weight: 600;
 `
 
 interface HeaderComponentProps {

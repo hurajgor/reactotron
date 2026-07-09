@@ -1,10 +1,10 @@
 import React, { FunctionComponent } from "react"
 import styled from "styled-components"
 import {
-  MdList,
-  MdDone as IconStatusResolved,
-  MdEject as IconStatusCancelled,
-  MdError as IconStatusRejected,
+  MdOutlineCheck as IconStatusResolved,
+  MdOutlineErrorOutline as IconStatusRejected,
+  MdOutlineList as MdList,
+  MdOutlineRemoveCircleOutline as IconStatusCancelled,
 } from "react-icons/md"
 import type { SagaTaskCompleteChild, SagaTaskCompletePayload } from "reactotron-core-contract"
 
@@ -21,12 +21,12 @@ const STATUS_MAP = {
 const EffectTitle = styled.div`
   display: flex;
   color: ${(props) => props.theme.foreground};
-  border-bottom: 1px solid ${(props) => props.theme.highlight};
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   padding-bottom: 4px;
   margin-bottom: 4px;
 `
 const TriggerType = styled.div`
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.support};
   padding-right: 20px;
 `
 const Duration = styled.div`
@@ -54,12 +54,12 @@ interface EffectNameProps {
   $isLoser: boolean
 }
 const EffectName = styled.span.attrs(() => ({}))<EffectNameProps>`
-  color: ${(props) => (props.$isLoser ? props.theme.foregroundDark : props.theme.constant)};
+  color: ${(props) => (props.$isLoser ? props.theme.foregroundDark : props.theme.highlight)};
   padding-left: ${(props) => props.$depth * 20}px;
   text-decoration: ${(props) => (props.$isLoser ? "line-through" : "")};
 `
 const EffectStatus = styled.span`
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.keyword};
   padding-right: 4px;
 `
 const EffectExtraContainer = styled.div`

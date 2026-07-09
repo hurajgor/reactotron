@@ -1,11 +1,11 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from "react"
 import {
-  MdBolt,
-  MdContentCopy,
-  MdInput,
-  MdPlayArrow,
-  MdRefresh,
-  MdSearch,
+  MdOutlineBolt,
+  MdOutlineContentCopy,
+  MdOutlineInput,
+  MdOutlinePlayArrow,
+  MdOutlineRefresh,
+  MdOutlineSearch,
 } from "react-icons/md"
 import { clipboard } from "electron"
 import styled from "styled-components"
@@ -32,9 +32,9 @@ const Toolbar = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
 const SearchBox = styled.label`
@@ -46,7 +46,7 @@ const SearchBox = styled.label`
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.foregroundDark};
 `
@@ -68,7 +68,7 @@ const ActionButton = styled.button`
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.foreground};
   font-size: 12px;
@@ -80,8 +80,8 @@ const ActionButton = styled.button`
   }
 
   &:not(:disabled):hover {
-    border-color: ${(props) => props.theme.foregroundDark};
-    background-color: ${(props) => props.theme.backgroundHighlight};
+    border-color: ${(props) => props.theme.highlight};
+    background-color: ${(props) => props.theme.backgroundLighter};
   }
 `
 
@@ -108,17 +108,18 @@ const NodeRow = styled.button<{ $selected: boolean }>`
   min-height: 62px;
   padding: 10px 14px;
   border: 0;
-  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  border-left: 3px solid ${(props) => (props.$selected ? props.theme.highlight : "transparent")};
+  border-bottom: 1px solid ${(props) => props.theme.line};
+  border-left: 2px solid ${(props) => (props.$selected ? props.theme.highlight : "transparent")};
   outline: 0;
   background-color: ${(props) =>
-    props.$selected ? props.theme.backgroundHighlight : "transparent"};
+    props.$selected ? "rgba(122, 162, 247, 0.18)" : "transparent"};
   color: ${(props) => props.theme.foreground};
   text-align: left;
   cursor: pointer;
 
   &:hover {
-    background-color: ${(props) => props.theme.backgroundHighlight};
+    background-color: ${(props) =>
+      props.$selected ? "rgba(122, 162, 247, 0.22)" : props.theme.backgroundLighter};
   }
 `
 
@@ -149,8 +150,8 @@ const Badge = styled.span<{ $muted?: boolean }>`
   align-self: center;
   padding: 3px 7px;
   border-radius: 999px;
-  color: ${(props) => (props.$muted ? props.theme.foregroundDark : props.theme.bold)};
-  background-color: rgba(255, 255, 255, 0.05);
+  color: ${(props) => (props.$muted ? props.theme.foregroundDark : props.theme.support)};
+  background-color: rgba(122, 162, 247, 0.08);
   font-size: 11px;
   font-weight: 700;
 `
@@ -160,12 +161,13 @@ const Inspector = styled.aside`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background-color: ${(props) => props.theme.background};
+  background-color: ${(props) => props.theme.backgroundDarker};
 `
 
 const InspectorHeader = styled.div`
   padding: 14px 16px 12px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.background};
 `
 
 const Eyebrow = styled.div`
@@ -192,7 +194,7 @@ const ActionBar = styled.div`
   gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
 const ScrollPane = styled.div`
@@ -207,7 +209,7 @@ const FillInput = styled.input`
   min-width: 0;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   outline: 0;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.foreground};
@@ -218,11 +220,11 @@ const StatusLine = styled.div<{ $tone?: "error" | "success" }>`
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   color: ${(props) =>
     props.$tone === "error"
-      ? "#ff6b6b"
+      ? props.theme.tag
       : props.$tone === "success"
-        ? "#50c878"
+        ? props.theme.support
         : props.theme.foregroundDark};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
   font-size: 12px;
 `
 
@@ -334,7 +336,7 @@ function Agent() {
       <Header title="Agent" isDraggable />
       <Toolbar>
         <SearchBox>
-          <MdSearch size={16} />
+          <MdOutlineSearch size={16} />
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -342,7 +344,7 @@ function Agent() {
           />
         </SearchBox>
         <ActionButton type="button" onClick={requestSnapshot}>
-          <MdRefresh size={15} />
+          <MdOutlineRefresh size={15} />
           Snapshot
         </ActionButton>
       </Toolbar>
@@ -352,7 +354,7 @@ function Agent() {
       <Workspace>
         <NodeList>
           {filteredNodes.length === 0 ? (
-            <EmptyState icon={MdBolt} title="No Runtime Nodes">
+            <EmptyState icon={MdOutlineBolt} title="No Runtime Nodes">
               Connect an app with agentRuntime enabled, open a screen with testIDs or accessibility labels, then request a snapshot.
             </EmptyState>
           ) : (
@@ -385,7 +387,7 @@ function Agent() {
                   disabled={!isPressable(selectedNode) || status === "loading"}
                   onClick={() => runAction("press")}
                 >
-                  <MdPlayArrow size={15} />
+                  <MdOutlinePlayArrow size={15} />
                   Press
                 </ActionButton>
                 <FillInput
@@ -398,14 +400,14 @@ function Agent() {
                   disabled={!isFillable(selectedNode) || status === "loading"}
                   onClick={() => runAction("fill")}
                 >
-                  <MdInput size={15} />
+                  <MdOutlineInput size={15} />
                   Fill
                 </ActionButton>
                 <ActionButton
                   type="button"
                   onClick={() => clipboard.writeText(JSON.stringify(selectedNode, null, 2))}
                 >
-                  <MdContentCopy size={15} />
+                  <MdOutlineContentCopy size={15} />
                   Copy node
                 </ActionButton>
               </ActionBar>
@@ -414,7 +416,7 @@ function Agent() {
               </ScrollPane>
             </>
           ) : (
-            <EmptyState icon={MdBolt} title="Select A Node">
+            <EmptyState icon={MdOutlineBolt} title="Select A Node">
               Request a snapshot and choose a runtime node.
             </EmptyState>
           )}

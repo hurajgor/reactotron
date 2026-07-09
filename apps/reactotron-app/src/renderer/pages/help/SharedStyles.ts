@@ -6,15 +6,20 @@ export const ItemContainer = styled.div`
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 10px;
+  padding: 12px 10px;
   margin: 5px;
   flex: 1;
   background-color: ${(props) => props.theme.chrome};
-  border-radius: 5px;
+  border-radius: 8px;
   border: 1px solid ${(props) => props.theme.chromeLine};
+  color: ${(props) => props.theme.foreground};
+
+  &:hover {
+    border-color: ${(props) => props.theme.highlight};
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 export const ItemIconContainer = styled.div`
-  color: ${(props) => props.theme.foregroundLight};
+  color: ${(props) => props.theme.highlight};
   margin-bottom: 8px;
 `
-

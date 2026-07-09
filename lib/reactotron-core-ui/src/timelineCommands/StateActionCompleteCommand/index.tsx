@@ -1,6 +1,6 @@
 import React, { FunctionComponent, useState } from "react"
 import styled from "styled-components"
-import { MdRepeat, MdCode } from "react-icons/md"
+import { MdOutlineCode, MdOutlineRepeat } from "react-icons/md"
 import stringifyObject from "stringify-object"
 import type { Difference } from "reactotron-core-contract"
 
@@ -60,7 +60,7 @@ const StateActionCompleteCommand: FunctionComponent<Props> = ({
 
   if (dispatchAction) {
     toolbar.push({
-      icon: MdRepeat,
+      icon: MdOutlineRepeat,
       onClick: () => {
         dispatchAction(payload.action)
       },
@@ -70,7 +70,7 @@ const StateActionCompleteCommand: FunctionComponent<Props> = ({
 
   if (openDispatchDialog) {
     toolbar.push({
-      icon: MdCode,
+      icon: MdOutlineCode,
       onClick: () => {
         openDispatchDialog(
           stringifyObject(payload.action, {

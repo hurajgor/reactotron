@@ -8,13 +8,15 @@ const Container = styled.div`
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  color: ${(props) => props.theme.foregroundLight};
+  color: ${(props) => props.theme.foregroundDark};
 `
 
 const Title = styled.div`
-  font-size: 2rem;
-  padding-bottom: 50px;
-  padding-top: 10px;
+  color: ${(props) => props.theme.foregroundLight};
+  font-size: 1.25rem;
+  font-weight: 600;
+  padding-bottom: 18px;
+  padding-top: 12px;
 `
 
 const Message = styled.div`
@@ -25,8 +27,8 @@ const Message = styled.div`
 `
 
 const Image = styled.img`
-  width: 100px;
-  height: 100px;
+  width: 52px;
+  height: 52px;
   padding-bottom: 4px;
 `
 
@@ -44,7 +46,7 @@ const EmptyState: FunctionComponent<React.PropsWithChildren<Props>> = ({
 }) => {
   return (
     <Container>
-      {Icon && <Icon size={100} />}
+      {Icon && <Icon size={52} />}
       {image && <Image src={image} />}
       {title && <Title>{title}</Title>}
       <Message>{children}</Message>

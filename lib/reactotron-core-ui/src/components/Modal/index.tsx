@@ -8,9 +8,9 @@ const Title = styled.h1`
   margin: 0;
   padding: 0;
   text-align: left;
-  font-weight: normal;
-  font-size: 24px;
-  color: ${(props) => props.theme.heading};
+  font-weight: 700;
+  font-size: 18px;
+  color: ${(props) => props.theme.foregroundLight};
 `
 const KeystrokesContainer = styled.div`
   display: flex;
@@ -22,10 +22,11 @@ export const KeystrokeContainer = styled.div`
   padding: 0 10px;
 `
 export const Keystroke = styled.span`
-  padding: 4px 8px;
-  border-radius: 4px;
-  background-color: ${(props) => props.theme.backgroundHighlight};
-  color: ${(props) => props.theme.foreground};
+  padding: 3px 8px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 6px;
+  background-color: ${(props) => props.theme.backgroundLighter};
+  color: ${(props) => props.theme.foregroundLight};
 `
 
 interface Props {
@@ -62,11 +63,11 @@ const Modal: FunctionComponent<React.PropsWithChildren<Props>> = ({
         content: {
           display: "flex",
           flexDirection: "column",
-          borderRadius: 4,
+          borderRadius: 8,
           padding: 20,
-          backgroundColor: theme.background,
+          backgroundColor: theme.backgroundSubtleLight,
           color: theme.foreground,
-          borderColor: theme.backgroundLighter,
+          borderColor: theme.chromeLine,
           width: 500,
           position: "auto" as any, // TODO: Fix this!
           top: "auto",

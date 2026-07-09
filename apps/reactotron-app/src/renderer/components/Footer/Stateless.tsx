@@ -1,6 +1,10 @@
 import React from "react"
 import styled from "styled-components"
-import { MdSwapVert as ExpandIcon, MdSettings as SettingsIcon, MdShield as ShieldIcon } from "react-icons/md"
+import {
+  MdOutlineSecurity as ShieldIcon,
+  MdOutlineSettings as SettingsIcon,
+  MdOutlineSwapVert as ExpandIcon,
+} from "react-icons/md"
 
 import { getConfiguredServerPort } from "../../config"
 import {
@@ -69,11 +73,12 @@ const McpButton = styled.div.attrs(() => ({}))<McpButtonProps>`
   cursor: pointer;
   font-size: 11px;
   user-select: none;
-  background-color: ${(props) => props.$active ? "rgba(80, 200, 120, 0.15)" : "transparent"};
-  border: 1px solid ${(props) => props.$active ? "rgba(80, 200, 120, 0.4)" : props.theme.chromeLine};
-  color: ${(props) => props.$active ? "#50c878" : props.theme.foregroundDark};
+  background-color: ${(props) => props.$active ? "rgba(122, 162, 247, 0.14)" : "transparent"};
+  border: 1px solid ${(props) => props.$active ? "rgba(122, 162, 247, 0.4)" : props.theme.chromeLine};
+  color: ${(props) => props.$active ? props.theme.highlight : props.theme.foregroundDark};
   &:hover {
-    background-color: ${(props) => props.$active ? "rgba(80, 200, 120, 0.25)" : "rgba(255,255,255,0.05)"};
+    background-color: ${(props) =>
+      props.$active ? "rgba(122, 162, 247, 0.22)" : "rgba(122, 162, 247, 0.08)"};
   }
 `
 
@@ -81,7 +86,7 @@ const McpDot = styled.div<McpButtonProps>`
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: ${(props) => props.$active ? "#50c878" : props.theme.foregroundDark};
+  background-color: ${(props) => props.$active ? props.theme.support : props.theme.foregroundDark};
 `
 
 const McpSettingsButton = styled.div`
@@ -93,14 +98,14 @@ const McpSettingsButton = styled.div`
   color: ${(props) => props.theme.foregroundDark};
   &:hover {
     color: ${(props) => props.theme.foreground};
-    background-color: rgba(255,255,255,0.05);
+    background-color: rgba(122, 162, 247, 0.08);
   }
 `
 
 const RedactionBadge = styled.span<{ $warning?: boolean }>`
   display: flex;
   align-items: center;
-  color: ${(props) => props.$warning ? "#e8a838" : "inherit"};
+  color: ${(props) => props.$warning ? props.theme.warning : "inherit"};
 `
 
 function renderExpanded(

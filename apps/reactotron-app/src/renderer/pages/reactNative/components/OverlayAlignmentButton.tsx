@@ -12,12 +12,18 @@ interface OverlayAlignmentButtonProps {
 const Button = styled.button.attrs<{ selected: boolean }>((props) => ({
   selected: props.selected ? props.selected : false,
 }))`
-  height: 32px;
-  width: 32px;
-  background-color: ${(props) => (props.selected ? props.theme.bold : props.theme.subtleLine)};
-  border-radius: 2px;
-  border: 1px solid ${(props) => (props.selected ? props.theme.bold : props.theme.subtleLine)};
+  height: 28px;
+  width: 28px;
+  background-color: ${(props) =>
+    props.selected ? "rgba(122, 162, 247, 0.18)" : props.theme.backgroundSubtleLight};
+  border-radius: 6px;
+  border: 1px solid ${(props) => (props.selected ? props.theme.highlight : props.theme.chromeLine)};
   margin: 3px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 
 export function OverlayAlignmentButton(props: OverlayAlignmentButtonProps) {

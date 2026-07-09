@@ -5,10 +5,10 @@ import isShallow from "../../utils/isShallow"
 import TreeView from "../TreeView"
 
 const NullContainer = styled.div`
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.keyword};
 `
 const UndefinedContainer = styled.div`
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.keyword};
 `
 const StringContainer = styled.div`
   color: ${(props) => props.theme.foreground};

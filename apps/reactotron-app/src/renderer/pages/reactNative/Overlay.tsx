@@ -3,7 +3,7 @@ import styled from "styled-components"
 import fs from "fs"
 import { nativeImage } from "electron"
 import { Header, ReactNativeContext } from "reactotron-core-ui"
-import { MdBook, MdCamera } from "react-icons/md"
+import { MdOutlineAutoStories, MdOutlinePhotoCamera } from "react-icons/md"
 
 import { OverlayAlignment } from "./components/OverlayAlignment"
 import { OverlayButton } from "./components/OverlayButton"
@@ -24,8 +24,8 @@ const OverlayContainer = styled.div`
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-left: 20px;
-  padding-right: 20px;
+  padding-left: 18px;
+  padding-right: 18px;
   padding-bottom: 20px;
 `
 
@@ -34,10 +34,10 @@ const DropZone = styled.div`
   flex: 1;
   height: 200px;
   width: 200px;
-  background-color: ${(props) => props.theme.subtleLine};
-  border-radius: 2px;
-  border: 1px solid ${(props) => props.theme.backgroundSubtleDark};
-  color: ${(props) => props.theme.foregroundLight};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
+  border-radius: 8px;
+  border: 1px dashed ${(props) => props.theme.chromeLine};
+  color: ${(props) => props.theme.foregroundDark};
   justify-content: center;
   align-items: center;
 `
@@ -289,14 +289,14 @@ function Overlay() {
         tabs={[
           {
             text: "Image Overlay",
-            icon: MdCamera,
+            icon: MdOutlinePhotoCamera,
             isActive: true,
             // eslint-disable-next-line @typescript-eslint/no-empty-function
             onClick: () => {},
           },
           {
             text: "Storybook",
-            icon: MdBook,
+            icon: MdOutlineAutoStories,
             isActive: false,
             onClick: () => {
               // TODO: Couldn't get react-router-dom to do it for me so I forced it.

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react"
 import styled from "styled-components"
-import { MdCheckCircle as Checkmark } from "react-icons/md"
+import { MdOutlineCheckCircle as Checkmark } from "react-icons/md"
 
 import {
   getIcon,
@@ -15,8 +15,9 @@ const Container = styled.div`
   flex-direction: row;
   flex: 0 0 auto;
   cursor: pointer;
-  margin-right: 20px;
+  margin-right: 16px;
   align-items: center;
+  color: ${(props) => props.theme.foreground};
 `
 
 const IconContainer = styled.div`
@@ -27,7 +28,7 @@ const CheckmarkContainer = styled.div`
   position: absolute;
   bottom: -3px;
   right: -3px;
-  color: green;
+  color: ${(props) => props.theme.highlight};
 `
 
 const InfoContainer = styled.div`
@@ -59,7 +60,7 @@ export default function ConnectionSelector({
   return (
     <Container onClick={onClick}>
       <IconContainer>
-        <ConnectionIcon size={32} />
+        <ConnectionIcon size={20} />
         {isSelected && (
           <CheckmarkContainer>
             <Checkmark />

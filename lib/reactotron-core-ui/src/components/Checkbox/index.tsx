@@ -1,5 +1,5 @@
 import React from "react"
-import { MdCheckBoxOutlineBlank, MdCheckBox } from "react-icons/md"
+import { MdOutlineCheckBox, MdOutlineCheckBoxOutlineBlank } from "react-icons/md"
 import styled from "styled-components"
 
 const Container = styled.div`
@@ -9,9 +9,10 @@ const Container = styled.div`
 `
 const IconContainer = styled.div`
   padding-right: 10px;
+  color: ${(props) => props.theme.highlight};
 `
 const Label = styled.span`
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.foreground};
 `
 
 interface Props {
@@ -21,7 +22,7 @@ interface Props {
 }
 
 function Checkbox({ isChecked, label, onToggle }: Props) {
-  const Icon = isChecked ? MdCheckBox : MdCheckBoxOutlineBlank
+  const Icon = isChecked ? MdOutlineCheckBox : MdOutlineCheckBoxOutlineBlank
 
   return (
     <Container onClick={onToggle}>

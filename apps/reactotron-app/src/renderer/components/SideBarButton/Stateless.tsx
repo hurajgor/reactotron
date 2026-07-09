@@ -4,7 +4,7 @@ import { Link } from "react-router-dom"
 import colorInterpolate from "color-interpolate"
 import styled from "styled-components"
 
-const Theme = { highlight: "hsl(290, 3.2%, 47.4%)", foregroundLight: "#c3c3c3" }
+const Theme = { foregroundDark: "#787c99", highlight: "#7aa2f7" }
 
 interface SideBarButtonComponentProps {
   icon?: any
@@ -25,19 +25,31 @@ interface SideBarButtonProps {
   $isCompact?: boolean
 }
 
-const colorInterpolator = colorInterpolate([Theme.highlight, Theme.foregroundLight])
+const colorInterpolator = colorInterpolate([Theme.foregroundDark, Theme.highlight])
 
 export const SideBarButtonContainer = styled.div.attrs(() => ({}))<SideBarButtonProps>`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: ${(props) => (props.$isCompact ? 54 : 69)}px;
-  padding: ${(props) => (props.$isCompact ? "7px 0" : "15px 0")};
-  margin: 0 ${(props) => (props.$isCompact ? 6 : 10)}px;
+  min-height: ${(props) => (props.$isCompact ? 44 : 56)}px;
+  padding: ${(props) => (props.$isCompact ? "5px 0" : "8px 0")};
+  margin: 0 ${(props) => (props.$isCompact ? 6 : 8)}px;
   cursor: pointer;
-  border-top: ${(props) => (props.$hideTopBar ? "none" : `1px solid ${props.theme.line}`)};
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: ${(props) => `rgba(122, 162, 247, ${0.12 * props.$colorAnimation})`};
   color: ${(props) => colorInterpolator(props.$colorAnimation)};
+  transition:
+    background-color 0.12s ease-out,
+    border-color 0.12s ease-out;
+
+  &:hover {
+    border-color: ${(props) => props.theme.line};
+    background-color: ${(props) =>
+      props.$colorAnimation > 0.5 ? "rgba(122, 162, 247, 0.18)" : props.theme.backgroundLighter};
+    color: ${(props) => (props.$colorAnimation > 0.5 ? props.theme.highlight : props.theme.foreground)};
+  }
 `
 
 const Image = styled.img.attrs(() => ({}))<SideBarButtonProps>`
@@ -51,7 +63,8 @@ const Image = styled.img.attrs(() => ({}))<SideBarButtonProps>`
 const Title = styled.div`
   padding-top: 2px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 14px;
 `
 
 function SideBarButton({
@@ -66,7 +79,7 @@ function SideBarButton({
   isCompact,
   onPress,
 }: SideBarButtonComponentProps) {
-  const resolvedIconSize = iconSize || (isCompact ? 27 : 32)
+  const resolvedIconSize = iconSize || (isCompact ? 20 : 22)
 
   return (
     <Motion style={{ color: spring(isActive ? 1 : 0) }}>

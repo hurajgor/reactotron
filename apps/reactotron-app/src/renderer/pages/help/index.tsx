@@ -3,11 +3,11 @@ import { shell } from "electron"
 import { Header } from "reactotron-core-ui"
 import styled from "styled-components"
 import {
-  GoRepo as RepoIcon,
-  GoComment as FeedbackIcon,
-  GoSquirrel as ReleaseIcon,
-} from "react-icons/go"
-import { FaTwitter as TwitterIcon } from "react-icons/fa"
+  MdAlternateEmail as TwitterIcon,
+  MdOutlineCode as RepoIcon,
+  MdOutlineFeedback as FeedbackIcon,
+  MdOutlineNewReleases as ReleaseIcon,
+} from "react-icons/md"
 import { getApplicationKeyMap } from "react-hotkeys"
 import { ItemContainer, ItemIconContainer } from "./SharedStyles"
 import KeybindGroup from "./components/KeybindGroup"
@@ -30,15 +30,15 @@ const LogoContainer = styled.div`
   justify-content: center;
 `
 const LogoImage = styled.img`
-  height: 128px;
-  margin: 20px 0;
+  height: 72px;
+  margin: 14px 0 20px;
 `
 const Title = styled.div`
   font-size: 18px;
   margin: 10px 0;
   padding-bottom: 2px;
   color: ${(props) => props.theme.foregroundLight};
-  border-bottom: 1px solid ${(props) => props.theme.highlight};
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
 `
 const ConnectContainer = styled.div`
   display: flex;
@@ -96,25 +96,25 @@ function Help() {
         <ConnectContainer>
           <ItemContainer onClick={openRepo}>
             <ItemIconContainer>
-              <RepoIcon size={40} />
+              <RepoIcon size={22} />
             </ItemIconContainer>
             GitHub Docs
           </ItemContainer>
           <ItemContainer onClick={openFeedback}>
             <ItemIconContainer>
-              <FeedbackIcon size={40} />
+              <FeedbackIcon size={22} />
             </ItemIconContainer>
             Feedback
           </ItemContainer>
           <ItemContainer onClick={openUpdates}>
             <ItemIconContainer>
-              <ReleaseIcon size={40} />
+              <ReleaseIcon size={22} />
             </ItemIconContainer>
             Updates
           </ItemContainer>
           <ItemContainer onClick={openTwitter}>
             <ItemIconContainer>
-              <TwitterIcon size={40} />
+              <TwitterIcon size={22} />
             </ItemIconContainer>
             @reactotron
           </ItemContainer>

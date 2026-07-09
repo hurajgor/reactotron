@@ -1,6 +1,6 @@
 import React, { FunctionComponent, useEffect, useState } from "react"
 import styled from "styled-components"
-import { MdContentCopy } from "react-icons/md"
+import { MdOutlineContentCopy } from "react-icons/md"
 import stringifyObject from "stringify-object"
 
 import TimelineCommand from "../../components/TimelineCommand"
@@ -19,9 +19,9 @@ const ErrorMessage = styled.div`
   padding: 20px 0 20px 10px;
   cursor: text;
   user-select: text;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.foregroundLight};
   background-color: ${(props) => props.theme.backgroundDarker};
-  border-left: 1px solid ${(props) => props.theme.tag};
+  border-left: 1px solid ${(props) => props.theme.keyword};
   border-right: 1px solid ${(props) => props.theme.subtleLine};
   border-top: 1px solid ${(props) => props.theme.subtleLine};
   border-bottom: 1px solid ${(props) => props.theme.subtleLine};
@@ -36,7 +36,7 @@ const SourceContainer = styled.div`
 const SourceFilename = styled.div`
   padding: 5px 0;
   margin-bottom: 5px;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.support};
 `
 interface SourceLineContainerProps {
   $isSelected: boolean
@@ -45,10 +45,10 @@ const SourceLineContainer = styled.div.attrs(() => ({}))<SourceLineContainerProp
   display: flex;
   padding: 6px 0;
   cursor: pointer;
-  color: ${(props) => (props.$isSelected ? props.theme.tag : props.theme.foregroundDark)};
+  color: ${(props) => (props.$isSelected ? props.theme.highlight : props.theme.foregroundDark)};
   background-color: ${(props) =>
     props.$isSelected ? props.theme.backgroundDarker : "transparent"};
-  border-left: ${(props) => (props.$isSelected ? `1px solid ${props.theme.tag}` : undefined)};
+  border-left: ${(props) => (props.$isSelected ? `1px solid ${props.theme.highlight}` : undefined)};
   border-right: ${(props) =>
     props.$isSelected ? `1px solid ${props.theme.subtleLine}` : undefined};
   border-top: ${(props) => (props.$isSelected ? `1px solid ${props.theme.subtleLine}` : undefined)};
@@ -75,7 +75,7 @@ const StackTitle = styled.div`
   padding-top: 5px;
   padding-bottom: 5px;
   margin-bottom: 5px;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.support};
   border-bottom: 1px solid ${(props) => props.theme.line};
 `
 const StackTable = styled.div`
@@ -108,10 +108,10 @@ const StackFrameContainer = styled.div.attrs(() => ({}))<StackFrameContainerProp
   opacity: ${(props) => (props.$isNodeModule ? 0.4 : 1)};
   cursor: pointer;
 
-  color: ${(props) => (props.$isSelected ? props.theme.tag : props.theme.foreground)};
+  color: ${(props) => (props.$isSelected ? props.theme.highlight : props.theme.foreground)};
   background-color: ${(props) =>
     props.$isSelected ? props.theme.backgroundDarker : "transparent"};
-  border-left: ${(props) => (props.$isSelected ? `1px solid ${props.theme.tag}` : undefined)};
+  border-left: ${(props) => (props.$isSelected ? `1px solid ${props.theme.highlight}` : undefined)};
   border-right: ${(props) =>
     props.$isSelected ? `1px solid ${props.theme.subtleLine}` : undefined};
   border-top: ${(props) => (props.$isSelected ? `1px solid ${props.theme.subtleLine}` : undefined)};
@@ -139,7 +139,7 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
 
   return [
     {
-      icon: MdContentCopy,
+      icon: MdOutlineContentCopy,
       onClick: () => {
         const { level, stack, message } = commandPayload
 

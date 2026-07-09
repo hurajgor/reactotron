@@ -3,7 +3,7 @@ import { Motion, spring } from "react-motion"
 import colorInterpolate from "color-interpolate"
 import styled from "styled-components"
 
-const Theme = { highlight: "hsl(290, 3.2%, 47.4%)", foregroundLight: "#c3c3c3" }
+const Theme = { highlight: "#7aa2f7", foregroundLight: "#c0caf5" }
 
 interface Props {
   icon: any
@@ -21,11 +21,18 @@ const HeaderTabButtonContainer = styled.div.attrs(() => ({}))<HeaderTabButtonPro
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 15px 0;
-  margin: 0 10px;
+  padding: 10px 12px;
+  margin: 0 4px;
+  border-radius: 8px;
   cursor: pointer;
+  background-color: ${(props) => `rgba(122, 162, 247, ${0.14 * props.$colorAnimation})`};
   color: ${(props) => colorInterpolator(props.$colorAnimation)};
   -webkit-app-region: none;
+
+  &:hover {
+    background-color: ${(props) =>
+      props.$colorAnimation > 0.5 ? "rgba(122, 162, 247, 0.18)" : props.theme.backgroundLighter};
+  }
 `
 
 const Title = styled.div`
@@ -39,7 +46,7 @@ function HeaderTabButton({ icon: Icon, text, isActive, onClick }: Props) {
     <Motion style={{ color: spring(isActive ? 1 : 0) }}>
       {({ color }) => (
         <HeaderTabButtonContainer $colorAnimation={color} onClick={onClick}>
-          {Icon && <Icon size={32} />}
+          {Icon && <Icon size={20} />}
           <Title>{text}</Title>
         </HeaderTabButtonContainer>
       )}
