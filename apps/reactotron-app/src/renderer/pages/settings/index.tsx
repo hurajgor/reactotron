@@ -61,31 +61,46 @@ const SectionDescription = styled.p`
   margin: 0 0 14px;
 `
 
-const ThemeSelector = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(112px, 1fr));
-  gap: 6px;
+const SelectWrap = styled.div`
+  position: relative;
   width: 100%;
   min-width: 0;
+
+  &::after {
+    content: "";
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-right: 1px solid ${(props) => props.theme.foregroundDark};
+    border-bottom: 1px solid ${(props) => props.theme.foregroundDark};
+    pointer-events: none;
+    transform: translateY(-65%) rotate(45deg);
+  }
 `
 
-const ThemeOption = styled.button<{ $isActive: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+const ThemeSelect = styled.select`
+  width: 100%;
   height: 34px;
-  border: 1px solid ${(props) => (props.$isActive ? props.theme.highlight : props.theme.chromeLine)};
+  padding: 0 36px 0 12px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
   border-radius: 7px;
-  background-color: ${(props) =>
-    props.$isActive
-      ? `color-mix(in srgb, ${props.theme.highlight} 18%, transparent)`
-      : props.theme.background};
-  color: ${(props) => (props.$isActive ? props.theme.highlight : props.theme.foreground)};
+  appearance: none;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
   cursor: pointer;
   font-size: 12px;
+  outline: none;
 
   &:hover {
     border-color: ${(props) => props.theme.highlight};
+  }
+
+  &:focus {
+    border-color: ${(props) => props.theme.highlight};
+    box-shadow: ${(props) =>
+      `0 0 0 2px color-mix(in srgb, ${props.theme.highlight} 20%, transparent)`};
   }
 `
 
@@ -142,11 +157,24 @@ const ToggleThumb = styled.span<{ $isEnabled: boolean }>`
 const themeOptions: Array<{ label: string; value: ThemeMode }> = [
   { label: "Tokyo Night", value: "tokyoNight" },
   { label: "T3 Code", value: "t3Code" },
+  { label: "Catppuccin", value: "catppuccinMocha" },
+  { label: "GitHub Dark", value: "githubDark" },
+  { label: "One Dark Pro", value: "oneDarkPro" },
+  { label: "Nord", value: "nord" },
+  { label: "Rose Pine", value: "rosePine" },
+  { label: "Gruvbox Dark", value: "gruvboxDark" },
+  { label: "Ayu Mirage", value: "ayuMirage" },
 ]
 
 function Settings() {
-  const { themeMode, setThemeMode, enableNewTimeline, setEnableNewTimeline } =
-    useContext(AppPreferencesContext)
+  const {
+    themeMode,
+    setThemeMode,
+    enableNewTimeline,
+    setEnableNewTimeline,
+    startWithCompactSidebar,
+    setStartWithCompactSidebar,
+  } = useContext(AppPreferencesContext)
 
   return (
     <Container>
@@ -158,18 +186,18 @@ function Settings() {
               <SectionTitle>Theme</SectionTitle>
               <SectionDescription>Choose the Reactotron color theme.</SectionDescription>
             </div>
-            <ThemeSelector>
-              {themeOptions.map((option) => (
-                <ThemeOption
-                  key={option.value}
-                  type="button"
-                  $isActive={themeMode === option.value}
-                  onClick={() => setThemeMode(option.value)}
-                >
-                  {option.label}
-                </ThemeOption>
-              ))}
-            </ThemeSelector>
+            <SelectWrap>
+              <ThemeSelect
+                value={themeMode}
+                onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
+              >
+                {themeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </ThemeSelect>
+            </SelectWrap>
           </Section>
 
           <Section>
@@ -187,6 +215,25 @@ function Settings() {
               />
               <ToggleTrack $isEnabled={enableNewTimeline}>
                 <ToggleThumb $isEnabled={enableNewTimeline} />
+              </ToggleTrack>
+            </PreferenceRow>
+          </Section>
+
+          <Section>
+            <div>
+              <SectionTitle>Sidebar</SectionTitle>
+              <SectionDescription>
+                Start Reactotron with the compact left sidebar.
+              </SectionDescription>
+            </div>
+            <PreferenceRow>
+              <ToggleInput
+                type="checkbox"
+                checked={startWithCompactSidebar}
+                onChange={(event) => setStartWithCompactSidebar(event.target.checked)}
+              />
+              <ToggleTrack $isEnabled={startWithCompactSidebar}>
+                <ToggleThumb $isEnabled={startWithCompactSidebar} />
               </ToggleTrack>
             </PreferenceRow>
           </Section>

@@ -1,6 +1,8 @@
 import { useCallback, useReducer } from "react"
 import { produce } from "immer"
 
+import { startWithCompactSidebarStorageKey } from "../AppPreferences"
+
 export enum ActionTypes {
   ToggleSideBar = "TOGGLE_SIDEBAR",
 }
@@ -13,6 +15,17 @@ interface State {
 }
 
 type Action = { type: ActionTypes.ToggleSideBar }
+
+function getInitialSideBarMode(): SideBarMode {
+  if (typeof window === "undefined") return "compact"
+
+  const savedStartWithCompactSidebar = window.localStorage.getItem(
+    startWithCompactSidebarStorageKey
+  )
+  if (savedStartWithCompactSidebar === null) return "compact"
+
+  return savedStartWithCompactSidebar === "true" ? "compact" : "expanded"
+}
 
 export function reducer(state: State, action: Action) {
   switch (action.type) {
@@ -27,9 +40,10 @@ export function reducer(state: State, action: Action) {
 }
 
 function useLayout() {
+  const initialSideBarMode = getInitialSideBarMode()
   const [state, dispatch] = useReducer(reducer, {
     isSideBarOpen: true,
-    sideBarMode: "expanded",
+    sideBarMode: initialSideBarMode,
   })
 
   const toggleSideBar = useCallback(() => {

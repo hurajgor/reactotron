@@ -1,5 +1,5 @@
 import React from "react"
-import type { ThemeName } from "../themes"
+import { themeNames, type ThemeName } from "../themes"
 
 const themeModeStorageKey = "reactotron.themeMode"
 const themeModeChangeEvent = "reactotron-theme-mode-changed"
@@ -8,7 +8,7 @@ function getStoredThemeName(): ThemeName {
   if (typeof window === "undefined") return "tokyoNight"
 
   const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
-  if (savedThemeMode === "tokyoNight" || savedThemeMode === "t3Code") return savedThemeMode
+  if (themeNames.includes(savedThemeMode as ThemeName)) return savedThemeMode as ThemeName
 
   return "tokyoNight"
 }
