@@ -231,15 +231,16 @@ const LogLevelOption = styled.label`
 const Workspace = styled.div<{ $inspectorWidth: number }>`
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(120px, 0.75fr) 7px minmax(
-      240px,
-      ${(props) => props.$inspectorWidth}px
-    );
+  grid-template-columns:
+    minmax(120px, calc(100% - ${(props) => props.$inspectorWidth}px - 7px)) 7px
+    minmax(240px, 1fr);
   min-height: 0;
   overflow: hidden;
 
   @media (max-width: 520px) {
-    grid-template-columns: minmax(96px, 0.5fr) 7px minmax(220px, 1fr);
+    grid-template-columns:
+      minmax(96px, calc(100% - ${(props) => props.$inspectorWidth}px - 7px)) 7px
+      minmax(220px, 1fr);
   }
 `
 
