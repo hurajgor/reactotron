@@ -235,7 +235,15 @@ function flattenNodes(nodes: AgentUiNode[] = []): AgentUiNode[] {
 }
 
 function nodeSubtitle(node: AgentUiNode) {
-  return [node.type, node.role, node.label || node.text].filter(Boolean).join(" | ")
+  return [node.type, node.role, node.label || node.text || node.placeholder].filter(Boolean).join(" | ")
+}
+
+function nodeKey(node: AgentUiNode) {
+  return node.testID ?? node.id ?? ""
+}
+
+function nodeTitle(node: AgentUiNode) {
+  return node.testID ?? node.label ?? node.text ?? node.placeholder ?? node.id ?? "Runtime node"
 }
 
 function isFillable(node: AgentUiNode) {
@@ -252,7 +260,7 @@ function isPressable(node: AgentUiNode) {
 function Agent() {
   const { addCommandListener, sendCommand } = useContext(ReactotronContext)
   const [snapshot, setSnapshot] = useState<AgentUiSnapshot | null>(null)
-  const [selectedTestID, setSelectedTestID] = useState("")
+  const [selectedNodeKey, setSelectedNodeKey] = useState("")
   const [query, setQuery] = useState("")
   const [fillValue, setFillValue] = useState("")
   const [pendingRequestId, setPendingRequestId] = useState("")
@@ -264,12 +272,12 @@ function Agent() {
     const needle = query.trim().toLowerCase()
     if (!needle) return nodes
     return nodes.filter((node) =>
-      `${node.testID} ${node.type ?? ""} ${node.label ?? ""} ${node.text ?? ""} ${node.role ?? ""}`
+      `${node.id ?? ""} ${node.testID ?? ""} ${node.type ?? ""} ${node.label ?? ""} ${node.text ?? ""} ${node.role ?? ""} ${node.hint ?? ""} ${node.placeholder ?? ""}`
         .toLowerCase()
         .includes(needle)
     )
   }, [nodes, query])
-  const selectedNode = nodes.find((node) => node.testID === selectedTestID) ?? filteredNodes[0] ?? null
+  const selectedNode = nodes.find((node) => nodeKey(node) === selectedNodeKey) ?? filteredNodes[0] ?? null
 
   useEffect(() => {
     addCommandListener((command) => {
@@ -310,10 +318,11 @@ function Agent() {
     const requestId = createRequestId(`agent-ui-${action}`)
     setPendingRequestId(requestId)
     setStatus("loading")
-    setMessage(`Running ${action} on ${selectedNode.testID}...`)
+    setMessage(`Running ${action} on ${nodeTitle(selectedNode)}...`)
     sendCommand("agent.ui.action.request", {
       requestId,
       testID: selectedNode.testID,
+      selector: selectedNode.testID ? undefined : { id: selectedNode.id },
       action,
       value: action === "fill" ? fillValue : undefined,
     })
@@ -328,7 +337,7 @@ function Agent() {
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search testID, type, label, role"
+            placeholder="Search testID, label, text, role, placeholder"
           />
         </SearchBox>
         <ActionButton type="button" onClick={requestSnapshot}>
@@ -342,19 +351,19 @@ function Agent() {
       <Workspace>
         <NodeList>
           {filteredNodes.length === 0 ? (
-            <EmptyState icon={MdBolt} title="No Runtime testIDs">
-              Connect an app with agentRuntime enabled, open a screen with testIDs, then request a snapshot.
+            <EmptyState icon={MdBolt} title="No Runtime Nodes">
+              Connect an app with agentRuntime enabled, open a screen with testIDs or accessibility labels, then request a snapshot.
             </EmptyState>
           ) : (
             filteredNodes.map((node) => (
               <NodeRow
-                key={node.testID}
+                key={nodeKey(node)}
                 type="button"
-                $selected={selectedNode?.testID === node.testID}
-                onClick={() => setSelectedTestID(node.testID)}
+                $selected={nodeKey(selectedNode ?? {}) === nodeKey(node)}
+                onClick={() => setSelectedNodeKey(nodeKey(node))}
               >
                 <NodeTitle>
-                  <strong>{node.testID}</strong>
+                  <strong>{nodeTitle(node)}</strong>
                   <small>{nodeSubtitle(node)}</small>
                 </NodeTitle>
                 <Badge $muted={!node.enabled}>{node.enabled === false ? "disabled" : node.type ?? "node"}</Badge>
@@ -367,7 +376,7 @@ function Agent() {
             <>
               <InspectorHeader>
                 <Eyebrow>Runtime Node</Eyebrow>
-                <InspectorTitle>{selectedNode.testID}</InspectorTitle>
+                <InspectorTitle>{nodeTitle(selectedNode)}</InspectorTitle>
               </InspectorHeader>
               <ActionBar>
                 <ActionButton
@@ -404,7 +413,7 @@ function Agent() {
               </ScrollPane>
             </>
           ) : (
-            <EmptyState icon={MdBolt} title="Select A testID">
+            <EmptyState icon={MdBolt} title="Select A Node">
               Request a snapshot and choose a runtime node.
             </EmptyState>
           )}

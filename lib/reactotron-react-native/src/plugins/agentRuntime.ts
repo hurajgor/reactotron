@@ -1,6 +1,7 @@
 import type {
   AgentUiActionRequestPayload,
   AgentUiNode,
+  AgentUiSelector,
   AgentUiResponsePayload,
   AgentUiSnapshot,
   AgentUiSnapshotRequestPayload,
@@ -49,6 +50,8 @@ type CapturedElement = {
 type AgentRuntimeGlobalState = {
   installed: boolean
   elements: Map<string, CapturedElement[]>
+  ids: WeakMap<Record<string, any>, string>
+  nextId: number
 }
 
 function getGlobalState(): AgentRuntimeGlobalState {
@@ -57,10 +60,18 @@ function getGlobalState(): AgentRuntimeGlobalState {
     target[AUTO_CAPTURE_KEY] = {
       installed: false,
       elements: new Map<string, CapturedElement[]>(),
+      ids: new WeakMap<Record<string, any>, string>(),
+      nextId: 1,
     } satisfies AgentRuntimeGlobalState
   }
 
   const state = target[AUTO_CAPTURE_KEY] as AgentRuntimeGlobalState
+  if (!state.ids) {
+    state.ids = new WeakMap<Record<string, any>, string>()
+  }
+  if (!state.nextId) {
+    state.nextId = 1
+  }
   ;(state.elements as Map<string, CapturedElement[] | CapturedElement>).forEach((value, testID) => {
     if (!Array.isArray(value)) {
       state.elements.set(testID, [value])
@@ -92,6 +103,18 @@ function textFromChildren(children: unknown): string | undefined {
 
 function roleFromProps(props: Record<string, any>) {
   return props.accessibilityRole ?? props.role
+}
+
+function labelFromProps(props: Record<string, any>) {
+  return props.accessibilityLabel ?? props["aria-label"]
+}
+
+function hintFromProps(props: Record<string, any>) {
+  return props.accessibilityHint
+}
+
+function placeholderFromProps(props: Record<string, any>) {
+  return props.placeholder
 }
 
 function enabledFromProps(props: Record<string, any>) {
@@ -147,7 +170,8 @@ function addCapturedElement(
   elements: Map<string, CapturedElement[]>,
   candidate: CapturedElement
 ) {
-  const candidates = elements.get(candidate.node.testID) ?? []
+  const key = candidateKey(candidate.node)
+  const candidates = elements.get(key) ?? []
   const existingIndex = candidates.findIndex((entry) => entry.props === candidate.props)
 
   if (existingIndex >= 0) {
@@ -157,7 +181,7 @@ function addCapturedElement(
   }
 
   candidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a) || b.seenAt - a.seenAt)
-  elements.set(candidate.node.testID, candidates.slice(0, 20))
+  elements.set(key, candidates.slice(0, 20))
 }
 
 function assignOriginalRef(ref: any, value: any) {
@@ -171,20 +195,160 @@ function assignOriginalRef(ref: any, value: any) {
   }
 }
 
+function generatedIdForProps(type: unknown, props: Record<string, any>) {
+  const state = getGlobalState()
+  let id = state.ids.get(props)
+  if (!id) {
+    id = `agent-runtime-${state.nextId++}`
+    state.ids.set(props, id)
+  }
+
+  return id
+}
+
 function nodeFromProps(type: unknown, props: Record<string, any>): AgentUiNode | null {
-  const testID = props.testID
-  if (typeof testID !== "string" || testID.length === 0) return null
+  const testID = typeof props.testID === "string" && props.testID.length > 0 ? props.testID : undefined
+  const text = textFromChildren(props.children)
+  const label = labelFromProps(props)
+  const role = roleFromProps(props)
+  const hint = hintFromProps(props)
+  const placeholder = placeholderFromProps(props)
+
+  if (
+    !testID &&
+    !text &&
+    !label &&
+    !role &&
+    !hint &&
+    !placeholder &&
+    props.value == null &&
+    !hasPressHandler(props) &&
+    !hasFillHandler(props)
+  ) {
+    return null
+  }
 
   return {
+    id: generatedIdForProps(type, props),
     testID,
     type: typeName(type),
-    text: textFromChildren(props.children),
-    label: props.accessibilityLabel,
-    role: roleFromProps(props),
+    text,
+    label,
+    role,
+    hint,
+    placeholder,
     visible: visibleFromProps(props),
     enabled: enabledFromProps(props),
     value: props.value,
   }
+}
+
+function candidateKey(node: AgentUiNode) {
+  return node.testID ?? node.id ?? ""
+}
+
+function allCandidates(elements: Map<string, CapturedElement[]>) {
+  return Array.from(elements.values()).flat()
+}
+
+function uniqueCandidates(candidates: CapturedElement[]) {
+  const seenProps = new WeakSet<Record<string, any>>()
+  const seenKeys = new Set<string>()
+
+  return candidates.filter((candidate) => {
+    if (candidate.props && seenProps.has(candidate.props)) return false
+    if (candidate.props) seenProps.add(candidate.props)
+
+    const key = candidateKey(candidate.node)
+    if (key) {
+      const nodeKey = `${key}:${candidate.node.type ?? ""}:${candidate.node.text ?? ""}:${candidate.node.label ?? ""}`
+      if (seenKeys.has(nodeKey)) return false
+      seenKeys.add(nodeKey)
+    }
+
+    return true
+  })
+}
+
+function normalize(value: unknown) {
+  return String(value ?? "").trim().toLowerCase()
+}
+
+function textMatches(actual: unknown, expected: unknown) {
+  return normalize(actual).includes(normalize(expected))
+}
+
+function candidateMatchesSelector(candidate: CapturedElement, selector: AgentUiSelector) {
+  const node = candidate.node
+  if (selector.id && node.id !== selector.id) return false
+  if (selector.testID && node.testID !== selector.testID) return false
+  if (selector.type && node.type !== selector.type) return false
+  if (selector.role && node.role !== selector.role) return false
+  if (selector.enabled != null && node.enabled !== selector.enabled) return false
+  if (selector.visible != null && node.visible !== selector.visible) return false
+  if (selector.text && !textMatches(node.text, selector.text)) return false
+  if (selector.label && !textMatches(node.label, selector.label)) return false
+  if (selector.hint && !textMatches(node.hint, selector.hint)) return false
+  if (selector.placeholder && !textMatches(node.placeholder, selector.placeholder)) return false
+  return true
+}
+
+function summarizeNode(node: AgentUiNode) {
+  return {
+    id: node.id,
+    testID: node.testID,
+    type: node.type,
+    text: node.text,
+    label: node.label,
+    role: node.role,
+    hint: node.hint,
+    placeholder: node.placeholder,
+    enabled: node.enabled,
+    visible: node.visible,
+  }
+}
+
+function safeSelectorDescription(request: AgentUiActionRequestPayload) {
+  if (request.testID) return `testID "${request.testID}"`
+  if (request.selector) return `selector ${JSON.stringify(request.selector)}`
+  return "the empty selector"
+}
+
+function findCandidates(
+  elements: Map<string, CapturedElement[]>,
+  request: AgentUiActionRequestPayload
+) {
+  if (request.testID) {
+    return uniqueCandidates([
+      ...(elements.get(request.testID) ?? []),
+      ...(getGlobalState().elements.get(request.testID) ?? []),
+    ])
+  }
+
+  if (request.selector?.id) {
+    return uniqueCandidates([
+      ...(elements.get(request.selector.id) ?? []),
+      ...(getGlobalState().elements.get(request.selector.id) ?? []),
+    ].filter((candidate) => candidateMatchesSelector(candidate, request.selector as AgentUiSelector)))
+  }
+
+  if (request.selector?.testID) {
+    return uniqueCandidates([
+      ...(elements.get(request.selector.testID) ?? []),
+      ...(getGlobalState().elements.get(request.selector.testID) ?? []),
+    ].filter((candidate) => candidateMatchesSelector(candidate, request.selector as AgentUiSelector)))
+  }
+
+  if (request.selector) {
+    const matches = [
+      ...allCandidates(elements),
+      ...allCandidates(getGlobalState().elements),
+    ].filter((candidate) => candidateMatchesSelector(candidate, request.selector as AgentUiSelector))
+
+    return uniqueCandidates(matches)
+  }
+
+  return []
 }
 
 function captureElement(
@@ -298,28 +462,48 @@ async function runInferredAction(
   elements: Map<string, CapturedElement[]>,
   request: AgentUiActionRequestPayload
 ) {
-  const element = bestCandidate(
-    [
-      ...(elements.get(request.testID) ?? []),
-      ...(getGlobalState().elements.get(request.testID) ?? []),
-    ],
-    request.action
-  )
+  const matches = findCandidates(elements, request)
+  const index = request.selector?.index
+  const selectedMatches = index == null ? matches : matches.slice(index, index + 1)
+  const actionableMatches = selectedMatches.filter((candidate) => scoreCandidate(candidate, request.action) > 0)
+
+  if (!request.testID && !request.selector) {
+    throw new Error("Agent UI action requires either testID or selector.")
+  }
+
+  if (matches.length === 0) {
+    throw new Error(`No mounted element matched ${safeSelectorDescription(request)}.`)
+  }
+
+  if (index != null && selectedMatches.length === 0) {
+    throw new Error(`No mounted element matched ${safeSelectorDescription(request)} at index ${index}.`)
+  }
+
+  if (!request.testID && index == null && actionableMatches.length > 1) {
+    throw new Error(
+      `Ambiguous selector matched ${actionableMatches.length} actionable elements. Add testID, id, more selector fields, or index. Candidates: ${JSON.stringify(
+        actionableMatches.slice(0, 10).map((candidate) => summarizeNode(candidate.node))
+      )}`
+    )
+  }
+
+  const element = bestCandidate(selectedMatches, request.action)
   const props = element?.props
+  const targetDescription = request.testID ?? request.selector?.testID ?? request.selector?.id ?? "selector"
 
   if (!props) {
-    throw new Error(`No mounted element with testID "${request.testID}" was found.`)
+    throw new Error(`No mounted element matched ${safeSelectorDescription(request)}.`)
   }
 
   if (request.action === "press") {
     const handler = props.onPress ?? props.onClick
     if (typeof handler !== "function") {
-      throw new Error(`Element "${request.testID}" does not expose an onPress handler.`)
+      throw new Error(`Element "${targetDescription}" does not expose an onPress handler.`)
     }
 
     return handler({
       nativeEvent: {
-        target: request.testID,
+        target: targetDescription,
       },
     })
   }
@@ -333,18 +517,18 @@ async function runInferredAction(
       return props.onChange({
         nativeEvent: {
           text: String(request.value ?? ""),
-          target: request.testID,
+          target: targetDescription,
         },
       })
     }
 
-    throw new Error(`Element "${request.testID}" does not expose onChangeText or onChange.`)
+    throw new Error(`Element "${targetDescription}" does not expose onChangeText or onChange.`)
   }
 
   if (request.action === "scroll") {
     const ref = element?.ref
     if (!ref) {
-      throw new Error(`Element "${request.testID}" scroll ref not available.`)
+      throw new Error(`Element "${targetDescription}" scroll ref not available.`)
     }
 
     const args = request.args ?? {}
@@ -370,7 +554,7 @@ async function runInferredAction(
       })
     }
 
-    throw new Error(`Element "${request.testID}" scroll ref not available.`)
+    throw new Error(`Element "${targetDescription}" scroll ref not available.`)
   }
 
   throw new Error(`No inferred handler exists for action "${request.action}".`)
@@ -388,7 +572,10 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
     installCreateElementCapture()
   }
 
-  ;(options.nodes ?? []).forEach((node) => nodes.set(node.testID, node))
+  ;(options.nodes ?? []).forEach((node) => {
+    const key = candidateKey(node)
+    if (key) nodes.set(key, node)
+  })
 
   Object.entries(options.actions ?? {}).forEach(([testID, handlerOrMap]) => {
     if (typeof handlerOrMap === "function") {
@@ -415,7 +602,8 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
     const mergedNodes = new Map<string, AgentUiNode>()
 
     ;[...capturedNodes, ...fiberSnapshot.nodes, ...Array.from(nodes.values())].forEach((node) => {
-      mergedNodes.set(node.testID, node)
+      const key = candidateKey(node)
+      if (key) mergedNodes.set(key, node)
     })
 
     return {
@@ -446,7 +634,10 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
   }
 
   const handleAction = async (payload: AgentUiActionRequestPayload) => {
-    const handler = actions.get(actionKey(payload.testID, payload.action))
+    const manualActionTestID = payload.testID ?? payload.selector?.testID
+    const handler = manualActionTestID
+      ? actions.get(actionKey(manualActionTestID, payload.action))
+      : undefined
 
     try {
       const fiberSnapshot = autoCapture ? collectFiberNodes() : { nodes: [], elements: new Map() }
@@ -458,7 +649,7 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
         requestId: payload.requestId,
         status: "success",
         action: payload.action,
-        testID: payload.testID,
+        testID: manualActionTestID,
         result,
         snapshot: await buildSnapshot(),
       })
@@ -467,7 +658,7 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
         requestId: payload.requestId,
         status: "error",
         action: payload.action,
-        testID: payload.testID,
+        testID: manualActionTestID,
         message: error instanceof Error ? error.message : String(error),
       })
     }
@@ -488,7 +679,8 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
         snapshotProvider = provider
       },
       registerAgentRuntimeNode: (node: AgentUiNode) => {
-        nodes.set(node.testID, node)
+        const key = candidateKey(node)
+        if (key) nodes.set(key, node)
       },
       updateAgentRuntimeNode: (testID: string, patch: Partial<AgentUiNode>) => {
         nodes.set(testID, { testID, ...nodes.get(testID), ...patch })

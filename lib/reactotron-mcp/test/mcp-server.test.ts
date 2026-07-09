@@ -282,6 +282,7 @@ describe("tools", () => {
     expect(names).toContain("list_custom_commands")
     expect(names).toContain("agent_ui_snapshot")
     expect(names).toContain("agent_ui_action")
+    expect(names).toContain("agent_ui_find")
     expect(names).toContain("agent_ui_press")
     expect(names).toContain("agent_ui_fill")
     expect(names).toContain("agent_ui_scroll")
@@ -398,6 +399,47 @@ describe("tools", () => {
     }
   })
 
+  test("agent_ui_find returns nodes matching accessibility selector", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.snapshot.request") {
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              snapshot: {
+                nodes: [
+                  { id: "node-1", type: "Pressable", role: "button", label: "Sign In", enabled: true, visible: true },
+                  { id: "node-2", type: "TextInput", role: "text", placeholder: "Email address", enabled: true, visible: true },
+                ],
+              },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 26,
+        params: {
+          name: "agent_ui_find",
+          arguments: { selector: { role: "button", label: "sign" } },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.count).toBe(1)
+      expect(data.matches[0].id).toBe("node-1")
+    } finally {
+      app.close()
+    }
+  })
+
   test("agent_ui_press sends a testID action and returns app result", async () => {
     const app = await connectMockApp(relayPort)
     try {
@@ -432,6 +474,46 @@ describe("tools", () => {
       expect(data.testID).toBe("login-submit-button")
       expect(data.result.pressed).toBe(true)
       expect(received[0].payload.action).toBe("press")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_press sends selector action when testID is unavailable", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              result: { selector: parsed.payload.selector },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 27,
+        params: {
+          name: "agent_ui_press",
+          arguments: { selector: { role: "button", label: "Sign In" } },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("press")
+      expect(received[0].payload.testID).toBeUndefined()
+      expect(received[0].payload.selector).toEqual({ role: "button", label: "Sign In" })
     } finally {
       app.close()
     }

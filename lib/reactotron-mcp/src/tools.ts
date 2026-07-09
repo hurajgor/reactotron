@@ -1,6 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type ReactotronServer from "reactotron-core-server"
-import type { AgentUiActionRequestPayload, AgentUiResponsePayload, Command } from "reactotron-core-contract"
+import type {
+  AgentUiActionRequestPayload,
+  AgentUiNode,
+  AgentUiResponsePayload,
+  AgentUiSelector,
+  Command,
+} from "reactotron-core-contract"
 import { z } from "zod/v4"
 import { promises as fsPromises } from "fs"
 import { extname } from "path"
@@ -68,6 +74,50 @@ function textResult(data: unknown, guidance?: string) {
 
 function createRequestId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+const agentUiSelectorSchema = z.object({
+  id: z.string().optional().describe("Runtime node id from agent_ui_snapshot or agent_ui_find."),
+  testID: z.string().optional().describe("React Native testID."),
+  type: z.string().optional().describe("React component/native type, e.g. Pressable or TextInput."),
+  text: z.string().optional().describe("Visible text content, matched case-insensitively by substring."),
+  label: z.string().optional().describe("Accessibility label, matched case-insensitively by substring."),
+  role: z.string().optional().describe("Accessibility role, e.g. button, text, search, image."),
+  hint: z.string().optional().describe("Accessibility hint, matched case-insensitively by substring."),
+  placeholder: z.string().optional().describe("Input placeholder, matched case-insensitively by substring."),
+  enabled: z.boolean().optional().describe("Whether the node is enabled."),
+  visible: z.boolean().optional().describe("Whether the node is visible."),
+  index: z.number().optional().describe("0-based index to disambiguate multiple selector matches."),
+})
+
+function flattenAgentNodes(nodes: AgentUiNode[] = []): AgentUiNode[] {
+  return nodes.flatMap((node) => [node, ...flattenAgentNodes(node.children ?? [])])
+}
+
+function normalizeSelectorValue(value: unknown) {
+  return String(value ?? "").trim().toLowerCase()
+}
+
+function selectorTextMatches(actual: unknown, expected: unknown) {
+  return normalizeSelectorValue(actual).includes(normalizeSelectorValue(expected))
+}
+
+function nodeMatchesSelector(node: AgentUiNode, selector: AgentUiSelector) {
+  if (selector.id && node.id !== selector.id) return false
+  if (selector.testID && node.testID !== selector.testID) return false
+  if (selector.type && node.type !== selector.type) return false
+  if (selector.role && node.role !== selector.role) return false
+  if (selector.enabled != null && node.enabled !== selector.enabled) return false
+  if (selector.visible != null && node.visible !== selector.visible) return false
+  if (selector.text && !selectorTextMatches(node.text, selector.text)) return false
+  if (selector.label && !selectorTextMatches(node.label, selector.label)) return false
+  if (selector.hint && !selectorTextMatches(node.hint, selector.hint)) return false
+  if (selector.placeholder && !selectorTextMatches(node.placeholder, selector.placeholder)) return false
+  return true
+}
+
+function compactArgs(args: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined))
 }
 
 async function waitForAgentUiResponse(
@@ -309,12 +359,13 @@ export function registerTools(
 
   mcp.registerTool("agent_ui_action", {
     description: [
-      "Run a registered semantic UI action by testID through the connected app's Reactotron agent runtime.",
-      "Requires the app to register a handler for this testID/action pair.",
-      "Use agent_ui_snapshot first to discover available testIDs.",
+      "Run a semantic UI action by testID or accessibility selector through the connected app's Reactotron agent runtime.",
+      "Use testID when available. Otherwise use selector fields such as role, label, text, placeholder, or id.",
+      "Use agent_ui_snapshot or agent_ui_find first to discover available nodes.",
     ].join(" "),
     inputSchema: {
-      testID: z.string().describe("Target React Native testID, e.g. 'login-submit-button'."),
+      testID: z.string().optional().describe("Target React Native testID, e.g. 'login-submit-button'."),
+      selector: agentUiSelectorSchema.optional().describe("Accessibility/runtime selector when testID is unavailable."),
       action: z.string().describe("Action name registered by the app, e.g. 'press', 'fill', or 'scroll'."),
       value: z.any().optional().describe("Optional action value. For fill, this is usually the text."),
       args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
@@ -329,6 +380,7 @@ export function registerTools(
     const payload: AgentUiActionRequestPayload = {
       requestId,
       testID: args.testID,
+      selector: args.selector,
       action: args.action,
       value: args.value,
       args: args.args,
@@ -342,17 +394,63 @@ export function registerTools(
         status: "no_response",
         action: args.action,
         testID: args.testID,
-        message: "The app did not answer agent.ui.action.request. Add Reactotron.use(agentRuntime(...)) and register the action.",
+        selector: args.selector,
+        message: "The app did not answer agent.ui.action.request. Add Reactotron.use(agentRuntime(...)) in the app.",
       })
     }
 
     return textResult(response)
   })
 
-  mcp.registerTool("agent_ui_press", {
-    description: "Press a registered testID through Reactotron agent runtime. Shortcut for agent_ui_action with action='press'.",
+  mcp.registerTool("agent_ui_find", {
+    description: [
+      "Find semantic UI nodes in the connected app by testID or accessibility selector.",
+      "This is useful when an app has no testIDs but does have accessibility labels, roles, text, hints, or placeholders.",
+      "If multiple nodes match, use the returned id or selector.index to disambiguate before acting.",
+    ].join(" "),
     inputSchema: {
-      testID: z.string().describe("Target React Native testID."),
+      selector: agentUiSelectorSchema.describe("Selector to match against runtime nodes."),
+      clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
+      timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
+    },
+  }, async (args) => {
+    const { clientId, error } = resolveClientId(server, args.clientId)
+    if (error) return textResult({ status: "error", message: error })
+
+    const requestId = createRequestId("agent-ui-find")
+    server.send("agent.ui.snapshot.request", { requestId }, clientId)
+
+    const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
+    if (!response) {
+      return textResult({
+        status: "no_response",
+        message: "The app did not answer agent.ui.snapshot.request. Add Reactotron.use(agentRuntime(...)) in the app.",
+      })
+    }
+
+    if (response.status === "error" || !response.snapshot) return textResult(response)
+
+    const matches = flattenAgentNodes(response.snapshot.nodes).filter((node) =>
+      nodeMatchesSelector(node, args.selector)
+    )
+
+    return textResult({
+      status: "success",
+      count: matches.length,
+      selector: args.selector,
+      matches,
+      guidance:
+        matches.length > 1
+          ? "Multiple nodes matched. Use a returned id, add more selector fields, or pass selector.index to press/fill/scroll."
+          : undefined,
+    })
+  })
+
+  mcp.registerTool("agent_ui_press", {
+    description: "Press a node by testID or accessibility selector through Reactotron agent runtime. Shortcut for agent_ui_action with action='press'.",
+    inputSchema: {
+      testID: z.string().optional().describe("Target React Native testID."),
+      selector: agentUiSelectorSchema.optional().describe("Accessibility/runtime selector when testID is unavailable."),
       args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
       clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
       timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
@@ -365,6 +463,7 @@ export function registerTools(
     server.send("agent.ui.action.request", {
       requestId,
       testID: args.testID,
+      selector: args.selector,
       action: "press",
       args: args.args,
     }, clientId)
@@ -375,7 +474,8 @@ export function registerTools(
         status: "no_response",
         action: "press",
         testID: args.testID,
-        message: "The app did not answer press. Register a 'press' handler for this testID in agentRuntime.",
+        selector: args.selector,
+        message: "The app did not answer press. Ensure the app has Reactotron.use(agentRuntime(...)) enabled.",
       })
     }
 
@@ -383,9 +483,10 @@ export function registerTools(
   })
 
   mcp.registerTool("agent_ui_fill", {
-    description: "Fill a registered text input testID through Reactotron agent runtime. Shortcut for agent_ui_action with action='fill'.",
+    description: "Fill a text input by testID or accessibility selector through Reactotron agent runtime. Shortcut for agent_ui_action with action='fill'.",
     inputSchema: {
-      testID: z.string().describe("Target React Native TextInput testID."),
+      testID: z.string().optional().describe("Target React Native TextInput testID."),
+      selector: agentUiSelectorSchema.optional().describe("Accessibility/runtime selector when testID is unavailable."),
       text: z.string().describe("Text to enter."),
       args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
       clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
@@ -399,6 +500,7 @@ export function registerTools(
     server.send("agent.ui.action.request", {
       requestId,
       testID: args.testID,
+      selector: args.selector,
       action: "fill",
       value: args.text,
       args: args.args,
@@ -410,7 +512,8 @@ export function registerTools(
         status: "no_response",
         action: "fill",
         testID: args.testID,
-        message: "The app did not answer fill. Register a 'fill' handler for this testID in agentRuntime.",
+        selector: args.selector,
+        message: "The app did not answer fill. Ensure the app has Reactotron.use(agentRuntime(...)) enabled.",
       })
     }
 
@@ -418,9 +521,10 @@ export function registerTools(
   })
 
   mcp.registerTool("agent_ui_scroll", {
-    description: "Scroll a registered ScrollView, FlatList, or SectionList testID through Reactotron agent runtime. Shortcut for agent_ui_action with action='scroll'.",
+    description: "Scroll a ScrollView, FlatList, or SectionList by testID or accessibility selector through Reactotron agent runtime. Shortcut for agent_ui_action with action='scroll'.",
     inputSchema: {
-      testID: z.string().describe("Target React Native ScrollView, FlatList, or SectionList testID."),
+      testID: z.string().optional().describe("Target React Native ScrollView, FlatList, or SectionList testID."),
+      selector: agentUiSelectorSchema.optional().describe("Accessibility/runtime selector when testID is unavailable."),
       y: z.number().optional().describe("Y position for ScrollView, or fallback offset for virtualized lists."),
       offset: z.number().optional().describe("FlatList offset. Overrides y for FlatList-style refs."),
       x: z.number().optional().describe("X position for ScrollView. Default 0."),
@@ -440,8 +544,9 @@ export function registerTools(
     server.send("agent.ui.action.request", {
       requestId,
       testID: args.testID,
+      selector: args.selector,
       action: "scroll",
-      args: {
+      args: compactArgs({
         y: args.y,
         offset: args.offset,
         x: args.x,
@@ -450,7 +555,7 @@ export function registerTools(
         viewOffset: args.viewOffset,
         viewPosition: args.viewPosition,
         animated: args.animated,
-      },
+      }),
     }, clientId)
 
     const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
@@ -459,6 +564,7 @@ export function registerTools(
         status: "no_response",
         action: "scroll",
         testID: args.testID,
+        selector: args.selector,
         message: "The app did not answer scroll. Ensure the testID is mounted on a scrollable component with a captured ref.",
       })
     }

@@ -53,6 +53,37 @@ describe("agentRuntime", () => {
     )
   })
 
+  test("automatically snapshots accessibility-only elements without testIDs", async () => {
+    const { plugin, sent } = createPlugin()
+
+    React.createElement("Pressable", {
+      accessibilityRole: "button",
+      accessibilityLabel: "Sign In",
+      accessibilityHint: "Submits the login form",
+      children: "Continue",
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.snapshot.request",
+      payload: { requestId: "snapshot-a11y-1" },
+    } as any)
+    await flush()
+
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.snapshot.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: expect.stringMatching(/^agent-runtime-/),
+          testID: undefined,
+          role: "button",
+          label: "Sign In",
+          hint: "Submits the login form",
+          text: "Continue",
+        }),
+      ])
+    )
+  })
+
   test("infers press from captured onPress props", async () => {
     const { plugin, sent } = createPlugin()
     const onPress = jest.fn(() => ({ pressed: true }))
@@ -71,6 +102,59 @@ describe("agentRuntime", () => {
     expect(onPress).toHaveBeenCalledTimes(1)
     expect(sent[0].payload.status).toBe("success")
     expect(sent[0].payload.action).toBe("press")
+  })
+
+  test("infers press from an accessibility selector when testID is missing", async () => {
+    const { plugin, sent } = createPlugin()
+    const onPress = jest.fn(() => ({ pressed: true }))
+
+    React.createElement("Pressable", {
+      accessibilityRole: "button",
+      accessibilityLabel: "Sign In",
+      onPress,
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "press-selector-1",
+        selector: { role: "button", label: "sign in" },
+        action: "press",
+      },
+    } as any)
+    await flush()
+
+    expect(onPress).toHaveBeenCalledTimes(1)
+    expect(sent[0].payload.status).toBe("success")
+  })
+
+  test("returns candidates when an accessibility selector is ambiguous", async () => {
+    const { plugin, sent } = createPlugin()
+
+    React.createElement("Pressable", {
+      accessibilityRole: "button",
+      accessibilityLabel: "Continue",
+      onPress: jest.fn(),
+    } as any)
+    React.createElement("Pressable", {
+      accessibilityRole: "button",
+      accessibilityLabel: "Continue",
+      onPress: jest.fn(),
+    } as any)
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "press-selector-ambiguous-1",
+        selector: { role: "button", label: "Continue" },
+        action: "press",
+      },
+    } as any)
+    await flush()
+
+    expect(sent[0].payload.status).toBe("error")
+    expect(sent[0].payload.message).toContain("Ambiguous selector matched 2 actionable elements")
+    expect(sent[0].payload.message).toContain("Candidates")
   })
 
   test("prefers an actionable press candidate when a native child duplicates testID", async () => {
@@ -120,6 +204,31 @@ describe("agentRuntime", () => {
     expect(onChangeText).toHaveBeenCalledWith("qa@example.com")
     expect(sent[0].payload.status).toBe("success")
     expect(sent[0].payload.action).toBe("fill")
+  })
+
+  test("infers fill from a placeholder selector when testID is missing", async () => {
+    const { plugin, sent } = createPlugin()
+    const onChangeText = jest.fn()
+
+    React.createElement("TextInput", {
+      accessibilityRole: "text",
+      placeholder: "Email address",
+      onChangeText,
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "fill-selector-1",
+        selector: { placeholder: "email" },
+        action: "fill",
+        value: "qa@example.com",
+      },
+    } as any)
+    await flush()
+
+    expect(onChangeText).toHaveBeenCalledWith("qa@example.com")
+    expect(sent[0].payload.status).toBe("success")
   })
 
   test("prefers an actionable fill candidate when a native child duplicates testID", async () => {

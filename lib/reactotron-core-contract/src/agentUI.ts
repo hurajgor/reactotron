@@ -1,14 +1,31 @@
 export interface AgentUiNode {
-  testID: string
+  id?: string
+  testID?: string
   type?: string
   text?: string
   label?: string
   role?: string
+  hint?: string
+  placeholder?: string
   visible?: boolean
   enabled?: boolean
   value?: unknown
   props?: Record<string, unknown>
   children?: AgentUiNode[]
+}
+
+export interface AgentUiSelector {
+  id?: string
+  testID?: string
+  type?: string
+  text?: string
+  label?: string
+  role?: string
+  hint?: string
+  placeholder?: string
+  enabled?: boolean
+  visible?: boolean
+  index?: number
 }
 
 export interface AgentUiSnapshot {
@@ -24,7 +41,8 @@ export interface AgentUiSnapshotRequestPayload {
 
 export interface AgentUiActionRequestPayload {
   requestId: string
-  testID: string
+  testID?: string
+  selector?: AgentUiSelector
   action: string
   value?: unknown
   args?: Record<string, unknown>
