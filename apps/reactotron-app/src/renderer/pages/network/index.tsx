@@ -943,8 +943,9 @@ function Network() {
   }, [items, logLevels, query, showLogs, showNetwork])
   const filteredItemCount = items.length - visibleItems.length
 
-  const selectedItem =
-    visibleItems.find((item) => item.id === selectedId) ?? visibleItems[0] ?? null
+  const selectedItem = selectedId
+    ? visibleItems.find((item) => item.id === selectedId) ?? null
+    : null
 
   return (
     <Container>
