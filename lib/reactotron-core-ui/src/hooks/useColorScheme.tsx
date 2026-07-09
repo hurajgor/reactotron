@@ -1,54 +1,33 @@
 import React from "react"
-import { ColorScheme } from "../themes"
+import type { ThemeName } from "../themes"
 
 const themeModeStorageKey = "reactotron.themeMode"
 const themeModeChangeEvent = "reactotron-theme-mode-changed"
 
-function getColorScheme({ matches }: MediaQueryList | MediaQueryListEvent): ColorScheme {
-  return matches ? "dark" : "light"
-}
-
-function getStoredColorScheme(fallback: ColorScheme): ColorScheme {
-  if (typeof window === "undefined") return fallback
+function getStoredThemeName(): ThemeName {
+  if (typeof window === "undefined") return "tokyoNight"
 
   const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
-  if (savedThemeMode === "dark" || savedThemeMode === "light") return savedThemeMode
+  if (savedThemeMode === "tokyoNight" || savedThemeMode === "t3Code") return savedThemeMode
 
-  return fallback
+  return "tokyoNight"
 }
 
-function useColorScheme(): ColorScheme {
-  const mediaQueryRef = React.useRef<MediaQueryList | null>(
-    window?.matchMedia?.("(prefers-color-scheme: dark)") || null
-  )
-
-  const [colorScheme, setColorScheme] = React.useState<ColorScheme>(() => {
-    if (typeof window === "undefined" || !mediaQueryRef.current) return "dark"
-    return getStoredColorScheme(getColorScheme(mediaQueryRef.current))
-  })
+function useColorScheme(): ThemeName {
+  const [themeName, setThemeName] = React.useState<ThemeName>(getStoredThemeName)
 
   React.useEffect(() => {
-    const mediaQuery = mediaQueryRef.current
-
-    if (!mediaQuery) return () => {}
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setColorScheme(getStoredColorScheme(getColorScheme(e)))
-    }
-
     const handleThemeModeChange = () => {
-      setColorScheme(getStoredColorScheme(getColorScheme(mediaQuery)))
+      setThemeName(getStoredThemeName())
     }
 
-    mediaQuery.addEventListener("change", handleChange)
     window.addEventListener(themeModeChangeEvent, handleThemeModeChange)
     return () => {
-      mediaQuery.removeEventListener("change", handleChange)
       window.removeEventListener(themeModeChangeEvent, handleThemeModeChange)
     }
   }, [])
 
-  return colorScheme
+  return themeName
 }
 
 export default useColorScheme

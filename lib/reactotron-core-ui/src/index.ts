@@ -73,3 +73,4 @@ export {
 
 export type { CustomCommand } from "./contexts/CustomCommands/useCustomCommands"
 export type { Snapshot } from "./contexts/State/useSnapshots"
+export type { ThemeName } from "./themes"

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react"
 
-export type ThemeMode = "system" | "dark" | "light"
+export type ThemeMode = "tokyoNight" | "t3Code"
 
 const themeModeStorageKey = "reactotron.themeMode"
 const newTimelineStorageKey = "reactotron.enableNewTimeline"
@@ -20,12 +20,12 @@ const noop = (): void => {
 }
 
 function readThemeMode(): ThemeMode {
-  if (typeof window === "undefined") return "system"
+  if (typeof window === "undefined") return "tokyoNight"
 
   const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
-  if (savedThemeMode === "dark" || savedThemeMode === "light") return savedThemeMode
+  if (savedThemeMode === "tokyoNight" || savedThemeMode === "t3Code") return savedThemeMode
 
-  return "system"
+  return "tokyoNight"
 }
 
 function readEnableNewTimeline(): boolean {
@@ -38,7 +38,7 @@ function readEnableNewTimeline(): boolean {
 }
 
 const AppPreferencesContext = React.createContext<Context>({
-  themeMode: "system",
+  themeMode: "tokyoNight",
   setThemeMode: noop,
   enableNewTimeline: true,
   setEnableNewTimeline: noop,

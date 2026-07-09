@@ -73,12 +73,20 @@ const McpButton = styled.div.attrs(() => ({}))<McpButtonProps>`
   cursor: pointer;
   font-size: 11px;
   user-select: none;
-  background-color: ${(props) => props.$active ? "rgba(122, 162, 247, 0.14)" : "transparent"};
-  border: 1px solid ${(props) => props.$active ? "rgba(122, 162, 247, 0.4)" : props.theme.chromeLine};
+  background-color: ${(props) =>
+    props.$active
+      ? `color-mix(in srgb, ${props.theme.highlight} 14%, transparent)`
+      : "transparent"};
+  border: 1px solid ${(props) =>
+    props.$active
+      ? `color-mix(in srgb, ${props.theme.highlight} 40%, transparent)`
+      : props.theme.chromeLine};
   color: ${(props) => props.$active ? props.theme.highlight : props.theme.foregroundDark};
   &:hover {
     background-color: ${(props) =>
-      props.$active ? "rgba(122, 162, 247, 0.22)" : "rgba(122, 162, 247, 0.08)"};
+      props.$active
+        ? `color-mix(in srgb, ${props.theme.highlight} 22%, transparent)`
+        : `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
   }
 `
 
@@ -98,7 +106,7 @@ const McpSettingsButton = styled.div`
   color: ${(props) => props.theme.foregroundDark};
   &:hover {
     color: ${(props) => props.theme.foreground};
-    background-color: rgba(122, 162, 247, 0.08);
+    background-color: ${(props) => `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
   }
 `
 

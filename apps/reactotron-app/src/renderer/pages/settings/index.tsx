@@ -63,7 +63,7 @@ const SectionDescription = styled.p`
 
 const ThemeSelector = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  grid-template-columns: repeat(2, minmax(112px, 1fr));
   gap: 6px;
   width: 100%;
   min-width: 0;
@@ -77,7 +77,9 @@ const ThemeOption = styled.button<{ $isActive: boolean }>`
   border: 1px solid ${(props) => (props.$isActive ? props.theme.highlight : props.theme.chromeLine)};
   border-radius: 7px;
   background-color: ${(props) =>
-    props.$isActive ? "rgba(122, 162, 247, 0.18)" : props.theme.background};
+    props.$isActive
+      ? `color-mix(in srgb, ${props.theme.highlight} 18%, transparent)`
+      : props.theme.background};
   color: ${(props) => (props.$isActive ? props.theme.highlight : props.theme.foreground)};
   cursor: pointer;
   font-size: 12px;
@@ -117,7 +119,9 @@ const ToggleTrack = styled.span<{ $isEnabled: boolean }>`
     ${(props) => (props.$isEnabled ? props.theme.highlight : props.theme.chromeLine)};
   border-radius: 999px;
   background-color: ${(props) =>
-    props.$isEnabled ? "rgba(122, 162, 247, 0.24)" : props.theme.background};
+    props.$isEnabled
+      ? `color-mix(in srgb, ${props.theme.highlight} 24%, transparent)`
+      : props.theme.background};
   transition:
     background-color 0.12s ease-out,
     border-color 0.12s ease-out;
@@ -136,9 +140,8 @@ const ToggleThumb = styled.span<{ $isEnabled: boolean }>`
 `
 
 const themeOptions: Array<{ label: string; value: ThemeMode }> = [
-  { label: "System", value: "system" },
-  { label: "Dark", value: "dark" },
-  { label: "Light", value: "light" },
+  { label: "Tokyo Night", value: "tokyoNight" },
+  { label: "T3 Code", value: "t3Code" },
 ]
 
 function Settings() {
@@ -153,7 +156,7 @@ function Settings() {
           <Section>
             <div>
               <SectionTitle>Theme</SectionTitle>
-              <SectionDescription>Choose how Reactotron picks its color theme.</SectionDescription>
+              <SectionDescription>Choose the Reactotron color theme.</SectionDescription>
             </div>
             <ThemeSelector>
               {themeOptions.map((option) => (

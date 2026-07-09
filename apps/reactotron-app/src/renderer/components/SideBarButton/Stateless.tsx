@@ -1,10 +1,7 @@
 import React from "react"
 import { Motion, spring } from "react-motion"
 import { Link } from "react-router-dom"
-import colorInterpolate from "color-interpolate"
 import styled from "styled-components"
-
-const Theme = { foregroundDark: "#787c99", highlight: "#7aa2f7" }
 
 interface SideBarButtonComponentProps {
   icon?: any
@@ -25,8 +22,6 @@ interface SideBarButtonProps {
   $isCompact?: boolean
 }
 
-const colorInterpolator = colorInterpolate([Theme.foregroundDark, Theme.highlight])
-
 export const SideBarButtonContainer = styled.div.attrs(() => ({}))<SideBarButtonProps>`
   display: flex;
   flex-direction: column;
@@ -38,8 +33,12 @@ export const SideBarButtonContainer = styled.div.attrs(() => ({}))<SideBarButton
   cursor: pointer;
   border: 1px solid transparent;
   border-radius: 8px;
-  background-color: ${(props) => `rgba(122, 162, 247, ${0.12 * props.$colorAnimation})`};
-  color: ${(props) => colorInterpolator(props.$colorAnimation)};
+  background-color: ${(props) =>
+    `color-mix(in srgb, ${props.theme.highlight} ${12 * props.$colorAnimation}%, transparent)`};
+  color: ${(props) =>
+    `color-mix(in srgb, ${props.theme.highlight} ${
+      100 * props.$colorAnimation
+    }%, ${props.theme.foregroundDark})`};
   transition:
     background-color 0.12s ease-out,
     border-color 0.12s ease-out;
@@ -47,7 +46,9 @@ export const SideBarButtonContainer = styled.div.attrs(() => ({}))<SideBarButton
   &:hover {
     border-color: ${(props) => props.theme.line};
     background-color: ${(props) =>
-      props.$colorAnimation > 0.5 ? "rgba(122, 162, 247, 0.18)" : props.theme.backgroundLighter};
+      props.$colorAnimation > 0.5
+        ? `color-mix(in srgb, ${props.theme.highlight} 18%, transparent)`
+        : props.theme.backgroundLighter};
     color: ${(props) => (props.$colorAnimation > 0.5 ? props.theme.highlight : props.theme.foreground)};
   }
 `

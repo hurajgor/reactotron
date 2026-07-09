@@ -3,103 +3,45 @@ import useColorScheme from "./useColorScheme"
 
 describe("useColorScheme", () => {
   const themeModeStorageKey = "reactotron.themeMode"
-  const addEventListener = jest.fn()
-  const removeEventListener = jest.fn()
-
-  const mockMatchMedia = jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    addEventListener,
-    removeEventListener,
-  }))
-
-  const originalMatchMedia = window.matchMedia
 
   afterEach(() => {
     jest.resetAllMocks()
     window.localStorage.removeItem(themeModeStorageKey)
-    window.matchMedia = originalMatchMedia
   })
 
-  it("should return dark when window.matchMedia is undefined", () => {
-    window.matchMedia = undefined
-
+  it("should return tokyo night by default", () => {
     const { result } = renderHook(() => useColorScheme())
-    expect(result.current).toBe("dark")
-  })
-
-  it("should return light when system preference is light", () => {
-    window.matchMedia = mockMatchMedia
-    mockMatchMedia.mockReturnValue({
-      matches: false,
-      addEventListener,
-      removeEventListener,
-    })
-
-    const { result } = renderHook(() => useColorScheme())
-    expect(result.current).toBe("light")
-  })
-
-  it("should return dark when system preference is dark", () => {
-    window.matchMedia = mockMatchMedia
-    mockMatchMedia.mockReturnValue({
-      matches: true,
-      addEventListener,
-      removeEventListener,
-    })
-
-    const { result } = renderHook(() => useColorScheme())
-    expect(result.current).toBe("dark")
+    expect(result.current).toBe("tokyoNight")
   })
 
   it("should return stored theme preference when one is set", () => {
-    window.localStorage.setItem(themeModeStorageKey, "dark")
-    window.matchMedia = mockMatchMedia
-    mockMatchMedia.mockReturnValue({
-      matches: false,
-      addEventListener,
-      removeEventListener,
-    })
+    window.localStorage.setItem(themeModeStorageKey, "t3Code")
 
     const { result } = renderHook(() => useColorScheme())
-    expect(result.current).toBe("dark")
+    expect(result.current).toBe("t3Code")
   })
 
-  it("should update when system preference changes", () => {
-    let colorSchemeChangeHandler: (e: { matches: boolean }) => void
-    const _addEventListener = jest.fn().mockImplementation((_, handler) => {
-      colorSchemeChangeHandler = handler
-    })
-
-    window.matchMedia = mockMatchMedia
-    mockMatchMedia.mockReturnValue({
-      matches: false,
-      addEventListener: _addEventListener,
-      removeEventListener,
-    })
-
+  it("should update when theme preference changes", () => {
     const { result } = renderHook(() => useColorScheme())
-    expect(result.current).toBe("light")
+    expect(result.current).toBe("tokyoNight")
 
     act(() => {
-      colorSchemeChangeHandler({ matches: true })
+      window.localStorage.setItem(themeModeStorageKey, "t3Code")
+      window.dispatchEvent(new CustomEvent("reactotron-theme-mode-changed", { detail: "t3Code" }))
     })
 
-    expect(result.current).toBe("dark")
+    expect(result.current).toBe("t3Code")
   })
 
   it("should clean up event listener on unmount", () => {
-    window.matchMedia = mockMatchMedia
-
-    mockMatchMedia.mockReturnValue({
-      matches: false,
-      addEventListener,
-      removeEventListener,
-    })
+    const removeEventListener = jest.spyOn(window, "removeEventListener")
 
     const { unmount } = renderHook(() => useColorScheme())
     unmount()
 
-    expect(removeEventListener).toHaveBeenCalledWith("change", expect.any(Function))
+    expect(removeEventListener).toHaveBeenCalledWith(
+      "reactotron-theme-mode-changed",
+      expect.any(Function)
+    )
   })
 })

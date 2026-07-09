@@ -12,7 +12,9 @@ const Container = styled.div.attrs(() => ({}))<ContainerProps>`
   border-radius: 7px;
   cursor: pointer;
   background-color: ${(props) =>
-    props.$isActive ? "rgba(122, 162, 247, 0.18)" : props.theme.backgroundLighter};
+    props.$isActive
+      ? `color-mix(in srgb, ${props.theme.highlight} 18%, transparent)`
+      : props.theme.backgroundLighter};
   color: ${(props) => (props.$isActive ? props.theme.highlight : props.theme.foreground)};
   align-items: center;
   justify-content: center;
