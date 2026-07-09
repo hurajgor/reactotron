@@ -1,11 +1,11 @@
 import React, { ReactNode, useContext, useMemo, useState } from "react"
 import { clipboard } from "electron"
 import {
-  MdContentCopy,
-  MdDeleteSweep,
-  MdInsertDriveFile,
-  MdNetworkCheck,
-  MdSearch,
+  MdOutlineContentCopy,
+  MdOutlineDeleteSweep,
+  MdOutlineInsertDriveFile,
+  MdOutlineNetworkWifi,
+  MdOutlineSearch,
 } from "react-icons/md"
 import styled from "styled-components"
 import { ContentView, EmptyState, Header, ReactotronContext } from "reactotron-core-ui"
@@ -18,6 +18,7 @@ type LogLevel = "debug" | "info" | "warn" | "error"
 type LogLevelSelection = Record<LogLevel, boolean>
 type TableColumn = "kind" | "status" | "time"
 type TableColumns = Record<TableColumn, number>
+type TreeValueType = "string" | "number" | "boolean" | "null" | "undefined" | "object"
 
 type ConsoleItem = {
   id: string
@@ -63,6 +64,17 @@ const logLevelOptions: Array<{ level: LogLevel; label: string }> = [
   { level: "error", label: "Errors" },
 ]
 
+const treeValueColor: Record<TreeValueType, string> = {
+  string: "#9ece6a",
+  number: "#ff9e64",
+  boolean: "#bb9af7",
+  null: "#565f89",
+  undefined: "#565f89",
+  object: "#c0caf5",
+}
+
+const treePreviewLimit = 80
+
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -77,9 +89,9 @@ const Toolbar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
 const ToolbarControls = styled.div`
@@ -89,6 +101,10 @@ const ToolbarControls = styled.div`
   gap: 10px;
   margin-left: auto;
   min-width: 0;
+`
+
+const ToggleCount = styled.span`
+  color: ${(props) => props.theme.foregroundDark};
 `
 
 const SearchBox = styled.label`
@@ -101,9 +117,14 @@ const SearchBox = styled.label`
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.foregroundDark};
+
+  &:focus-within {
+    border-color: ${(props) => props.theme.highlight};
+    box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.16);
+  }
 `
 
 const SearchInput = styled.input`
@@ -124,7 +145,7 @@ const Toggle = styled.label`
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   color: ${(props) => props.theme.foreground};
   background-color: ${(props) => props.theme.background};
   font-size: 12px;
@@ -155,7 +176,7 @@ const LogLevelSummary = styled.summary`
   min-height: 34px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   background-color: ${(props) => props.theme.background};
   cursor: pointer;
   list-style: none;
@@ -181,9 +202,9 @@ const LogLevelPanel = styled.div`
   min-width: 190px;
   padding: 6px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 6px;
-  background-color: ${(props) => props.theme.background};
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
+  border-radius: 8px;
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
+  box-shadow: 0 18px 36px rgba(15, 15, 25, 0.46);
 `
 
 const LogLevelAction = styled.button`
@@ -270,7 +291,7 @@ const SplitResizeHandle = styled.div`
     bottom: 0;
     left: 3px;
     width: 1px;
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(122, 162, 247, 0.2);
   }
 
   &:hover {
@@ -330,19 +351,20 @@ const EventRow = styled(TableGrid)<{ $selected: boolean; $tone: ConsoleItem["ton
   gap: 12px;
   width: 100%;
   min-height: 54px;
-  padding: 9px 14px;
+  padding: 10px 14px;
   border: 0;
-  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  border-left: 3px solid ${(props) => toneColor(props.$tone)};
+  border-bottom: 1px solid ${(props) => props.theme.line};
+  border-left: 2px solid ${(props) => toneColor(props.$tone)};
   outline: 0;
   background-color: ${(props) =>
-    props.$selected ? props.theme.backgroundHighlight : "transparent"};
+    props.$selected ? "rgba(122, 162, 247, 0.18)" : "transparent"};
   color: ${(props) => props.theme.foreground};
   text-align: left;
   cursor: pointer;
 
   &:hover {
-    background-color: ${(props) => props.theme.backgroundHighlight};
+    background-color: ${(props) =>
+      props.$selected ? "rgba(122, 162, 247, 0.24)" : props.theme.backgroundSubtleLight};
   }
 `
 
@@ -351,7 +373,7 @@ const Method = styled.strong<{ $kind: ConsoleKind }>`
   align-items: center;
   gap: 6px;
   min-width: 0;
-  color: ${(props) => (props.$kind === "network" ? props.theme.bold : props.theme.tag)};
+  color: ${(props) => (props.$kind === "network" ? props.theme.support : props.theme.keyword)};
   font-size: 12px;
   line-height: 18px;
 `
@@ -380,13 +402,33 @@ const EventTitle = styled.span`
   }
 `
 
+const EndpointPath = styled.b`
+  display: inline-flex;
+  min-width: 0;
+  overflow: hidden;
+  color: ${(props) => props.theme.foregroundLight};
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const EndpointSegment = styled.span<{ $tone: number }>`
+  min-width: 0;
+  overflow: hidden;
+  color: ${(props) => endpointSegmentColor(props.$tone)};
+  text-overflow: ellipsis;
+`
+
+const EndpointSlash = styled.span`
+  color: ${(props) => props.theme.foregroundDark};
+`
+
 const Status = styled.i<{ $tone: ConsoleItem["tone"] }>`
   align-self: center;
   justify-self: start;
   padding: 3px 7px;
   border-radius: 999px;
   color: ${(props) => toneColor(props.$tone)};
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(65, 72, 104, 0.42);
   font-size: 11px;
   font-style: normal;
   font-weight: 700;
@@ -408,12 +450,13 @@ const Inspector = styled.aside`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background-color: ${(props) => props.theme.background};
+  background-color: ${(props) => props.theme.backgroundDarker};
 `
 
 const InspectorHeader = styled.div`
   padding: 14px 16px 12px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.background};
 
   @media (max-width: 560px) {
     padding: 12px 10px 10px;
@@ -444,6 +487,14 @@ const InspectorTitle = styled.div`
   }
 `
 
+const InspectorEndpoint = styled.strong`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+`
+
 const InspectorMeta = styled.div`
   margin-top: 6px;
   color: ${(props) => props.theme.foregroundDark};
@@ -456,7 +507,7 @@ const ActionBar = styled.div`
   gap: 8px;
   padding: 10px 16px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
 
   @media (max-width: 560px) {
     padding: 8px 10px;
@@ -471,11 +522,12 @@ const ActionButton = styled.button`
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.foreground};
   font-size: 12px;
   cursor: pointer;
+  user-select: none;
 
   &:hover {
     border-color: ${(props) => props.theme.foregroundDark};
@@ -489,6 +541,7 @@ const Tabs = styled.div`
   gap: 4px;
   padding: 10px 16px 0;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.background};
 
   @media (max-width: 560px) {
     padding: 8px 10px 0;
@@ -511,6 +564,7 @@ const ScrollPane = styled.div`
   min-height: 0;
   overflow: auto;
   padding: 16px;
+  user-select: text;
 
   @media (max-width: 560px) {
     padding: 10px;
@@ -532,8 +586,9 @@ const FieldGrid = styled.div`
   display: grid;
   grid-template-columns: 120px minmax(0, 1fr);
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   overflow: hidden;
+  user-select: text;
 `
 
 const FieldLabel = styled.div`
@@ -555,8 +610,9 @@ const FieldValue = styled.div`
 
 const ViewerContainer = styled.div`
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
+  border-radius: 7px;
   overflow: hidden;
+  user-select: text;
 `
 
 const ViewerHeader = styled.div`
@@ -567,7 +623,7 @@ const ViewerHeader = styled.div`
   gap: 10px;
   padding: 8px 10px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
 const ViewerTools = styled.div`
@@ -595,7 +651,7 @@ const ViewerSearch = styled.label`
   min-height: 28px;
   padding: 0 8px;
   border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 3px;
+  border-radius: 6px;
   background-color: ${(props) => props.theme.background};
   color: ${(props) => props.theme.foregroundDark};
 `
@@ -620,9 +676,9 @@ const ModeButton = styled.button<{ $active: boolean }>`
   flex: 0 0 auto;
   padding: 4px 8px;
   border: 1px solid ${(props) => (props.$active ? props.theme.highlight : props.theme.chromeLine)};
-  border-radius: 3px;
+  border-radius: 6px;
   background-color: ${(props) =>
-    props.$active ? props.theme.backgroundHighlight : props.theme.background};
+    props.$active ? "rgba(122, 162, 247, 0.18)" : props.theme.background};
   color: ${(props) => props.theme.foreground};
   font-size: 11px;
   cursor: pointer;
@@ -643,10 +699,34 @@ const CodeBlock = styled.pre`
   word-break: break-word;
 `
 
+const JsonKey = styled.span`
+  color: #7dcfff;
+`
+
+const JsonString = styled.span`
+  color: #9ece6a;
+`
+
+const JsonNumber = styled.span`
+  color: #ff9e64;
+`
+
+const JsonBoolean = styled.span`
+  color: #bb9af7;
+`
+
+const JsonNull = styled.span`
+  color: #bb9af7;
+`
+
+const JsonPunctuation = styled.span`
+  color: #565f89;
+`
+
 const Highlight = styled.mark`
   padding: 0;
   color: inherit;
-  background-color: rgba(232, 168, 56, 0.45);
+  background-color: rgba(224, 175, 104, 0.45);
 `
 
 const TreeBody = styled.div`
@@ -675,15 +755,43 @@ const TreeNodeSummary = styled.summary`
 `
 
 const TreeKey = styled.span`
-  color: ${(props) => props.theme.foregroundDark};
+  color: #7dcfff;
 `
 
-const TreeValue = styled.span`
-  color: ${(props) => props.theme.foreground};
+const TreeIndex = styled.span`
+  color: #bb9af7;
+`
+
+const TreeSummary = styled.span`
+  color: #c0caf5;
+`
+
+const TreeValue = styled.span<{ $type: TreeValueType }>`
+  color: ${(props) => treeValueColor[props.$type]};
 `
 
 const TreePrimitiveRow = styled.div<{ $depth: number }>`
   margin-left: ${(props) => props.$depth * 14}px;
+`
+
+const TreeMoreRow = styled.div<{ $depth: number }>`
+  margin-left: ${(props) => props.$depth * 14}px;
+  color: ${(props) => props.theme.foregroundDark};
+`
+
+const TreeMoreButton = styled.button`
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: ${(props) => props.theme.highlight};
+  font: inherit;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: ${(props) => props.theme.foregroundLight};
+  }
 `
 
 const ArgumentList = styled.div`
@@ -821,6 +929,8 @@ function Network() {
   const [tableColumns, setTableColumns] = useState<TableColumns>(defaultTableColumns)
 
   const items = useMemo(() => buildItems(commands), [commands])
+  const networkCount = useMemo(() => items.filter((item) => item.kind === "network").length, [items])
+  const logCount = useMemo(() => items.filter((item) => item.kind === "log").length, [items])
   const visibleItems = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return items
@@ -831,6 +941,7 @@ function Network() {
         return item.searchText.toLowerCase().includes(needle)
       })
   }, [items, logLevels, query, showLogs, showNetwork])
+  const filteredItemCount = items.length - visibleItems.length
 
   const selectedItem =
     visibleItems.find((item) => item.id === selectedId) ?? visibleItems[0] ?? null
@@ -840,7 +951,7 @@ function Network() {
       <Header title="Network" isDraggable />
       <Toolbar>
         <SearchBox>
-          <MdSearch size={16} />
+          <MdOutlineSearch size={16} />
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -854,7 +965,7 @@ function Network() {
               checked={showNetwork}
               onChange={(event) => setShowNetwork(event.target.checked)}
             />
-            Network
+            Network <ToggleCount>{networkCount}</ToggleCount>
           </Toggle>
           <Toggle>
             <input
@@ -862,7 +973,7 @@ function Network() {
               checked={showLogs}
               onChange={(event) => setShowLogs(event.target.checked)}
             />
-            Logs
+            Logs <ToggleCount>{logCount}</ToggleCount>
           </Toggle>
           <LogLevelFilter levels={logLevels} setLevels={setLogLevels} />
           <ActionButton
@@ -872,7 +983,7 @@ function Network() {
               setSelectedId("")
             }}
           >
-            <MdDeleteSweep size={14} />
+            <MdOutlineDeleteSweep size={14} />
             Clear
           </ActionButton>
         </ToolbarControls>
@@ -914,9 +1025,10 @@ function Network() {
           </TableHeader>
           {visibleItems.length === 0 ? (
             <EmptyTableState>
-              <EmptyState icon={MdNetworkCheck} title="No Network Activity">
-                Network requests and logs will appear here once your app connects on the active
-                Reactotron port.
+              <EmptyState icon={MdOutlineNetworkWifi} title="No Network Activity">
+                {items.length > 0 && filteredItemCount > 0
+                  ? "Events are currently hidden by the active search, type, or log-level filters."
+                  : "Network requests and logs will appear here once your app connects on the active Reactotron port."}
               </EmptyState>
             </EmptyTableState>
           ) : (
@@ -932,14 +1044,14 @@ function Network() {
               >
                 <Method $kind={item.kind}>
                   {item.kind === "network" ? (
-                    <MdNetworkCheck size={14} />
+                    <MdOutlineNetworkWifi size={14} />
                   ) : (
-                    <MdInsertDriveFile size={14} />
+                    <MdOutlineInsertDriveFile size={14} />
                   )}
                   {item.method}
                 </Method>
                 <EventTitle>
-                  <b>{item.title}</b>
+                  {item.kind === "network" ? renderEndpointPath(item.title) : <b>{item.title}</b>}
                   {item.subtitle ? <small>{item.subtitle}</small> : null}
                 </EventTitle>
                 {item.kind === "network" ? (
@@ -962,7 +1074,7 @@ function Network() {
           {selectedItem ? (
             <ConsoleInspector item={selectedItem} />
           ) : (
-            <EmptyState icon={MdNetworkCheck} title="Select An Event">
+            <EmptyState icon={MdOutlineNetworkWifi} title="Select An Event">
               Choose a request or log to inspect its details.
             </EmptyState>
           )}
@@ -1021,21 +1133,25 @@ function NetworkInspector({ item }: { item: ConsoleItem }) {
   const payload = item.command.payload as ApiResponsePayload
   const request: ApiRequest = payload.request ?? {}
   const response: ApiResponse = payload.response ?? {}
+  const responseCopyText = useMemo(() => formatBody(response.body), [response.body])
+  const requestCopyText = useMemo(() => formatBody(request.data), [request.data])
+  const curlCopyText = useMemo(() => apiRequestToCurl(payload), [payload])
+  const eventCopyText = useMemo(() => JSON.stringify(item.command, null, 2), [item.command])
 
   return (
     <>
       <InspectorHeader>
         <InspectorEyebrow>Network request</InspectorEyebrow>
         <InspectorTitle>
-          <strong title={request.url}>{item.title}</strong>
+          <InspectorEndpoint title={request.url}>{renderEndpointPath(item.title)}</InspectorEndpoint>
           <Status $tone={item.tone}>{item.status}</Status>
         </InspectorTitle>
       </InspectorHeader>
       <ActionBar>
-        <CopyButton text={formatBody(response.body)}>Copy response</CopyButton>
-        <CopyButton text={formatBody(request.data)}>Copy request</CopyButton>
-        <CopyButton text={apiRequestToCurl(payload)}>Copy cURL</CopyButton>
-        <CopyButton text={JSON.stringify(item.command, null, 2)}>Copy event</CopyButton>
+        <CopyButton text={responseCopyText}>Copy response</CopyButton>
+        <CopyButton text={requestCopyText}>Copy request</CopyButton>
+        <CopyButton text={curlCopyText}>Copy cURL</CopyButton>
+        <CopyButton text={eventCopyText}>Copy event</CopyButton>
       </ActionBar>
       <Tabs>
         {(["summary", "request", "response", "headers", "raw"] as InspectorTab[]).map((value) => (
@@ -1057,7 +1173,12 @@ function NetworkInspector({ item }: { item: ConsoleItem }) {
 function LogInspector({ item }: { item: ConsoleItem }) {
   const [tab, setTab] = useState<"message" | "raw">("message")
   const payload = item.command.payload as LogPayload
-  const args = normalizeLogArgs(payload.message).map(normalizeLogArgument)
+  const args = useMemo(
+    () => normalizeLogArgs(payload.message).map(normalizeLogArgument),
+    [payload.message]
+  )
+  const logCopyText = useMemo(() => formatLogForCopy(args), [args])
+  const eventCopyText = useMemo(() => JSON.stringify(item.command, null, 2), [item.command])
 
   return (
     <>
@@ -1072,8 +1193,8 @@ function LogInspector({ item }: { item: ConsoleItem }) {
         </InspectorMeta>
       </InspectorHeader>
       <ActionBar>
-        <CopyButton text={formatLogForCopy(args)}>Copy log</CopyButton>
-        <CopyButton text={JSON.stringify(item.command, null, 2)}>Copy event</CopyButton>
+        <CopyButton text={logCopyText}>Copy log</CopyButton>
+        <CopyButton text={eventCopyText}>Copy event</CopyButton>
       </ActionBar>
       <Tabs>
         <TabButton type="button" $active={tab === "message"} onClick={() => setTab("message")}>
@@ -1185,13 +1306,23 @@ function LogHighlightChip({ label, value }: { label: string; value: string }) {
 function PayloadViewer({ label, value }: { label: string; value: unknown }) {
   const [mode, setMode] = useState<BodyMode>("pretty")
   const [search, setSearch] = useState("")
-  const parsed = parseBody(value)
-  const prettyText = formatBody(value)
-  const rawText = typeof value === "string" ? value : JSON.stringify(value, null, 2)
+  const parsed = useMemo(() => parseBody(value), [value])
+  const prettyText = useMemo(() => formatBody(value), [value])
+  const rawText = useMemo(
+    () => (typeof value === "string" ? value : JSON.stringify(value, null, 2)),
+    [value]
+  )
   const canTree = parsed !== undefined && parsed !== null && typeof parsed === "object"
   const visibleText = mode === "raw" ? rawText : prettyText
-  const matchCount = countMatches(visibleText, search)
-  const treeValue = search && canTree ? filterJsonValue(parsed, search) : parsed
+  const matchCount = useMemo(() => countMatches(visibleText, search), [visibleText, search])
+  const treeValue = useMemo(
+    () => (search && canTree ? filterJsonValue(parsed, search) : parsed),
+    [canTree, parsed, search]
+  )
+  const codeContent = useMemo(
+    () => renderCodeText(visibleText, search),
+    [visibleText, search]
+  )
 
   return (
     <Section>
@@ -1220,7 +1351,7 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
               </ModeButton>
             </ViewerModes>
             <ViewerSearch>
-              <MdSearch size={13} />
+              <MdOutlineSearch size={13} />
               <ViewerSearchInput
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -1236,7 +1367,7 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
             <JsonTree value={treeValue} />
           </TreeBody>
         ) : (
-          <CodeBlock>{highlightText(visibleText, search)}</CodeBlock>
+          <CodeBlock>{codeContent}</CodeBlock>
         )}
       </ViewerContainer>
     </Section>
@@ -1244,11 +1375,14 @@ function PayloadViewer({ label, value }: { label: string; value: unknown }) {
 }
 
 function JsonTree({ value, depth = 0, name }: { value: unknown; depth?: number; name?: string }) {
+  const [open, setOpen] = useState(depth < 2)
+  const [showAll, setShowAll] = useState(false)
+
   if (!value || typeof value !== "object") {
     return (
       <TreePrimitiveRow $depth={depth}>
-        {name ? <TreeKey>{name}: </TreeKey> : null}
-        <TreeValue>{formatTreePrimitive(value)}</TreeValue>
+        {name ? renderTreeKey(name) : null}
+        <TreeValue $type={treeValueType(value)}>{formatTreePrimitive(value)}</TreeValue>
       </TreePrimitiveRow>
     )
   }
@@ -1256,22 +1390,54 @@ function JsonTree({ value, depth = 0, name }: { value: unknown; depth?: number; 
   const entries = Array.isArray(value)
     ? value.map((item, index) => [String(index), item] as const)
     : Object.entries(value as Record<string, unknown>)
+  const visibleEntries = showAll ? entries : entries.slice(0, treePreviewLimit)
   const label = name ?? (Array.isArray(value) ? "Array" : "Object")
   const summary = Array.isArray(value) ? `Array(${entries.length})` : `{${entries.length}}`
+  const hiddenCount = entries.length - visibleEntries.length
 
   return (
     <TreeNode $depth={depth}>
-      <details open={depth < 2}>
+      <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
         <TreeNodeSummary>
-          {name ? <TreeKey>{label}: </TreeKey> : null}
-          <TreeValue>{summary}</TreeValue>
+          {name ? renderTreeKey(label) : null}
+          <TreeSummary>{summary}</TreeSummary>
         </TreeNodeSummary>
-        {entries.map(([key, item]) => (
-          <JsonTree key={key} name={key} value={item} depth={depth + 1} />
-        ))}
+        {open
+          ? visibleEntries.map(([key, item]) => (
+              <JsonTree key={key} name={key} value={item} depth={depth + 1} />
+            ))
+          : null}
+        {open && hiddenCount > 0 ? (
+          <TreeMoreRow $depth={depth + 1}>
+            ... {hiddenCount} more items
+            <TreeMoreButton
+              type="button"
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                setShowAll(true)
+              }}
+            >
+              show all
+            </TreeMoreButton>
+          </TreeMoreRow>
+        ) : null}
       </details>
     </TreeNode>
   )
+}
+
+function renderTreeKey(name: string) {
+  return /^\d+$/.test(name) ? <TreeIndex>{name}: </TreeIndex> : <TreeKey>{name}: </TreeKey>
+}
+
+function treeValueType(value: unknown): TreeValueType {
+  if (value === null) return "null"
+  if (value === undefined) return "undefined"
+  if (typeof value === "string") return "string"
+  if (typeof value === "number") return "number"
+  if (typeof value === "boolean") return "boolean"
+  return "object"
 }
 
 function formatTreePrimitive(value: unknown) {
@@ -1293,7 +1459,7 @@ function CopyButton({ text, children }: { text: string; children: ReactNode }) {
         window.setTimeout(() => setCopied(false), 1100)
       }}
     >
-      <MdContentCopy size={14} />
+      <MdOutlineContentCopy size={14} />
       {copied ? "Copied" : children}
     </ActionButton>
   )
@@ -1388,8 +1554,6 @@ function networkItem(command: Command): ConsoleItem {
       hostName(url),
       response.status,
       payload.duration,
-      request.data,
-      response.body,
     ]
       .map(searchableText)
       .join(" "),
@@ -1405,21 +1569,20 @@ function logItem(command: Command): ConsoleItem {
   const payload = command.payload as LogPayload
   const level = payload?.level ?? "log"
   const message = payload?.message
-  const args = normalizeLogArgs(message)
-  const normalizedArgs = args.map(normalizeLogArgument)
+  const title = formatLogPreview(message)
+  const subtitle = formatLogSubtitlePreview(message)
 
   return {
     id: String(command.messageId),
     kind: "log",
     command,
-    title: formatLogPreview(message),
-    subtitle: formatLogSubtitle(args),
+    title,
+    subtitle,
     searchText: [
       displayLogLevel(level),
       normalizeLogLevel(level),
-      formatLogPreview(message),
-      formatLogSubtitle(args),
-      ...normalizedArgs.map((arg) => arg.value),
+      title,
+      subtitle,
     ]
       .map(searchableText)
       .join(" "),
@@ -1664,27 +1827,22 @@ function unwrapSerializedLogMessage(message: unknown): unknown {
 }
 
 function formatLogPreview(message: unknown) {
-  const args = normalizeLogArgs(message)
-  const firstArg = args[0]
-  const normalizedArg = normalizeLogArgument(firstArg).value
+  const value = Array.isArray(message) ? message[0] : message
 
-  if (typeof normalizedArg === "string") return normalizedArg.slice(0, 500)
-  if (normalizedArg instanceof Error) return normalizedArg.message.slice(0, 500)
-  if (typeof firstArg === "string") return firstArg.slice(0, 500)
-  if (firstArg instanceof Error) return firstArg.message.slice(0, 500)
+  if (typeof value === "string") return value.slice(0, 500)
+  if (value instanceof Error) return value.message.slice(0, 500)
 
-  return formatCompactLogValue(normalizedArg).slice(0, 500)
+  return formatCompactLogValue(value).slice(0, 500)
 }
 
-function formatLogSubtitle(args: unknown[]) {
-  if (args.length <= 1) return ""
+function formatLogSubtitlePreview(message: unknown) {
+  if (!Array.isArray(message) || message.length <= 1) return ""
 
-  const parts = logParts(args.map(normalizeLogArgument))
-  const payloadSummary = formatPayloadSignal(parts.payload?.value, 3)
-  const eventName = formatCompactLogValue(parts.event?.value)
-
-  if (eventName && payloadSummary) return `${eventName} | ${payloadSummary}`
-  return eventName || payloadSummary || ""
+  return message
+    .slice(1, 4)
+    .map((item) => formatCompactLogValue(item))
+    .filter(Boolean)
+    .join(" | ")
 }
 
 function buildLogHighlightItems(event: unknown, payload: unknown) {
@@ -1697,13 +1855,6 @@ function buildLogHighlightItems(event: unknown, payload: unknown) {
   }
 
   return items
-}
-
-function formatPayloadSignal(value: unknown, limit: number) {
-  return payloadSignalEntries(value)
-    .slice(0, limit)
-    .map((item) => `${item.label} ${item.value}`)
-    .join(" | ")
 }
 
 function payloadSignalEntries(value: unknown): Array<{ label: string; value: string }> {
@@ -1755,16 +1906,48 @@ function formatCompactLogValue(value: unknown) {
 function toneColor(tone: ConsoleItem["tone"]) {
   switch (tone) {
     case "good":
-      return "#50c878"
+      return "#7aa2f7"
     case "warn":
-      return "#e8a838"
+      return "#bb9af7"
     case "bad":
-      return "#ff6b6b"
+      return "#bb9af7"
     case "redirect":
-      return "#74c0fc"
+      return "#7dcfff"
     default:
-      return "#838184"
+      return "#565f89"
   }
+}
+
+function endpointSegmentColor(index: number) {
+  const colors = ["#7dcfff", "#7aa2f7", "#bb9af7", "#9ece6a", "#c0caf5"]
+  return colors[index % colors.length]
+}
+
+function renderEndpointPath(path: string) {
+  const [pathname, query] = path.split("?")
+  const segments = pathname.split("/").filter(Boolean)
+
+  if (segments.length === 0) {
+    return <EndpointPath>{path}</EndpointPath>
+  }
+
+  return (
+    <EndpointPath>
+      {pathname.startsWith("/") ? <EndpointSlash>/</EndpointSlash> : null}
+      {segments.map((segment, index) => (
+        <React.Fragment key={`${segment}-${index}`}>
+          {index > 0 ? <EndpointSlash>/</EndpointSlash> : null}
+          <EndpointSegment $tone={index}>{segment}</EndpointSegment>
+        </React.Fragment>
+      ))}
+      {query ? (
+        <>
+          <EndpointSlash>?</EndpointSlash>
+          <EndpointSegment $tone={segments.length}>{query}</EndpointSegment>
+        </>
+      ) : null}
+    </EndpointPath>
+  )
 }
 
 function urlPath(value: string) {
@@ -1890,7 +2073,47 @@ function countMatches(text: string, search: string) {
   return count
 }
 
-function highlightText(text: string, search: string) {
+function renderCodeText(text: string, search: string) {
+  const tokenPattern =
+    /("(?:\\.|[^"\\])*"\s*:)|("(?:\\.|[^"\\])*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false)\b|\bnull\b|([{}[\],:])/g
+  const nodes: ReactNode[] = []
+  let cursor = 0
+  let match: RegExpExecArray | null
+
+  while ((match = tokenPattern.exec(text)) !== null) {
+    if (match.index > cursor) {
+      nodes.push(renderSearchHighlightedText(text.slice(cursor, match.index), search, `plain-${cursor}`))
+    }
+
+    const token = match[0]
+    const key = `${match.index}-${token}`
+    const content = renderSearchHighlightedText(token, search, key)
+
+    if (match[1]) {
+      nodes.push(<JsonKey key={key}>{content}</JsonKey>)
+    } else if (match[2]) {
+      nodes.push(<JsonString key={key}>{content}</JsonString>)
+    } else if (match[3]) {
+      nodes.push(<JsonNumber key={key}>{content}</JsonNumber>)
+    } else if (match[4]) {
+      nodes.push(<JsonBoolean key={key}>{content}</JsonBoolean>)
+    } else if (token === "null") {
+      nodes.push(<JsonNull key={key}>{content}</JsonNull>)
+    } else {
+      nodes.push(<JsonPunctuation key={key}>{content}</JsonPunctuation>)
+    }
+
+    cursor = match.index + token.length
+  }
+
+  if (cursor < text.length) {
+    nodes.push(renderSearchHighlightedText(text.slice(cursor), search, `plain-${cursor}`))
+  }
+
+  return nodes
+}
+
+function renderSearchHighlightedText(text: string, search: string, keyPrefix: string): ReactNode {
   const needle = search.trim()
   if (!needle) return text
 
@@ -1906,7 +2129,9 @@ function highlightText(text: string, search: string) {
     }
 
     const end = matchIndex + needle.length
-    parts.push(<Highlight key={`${matchIndex}-${end}`}>{text.slice(matchIndex, end)}</Highlight>)
+    parts.push(
+      <Highlight key={`${keyPrefix}-${matchIndex}-${end}`}>{text.slice(matchIndex, end)}</Highlight>
+    )
     cursor = end
     matchIndex = lowerText.indexOf(lowerNeedle, cursor)
   }
