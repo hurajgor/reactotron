@@ -369,6 +369,7 @@ export function registerTools(
       action: z.string().describe("Action name registered by the app, e.g. 'press', 'fill', or 'scroll'."),
       value: z.any().optional().describe("Optional action value. For fill, this is usually the text."),
       args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
+      includeSnapshot: z.boolean().optional().describe("Whether the app should include a fresh snapshot in the action response. Default true for this generic tool."),
       clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
       timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
     },
@@ -384,6 +385,7 @@ export function registerTools(
       action: args.action,
       value: args.value,
       args: args.args,
+      includeSnapshot: args.includeSnapshot,
     }
 
     server.send("agent.ui.action.request", payload, clientId)
@@ -452,6 +454,7 @@ export function registerTools(
       testID: z.string().optional().describe("Target React Native testID."),
       selector: agentUiSelectorSchema.optional().describe("Accessibility/runtime selector when testID is unavailable."),
       args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
+      includeSnapshot: z.boolean().optional().describe("Whether to include a fresh snapshot in the response. Default false for speed."),
       clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
       timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
     },
@@ -466,6 +469,7 @@ export function registerTools(
       selector: args.selector,
       action: "press",
       args: args.args,
+      includeSnapshot: args.includeSnapshot ?? false,
     }, clientId)
 
     const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
@@ -489,6 +493,7 @@ export function registerTools(
       selector: agentUiSelectorSchema.optional().describe("Accessibility/runtime selector when testID is unavailable."),
       text: z.string().describe("Text to enter."),
       args: z.record(z.string(), z.any()).optional().describe("Optional structured arguments for the handler."),
+      includeSnapshot: z.boolean().optional().describe("Whether to include a fresh snapshot in the response. Default false for speed."),
       clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
       timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
     },
@@ -504,6 +509,7 @@ export function registerTools(
       action: "fill",
       value: args.text,
       args: args.args,
+      includeSnapshot: args.includeSnapshot ?? false,
     }, clientId)
 
     const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)
@@ -533,6 +539,7 @@ export function registerTools(
       viewOffset: z.number().optional().describe("SectionList view offset."),
       viewPosition: z.number().optional().describe("SectionList view position."),
       animated: z.boolean().optional().describe("Whether to animate scrolling. Default true."),
+      includeSnapshot: z.boolean().optional().describe("Whether to include a fresh snapshot in the response. Default false for speed."),
       clientId: z.string().optional().describe("Target app clientId (required when multiple apps connected)."),
       timeoutMs: z.number().optional().describe("How long to wait for the app to respond, in milliseconds. Default 2000."),
     },
@@ -556,6 +563,7 @@ export function registerTools(
         viewPosition: args.viewPosition,
         animated: args.animated,
       }),
+      includeSnapshot: args.includeSnapshot ?? false,
     }, clientId)
 
     const response = await waitForAgentUiResponse(commandBuffer, requestId, clientId, args.timeoutMs)

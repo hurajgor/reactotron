@@ -46,6 +46,7 @@ export interface AgentUiActionRequestPayload {
   action: string
   value?: unknown
   args?: Record<string, unknown>
+  includeSnapshot?: boolean
 }
 
 export interface AgentUiResponsePayload {

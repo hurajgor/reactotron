@@ -651,7 +651,7 @@ const agentRuntime = (options: AgentRuntimeOptions = {}) => <Client extends Reac
         action: payload.action,
         testID: manualActionTestID,
         result,
-        snapshot: await buildSnapshot(),
+        snapshot: payload.includeSnapshot === false ? undefined : await buildSnapshot(),
       })
     } catch (error) {
       sendResponse({

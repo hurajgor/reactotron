@@ -325,6 +325,7 @@ function Agent() {
       selector: selectedNode.testID ? undefined : { id: selectedNode.id },
       action,
       value: action === "fill" ? fillValue : undefined,
+      includeSnapshot: true,
     })
   }, [fillValue, selectedNode, sendCommand])
 

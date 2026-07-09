@@ -104,6 +104,54 @@ describe("agentRuntime", () => {
     expect(sent[0].payload.action).toBe("press")
   })
 
+  test("omits action snapshot when includeSnapshot is false", async () => {
+    const { plugin, sent } = createPlugin()
+    const onPress = jest.fn()
+
+    React.createElement("Pressable", {
+      testID: "fast-press",
+      onPress,
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "press-fast-1",
+        testID: "fast-press",
+        action: "press",
+        includeSnapshot: false,
+      },
+    } as any)
+    await flush()
+
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.snapshot).toBeUndefined()
+  })
+
+  test("includes action snapshot by default for compatibility", async () => {
+    const { plugin, sent } = createPlugin()
+
+    React.createElement("Pressable", {
+      testID: "compat-press",
+      onPress: jest.fn(),
+    } as any)
+
+    plugin.onCommand?.({
+      type: "agent.ui.action.request",
+      payload: {
+        requestId: "press-compat-1",
+        testID: "compat-press",
+        action: "press",
+      },
+    } as any)
+    await flush()
+
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.snapshot.nodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ testID: "compat-press" })])
+    )
+  })
+
   test("infers press from an accessibility selector when testID is missing", async () => {
     const { plugin, sent } = createPlugin()
     const onPress = jest.fn(() => ({ pressed: true }))

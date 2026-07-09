@@ -474,6 +474,7 @@ describe("tools", () => {
       expect(data.testID).toBe("login-submit-button")
       expect(data.result.pressed).toBe(true)
       expect(received[0].payload.action).toBe("press")
+      expect(received[0].payload.includeSnapshot).toBe(false)
     } finally {
       app.close()
     }
@@ -514,6 +515,7 @@ describe("tools", () => {
       expect(data.action).toBe("press")
       expect(received[0].payload.testID).toBeUndefined()
       expect(received[0].payload.selector).toEqual({ role: "button", label: "Sign In" })
+      expect(received[0].payload.includeSnapshot).toBe(false)
     } finally {
       app.close()
     }
@@ -522,9 +524,11 @@ describe("tools", () => {
   test("agent_ui_fill sends text value to app handler", async () => {
     const app = await connectMockApp(relayPort)
     try {
+      const received: any[] = []
       app.on("message", (msg) => {
         const parsed = JSON.parse(msg.toString())
         if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
           app.send(JSON.stringify({
             type: "agent.ui.response",
             payload: {
@@ -552,6 +556,7 @@ describe("tools", () => {
       expect(data.status).toBe("success")
       expect(data.action).toBe("fill")
       expect(data.result.value).toBe("qa@example.com")
+      expect(received[0].payload.includeSnapshot).toBe(false)
     } finally {
       app.close()
     }
@@ -595,6 +600,7 @@ describe("tools", () => {
       expect(data.result.animated).toBe(false)
       expect(received[0].payload.action).toBe("scroll")
       expect(received[0].payload.args.offset).toBe(320)
+      expect(received[0].payload.includeSnapshot).toBe(false)
     } finally {
       app.close()
     }
