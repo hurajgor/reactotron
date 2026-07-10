@@ -3,6 +3,7 @@ import { ipcRenderer } from "electron"
 import {
   MdAdd,
   MdHome,
+  MdOutlineLink,
   MdPhoneIphone,
   MdRefresh,
   MdRotateRight,
@@ -14,6 +15,12 @@ type Simulator = {
   name: string
   runtime: string
   udid: string
+}
+
+type SimulatorCreationOption = {
+  deviceTypeIdentifier: string
+  name: string
+  runtimeName: string
 }
 
 type Surface = Simulator & {
@@ -158,6 +165,24 @@ const Preview = styled.iframe`
   background: #111217;
 `
 
+const PreviewContainer = styled.div`
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  background: #000;
+`
+
+const DevicePickerMask = styled.div`
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 248px;
+  height: 72px;
+  background: #000;
+`
+
 const EmptyState = styled.div`
   display: flex;
   flex: 1;
@@ -216,6 +241,13 @@ const PrimaryButton = styled.button`
   }
 `
 
+const SecondaryButton = styled(PrimaryButton)`
+  margin-top: 8px;
+  border-color: ${(props) => props.theme.chromeLine};
+  background: ${(props) => props.theme.backgroundLighter};
+  color: ${(props) => props.theme.foregroundLight};
+`
+
 const Status = styled.p<{ $error: boolean }>`
   max-width: 300px;
   margin: 14px 0 0;
@@ -228,9 +260,11 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const [isResizing, setIsResizing] = useState(false)
   const [panelWidth, setPanelWidth] = useState(400)
   const [simulators, setSimulators] = useState<Simulator[]>([])
+  const [creationOptions, setCreationOptions] = useState<SimulatorCreationOption[]>([])
   const [surfaces, setSurfaces] = useState<Surface[]>([])
   const [activeUdid, setActiveUdid] = useState<string | null>(null)
   const [selectedUdid, setSelectedUdid] = useState("")
+  const [selectedDeviceType, setSelectedDeviceType] = useState("")
   const [isChoosing, setIsChoosing] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [status, setStatus] = useState("")
@@ -267,9 +301,26 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setIsError(false)
   }, [])
 
+  const loadCreationOptions = useCallback(async () => {
+    const result = (await ipcRenderer.invoke(
+      "list-ios-simulator-creation-options"
+    )) as IPCResponse & {
+      options: SimulatorCreationOption[]
+    }
+    if (!result.ok) return
+
+    setCreationOptions(result.options)
+    setSelectedDeviceType((current) =>
+      result.options.some((option) => option.deviceTypeIdentifier === current)
+        ? current
+        : result.options[0]?.deviceTypeIdentifier || ""
+    )
+  }, [])
+
   useEffect(() => {
     loadSimulators().catch(() => undefined)
-  }, [loadSimulators])
+    loadCreationOptions().catch(() => undefined)
+  }, [loadCreationOptions, loadSimulators])
 
   const openSurface = async () => {
     const simulator = simulators.find((item) => item.udid === selectedUdid)
@@ -309,6 +360,35 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setStatus("")
   }
 
+  const createSurface = async () => {
+    if (!selectedDeviceType) return
+
+    setIsLoading(true)
+    setStatus("Creating and booting iOS Simulator...")
+    setIsError(false)
+    const result = (await ipcRenderer.invoke(
+      "create-ios-simulator-surface",
+      selectedDeviceType
+    )) as IPCResponse & { previewUrl?: string; simulator?: Simulator }
+    setIsLoading(false)
+    if (!result.ok || !result.previewUrl || !result.simulator) {
+      setStatus(result.message || "Could not create the iOS simulator.")
+      setIsError(true)
+      return
+    }
+
+    const surface: Surface = {
+      ...result.simulator,
+      previewUrl: result.previewUrl,
+      orientation: "portrait",
+    }
+    setSimulators((current) => [...current, result.simulator!])
+    setSurfaces((current) => [...current, surface])
+    setActiveUdid(surface.udid)
+    setIsChoosing(false)
+    setStatus("")
+  }
+
   const runSurfaceCommand = async (command: "home" | "landscape_left" | "portrait") => {
     if (!activeSurface) return
     const result = (await ipcRenderer.invoke(
@@ -335,6 +415,31 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     const result = (await ipcRenderer.invoke("reload-ios-simulator")) as IPCResponse
     setStatus(result.message || (result.ok ? "Reload requested." : "The reload request failed."))
     setIsError(!result.ok)
+  }
+
+  const reconnect = async () => {
+    if (!activeSurface) return
+
+    setStatus("Reconnecting simulator preview...")
+    setIsError(false)
+    const result = (await ipcRenderer.invoke(
+      "reconnect-ios-simulator-surface",
+      activeSurface.udid
+    )) as IPCResponse & { previewUrl?: string }
+    if (!result.ok || !result.previewUrl) {
+      setStatus(result.message || "Could not reconnect the simulator preview.")
+      setIsError(true)
+      return
+    }
+
+    setSurfaces((current) =>
+      current.map((surface) =>
+        surface.udid === activeSurface.udid
+          ? { ...surface, previewUrl: result.previewUrl! }
+          : surface
+      )
+    )
+    setStatus("")
   }
 
   const saveScreenshot = async () => {
@@ -439,6 +544,13 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                   </IconButton>
                   <IconButton
                     type="button"
+                    title="Reconnect simulator preview"
+                    onClick={() => reconnect().catch(() => undefined)}
+                  >
+                    <MdOutlineLink size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
                     title="Rotate simulator"
                     onClick={() =>
                       runSurfaceCommand(
@@ -457,7 +569,14 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                   </IconButton>
                 </Actions>
               </ToolBar>
-              <Preview src={activeSurface.previewUrl} title={`${activeSurface.name} preview`} />
+              <PreviewContainer>
+                <Preview
+                  key={activeSurface.previewUrl}
+                  src={activeSurface.previewUrl}
+                  title={`${activeSurface.name} preview`}
+                />
+                <DevicePickerMask aria-hidden="true" />
+              </PreviewContainer>
               {status && <Status $error={isError}>{status}</Status>}
             </>
           ) : (
@@ -486,6 +605,29 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
               >
                 {isLoading ? "Opening..." : "Open iOS Simulator"}
               </PrimaryButton>
+              {creationOptions.length > 0 && (
+                <>
+                  <DeviceSelect
+                    aria-label="New iOS simulator type"
+                    value={selectedDeviceType}
+                    disabled={isLoading}
+                    onChange={(event) => setSelectedDeviceType(event.target.value)}
+                  >
+                    {creationOptions.map((option) => (
+                      <option key={option.deviceTypeIdentifier} value={option.deviceTypeIdentifier}>
+                        New {option.name} ({option.runtimeName})
+                      </option>
+                    ))}
+                  </DeviceSelect>
+                  <SecondaryButton
+                    type="button"
+                    disabled={isLoading}
+                    onClick={() => createSurface().catch(() => undefined)}
+                  >
+                    {isLoading ? "Creating..." : "Create iOS Simulator"}
+                  </SecondaryButton>
+                </>
+              )}
               <Status $error={isError}>{status}</Status>
               <IconButton
                 type="button"

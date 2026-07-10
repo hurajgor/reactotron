@@ -17,6 +17,13 @@ type IOSSimulator = {
   runtime: string
 }
 
+type IOSSimulatorCreationOption = {
+  deviceTypeIdentifier: string
+  name: string
+  runtimeIdentifier: string
+  runtimeName: string
+}
+
 const serveSimProcesses = new Map<
   string,
   { process: childProcess.ChildProcess; previewUrl: string }
@@ -111,6 +118,32 @@ async function getBootedIOSSimulators(): Promise<IOSSimulator[]> {
     )
 }
 
+async function getIOSSimulatorCreationOptions(): Promise<IOSSimulatorCreationOption[]> {
+  const output = await runCommand("xcrun", ["simctl", "list", "runtimes", "--json"])
+  const runtimes = JSON.parse(output).runtimes as Array<Record<string, unknown>>
+  const [runtime] = runtimes
+    .filter(
+      (item) =>
+        item.platform === "iOS" &&
+        item.isAvailable === true &&
+        Array.isArray(item.supportedDeviceTypes)
+    )
+    .sort((left, right) =>
+      String(right.version).localeCompare(String(left.version), undefined, { numeric: true })
+    )
+
+  if (!runtime) throw new Error("No available iOS Simulator runtime is installed.")
+
+  return (runtime.supportedDeviceTypes as Array<Record<string, unknown>>)
+    .filter((deviceType) => deviceType.productFamily === "iPhone")
+    .map((deviceType) => ({
+      deviceTypeIdentifier: String(deviceType.identifier),
+      name: String(deviceType.name),
+      runtimeIdentifier: String(runtime.identifier),
+      runtimeName: String(runtime.name),
+    }))
+}
+
 async function startServeSim(udid: string): Promise<{ previewUrl: string }> {
   const existingSurface = serveSimProcesses.get(udid)
   if (existingSurface && existingSurface.process.exitCode === null) {
@@ -118,7 +151,7 @@ async function startServeSim(udid: string): Promise<{ previewUrl: string }> {
   }
 
   const port = await getAvailablePort()
-  const previewUrl = `http://127.0.0.1:${port}`
+  const previewUrl = `http://127.0.0.1:${port}?device=${udid}&session=${Date.now()}`
   const serveSimProcess = childProcess.spawn(
     process.env.REACTOTRON_NODE_PATH || "node",
     [getServeSimCliPath(), "--port", String(port), "--codec", "auto", udid],
@@ -154,7 +187,9 @@ async function startServeSim(udid: string): Promise<{ previewUrl: string }> {
     serveSimProcess.stderr.on("data", receiveOutput)
     serveSimProcess.on("error", (error) => finish(error))
     serveSimProcess.on("close", (code) => {
-      serveSimProcesses.delete(udid)
+      if (serveSimProcesses.get(udid)?.process === serveSimProcess) {
+        serveSimProcesses.delete(udid)
+      }
       if (!settled) finish(new Error(output || `serve-sim exited with code ${code}.`))
     })
   })
@@ -224,6 +259,64 @@ export const setupSimulatorIPCCommands = () => {
       }
 
       return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("reconnect-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const existingSurface = serveSimProcesses.get(udid)
+      if (existingSurface) {
+        existingSurface.process.kill()
+        serveSimProcesses.delete(udid)
+      }
+
+      return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("list-ios-simulator-creation-options", async () => {
+    try {
+      return { ok: true, options: await getIOSSimulatorCreationOptions() }
+    } catch (error) {
+      return {
+        ok: false,
+        options: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("create-ios-simulator-surface", async (_event, deviceTypeIdentifier: unknown) => {
+    try {
+      if (typeof deviceTypeIdentifier !== "string") throw new Error("Invalid iOS simulator type.")
+      const options = await getIOSSimulatorCreationOptions()
+      const option = options.find((item) => item.deviceTypeIdentifier === deviceTypeIdentifier)
+      if (!option) throw new Error("That iOS simulator type is not available.")
+
+      const name = `Reactotron ${option.name} ${new Date().toISOString().replace(/[:.]/g, "-")}`
+      const udid = (
+        await runCommand("xcrun", [
+          "simctl",
+          "create",
+          name,
+          option.deviceTypeIdentifier,
+          option.runtimeIdentifier,
+        ])
+      ).trim()
+      assertIOSSimulatorUdid(udid)
+      await runCommand("xcrun", ["simctl", "boot", udid])
+      await runCommand("xcrun", ["simctl", "bootstatus", udid, "-b"])
+
+      return {
+        ok: true,
+        simulator: { name, runtime: option.runtimeName, udid },
+        ...(await startServeSim(udid)),
+      }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
