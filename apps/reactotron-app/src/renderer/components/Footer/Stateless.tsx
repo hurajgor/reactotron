@@ -1,6 +1,7 @@
 import React from "react"
 import styled from "styled-components"
 import {
+  MdOutlineReplay as ReloadIcon,
   MdOutlineSecurity as ShieldIcon,
   MdOutlineSettings as SettingsIcon,
   MdOutlineSwapVert as ExpandIcon,
@@ -26,53 +27,120 @@ const Container = styled.div`
 const ConnectionContainer = styled.div`
   display: flex;
   flex: 1;
+  min-width: 0;
   overflow-x: auto;
   height: 85px;
+  align-items: center;
 `
 
 interface ContentContainerProps {
   $isOpen: boolean
 }
 const ContentContainer = styled.div.attrs(() => ({}))<ContentContainerProps>`
+  position: relative;
   display: flex;
   flex-direction: row;
   background-color: ${(props) => props.theme.subtleLine};
-  padding: 0 10px;
+  padding: 0 240px 0 12px;
   justify-content: space-between;
   align-items: center;
   cursor: ${(props) => (props.$isOpen ? "auto" : "pointer")};
-  height: ${(props) => (props.$isOpen ? "85px" : "25px")};
+  height: ${(props) => (props.$isOpen ? "88px" : "28px")};
+  box-sizing: border-box;
+`
+
+const CollapsedSummary = styled.div`
+  display: grid;
+  grid-template-columns: minmax(155px, 1fr) minmax(0, 1.4fr) minmax(155px, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 `
 
 const ConnectionInfo = styled.div`
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const StatusInfo = styled(ConnectionInfo)`
+  text-align: left;
+  color: ${(props) => props.theme.foreground};
+`
+
+const PrimaryConnectionInfo = styled(ConnectionInfo)`
+  color: ${(props) => props.theme.foregroundLight};
+  font-weight: 600;
+`
+
+const ReloadButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.backgroundLighter};
+  color: ${(props) => props.theme.foregroundDark};
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${(props) => props.theme.foreground};
+    background-color: ${(props) => `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
+  }
 `
 
 const ExpandContainer = styled.div`
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  border-radius: 4px;
   cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
+  }
 `
 
 interface McpButtonProps {
   $active: boolean
 }
 
-const McpGroup = styled.div`
+const FooterControls = styled.div`
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
 `
 
 const McpButton = styled.div.attrs(() => ({}))<McpButtonProps>`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 8px;
-  border-radius: 3px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
+  line-height: 1;
   user-select: none;
+  box-sizing: border-box;
   background-color: ${(props) =>
     props.$active
       ? `color-mix(in srgb, ${props.theme.highlight} 14%, transparent)`
@@ -100,9 +168,11 @@ const McpDot = styled.div<McpButtonProps>`
 const McpSettingsButton = styled.div`
   display: flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   color: ${(props) => props.theme.foregroundDark};
   &:hover {
     color: ${(props) => props.theme.foreground};
@@ -149,19 +219,21 @@ function renderCollapsed(
   connections: Connection[],
   selectedConnection: Connection | null
 ) {
+  const connectionText =
+    serverStatus === "started"
+      ? renderConnectionInfo(selectedConnection)
+      : serverStatus === "portUnavailable"
+        ? `Port ${getConfiguredServerPort()} unavailable.`
+        : "Waiting for server to start"
+
   return (
-    <>
-      <ConnectionInfo>
+    <CollapsedSummary>
+      <StatusInfo>
         port {getConfiguredServerPort()} | {connections.length} connections
-      </ConnectionInfo>
-      {serverStatus === "portUnavailable" && (
-        <ConnectionInfo>Port {getConfiguredServerPort()} unavailable.</ConnectionInfo>
-      )}
-      {serverStatus === "started" && (
-        <ConnectionInfo>{renderConnectionInfo(selectedConnection)}</ConnectionInfo>
-      )}
-      {serverStatus === "stopped" && <ConnectionInfo>Waiting for server to start</ConnectionInfo>}
-    </>
+      </StatusInfo>
+      <PrimaryConnectionInfo>{connectionText}</PrimaryConnectionInfo>
+      <div />
+    </CollapsedSummary>
   )
 }
 
@@ -177,6 +249,7 @@ interface Props {
   onToggleMcp: () => void
   mcpRedactionEnforced: boolean
   onOpenMcpSettings: () => void
+  onReloadMetro: () => void
 }
 
 function Header({
@@ -191,14 +264,29 @@ function Header({
   onToggleMcp,
   mcpRedactionEnforced,
   onOpenMcpSettings,
+  onReloadMetro,
 }: Props) {
-  const renderMethod = isOpen ? renderExpanded : renderCollapsed
-
   return (
     <Container>
       <ContentContainer onClick={() => !isOpen && setIsOpen(true)} $isOpen={isOpen}>
-        {renderMethod(serverStatus, connections, selectedConnection, onChangeConnection)}
-        <McpGroup>
+        {isOpen
+          ? renderExpanded(serverStatus, connections, selectedConnection, onChangeConnection)
+          : renderCollapsed(
+            serverStatus,
+            connections,
+            selectedConnection
+          )}
+        <FooterControls>
+          {serverStatus === "started" && (
+            <ReloadButton
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onReloadMetro() }}
+              title="Reload React Native apps connected to Metro"
+            >
+              <ReloadIcon size={12} />
+              Reload Metro
+            </ReloadButton>
+          )}
           <McpButton
             $active={mcpStatus === "started"}
             onClick={(e) => { e.stopPropagation(); onToggleMcp() }}
@@ -220,7 +308,7 @@ function Header({
               <SettingsIcon size={14} />
             </McpSettingsButton>
           )}
-        </McpGroup>
+        </FooterControls>
         <ExpandContainer onClick={() => setIsOpen(!isOpen)}>
           <ExpandIcon size={18} />
         </ExpandContainer>

@@ -57,6 +57,7 @@ const DEFAULTS: ClientOptions<ReactotronReactNative> = {
   host: getHost("localhost"),
   port: 9090,
   name: "React Native App",
+  reconnect: true,
   environment: process.env.NODE_ENV || (__DEV__ ? "development" : "production"),
   client: {
     reactotronLibraryName: "reactotron-react-native",

@@ -174,6 +174,16 @@ export class ReactotronImpl
   socket: WebSocket = null as never
 
   /**
+   * The pending reconnect timer, if a reconnect has been scheduled.
+   */
+  reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  /**
+   * Number of reconnect attempts since the last successful connection.
+   */
+  reconnectAttempts = 0
+
+  /**
    * Available plugins.
    */
   plugins: Plugin<this>[] = []
@@ -229,6 +239,8 @@ export class ReactotronImpl
         onCommand: () => null,
         onConnect: () => null,
         onDisconnect: () => null,
+        reconnect: false,
+        reconnectDelay: 2000,
       } satisfies ClientOptions<ReactotronCore>,
       this.options,
       options
@@ -247,13 +259,44 @@ export class ReactotronImpl
 
   close() {
     this.connected = false
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
     this.socket && this.socket.close && this.socket.close()
+  }
+
+  logReconnect(message: string) {
+    if (this.options.reconnect === false) return
+
+    console.log(`[Reactotron] ${message}`)
+  }
+
+  scheduleReconnect() {
+    if (!this.connected || this.options.reconnect === false || this.reconnectTimer) return
+
+    this.reconnectAttempts += 1
+    this.logReconnect(
+      `Disconnected. Reconnect attempt ${this.reconnectAttempts} scheduled in ${this.options.reconnectDelay}ms.`
+    )
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (this.connected) {
+        this.connect()
+      }
+    }, this.options.reconnectDelay)
   }
 
   /**
    * Connect to the Reactotron server.
    */
   connect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
     this.connected = true
     const {
       createSocket,
@@ -270,10 +313,21 @@ export class ReactotronImpl
 
     // establish a connection to the server
     const protocol = secure ? "wss" : "ws"
-    const socket = createSocket!(`${protocol}://${host}:${port}`)
+    const socketPath = `${protocol}://${host}:${port}`
+    this.logReconnect(
+      `${this.reconnectAttempts > 0 ? "Reconnecting" : "Connecting"} to ${socketPath}.`
+    )
+    const socket = createSocket!(socketPath)
 
     // fires when we talk to the server
     const onOpen = () => {
+      this.connected = true
+      this.logReconnect(
+        this.reconnectAttempts > 0
+          ? `Reconnected to ${socketPath} after ${this.reconnectAttempts} attempt(s).`
+          : `Connected to ${socketPath}.`
+      )
+      this.reconnectAttempts = 0
       // fire our optional onConnect handler
       onConnect && onConnect()
 
@@ -311,6 +365,13 @@ export class ReactotronImpl
 
       // as well as the plugin's onDisconnect
       this.plugins.forEach((p) => p.onDisconnect && p.onDisconnect())
+
+      this.scheduleReconnect()
+    }
+
+    const onError = (error?: unknown) => {
+      this.isReady = false
+      this.logReconnect(`WebSocket error while connecting to ${socketPath}: ${String(error)}`)
     }
 
     const decodeCommandData = (data: unknown) => {
@@ -357,6 +418,7 @@ export class ReactotronImpl
       const nodeWebSocket = socket as WebSocket
       nodeWebSocket.on("open", onOpen)
       nodeWebSocket.on("close", onClose)
+      nodeWebSocket.on("error", onError)
       nodeWebSocket.on("message", onMessage)
       // assign the socket to the instance
       this.socket = socket
@@ -365,6 +427,7 @@ export class ReactotronImpl
       const browserWebSocket = socket as WebSocket
       socket.onopen = onOpen
       socket.onclose = onClose
+      socket.onerror = onError
       socket.onmessage = (evt) => onMessage(evt.data)
       // assign the socket to the instance
       this.socket = browserWebSocket
@@ -400,17 +463,22 @@ export class ReactotronImpl
 
     const serializedMessage = serialize(fullMessage, this.options.proxyHack)
 
-    if (this.isReady) {
+    if (this.isReady && this.socket.readyState === WebSocket.OPEN) {
       // send this command
       try {
         this.socket.send(serializedMessage)
       } catch {
         this.isReady = false
-        console.log("An error occurred communicating with reactotron. Please reload your app")
+        this.sendQueue.push(serializedMessage)
+        this.logReconnect(`Send failed; queued ${type} and closing socket before reconnect.`)
+        this.socket?.close?.()
+        this.scheduleReconnect()
       }
     } else {
       // queue it up until we can connect
       this.sendQueue.push(serializedMessage)
+      this.logReconnect(`Queued ${type}; socket is not ready.`)
+      this.scheduleReconnect()
     }
   }
 

@@ -74,10 +74,12 @@ const SideBarToolButton = styled.button`
 function SideBar({
   mode,
   onToggleCompact,
+  onRestartServer,
   serverStatus,
 }: {
   mode: SideBarMode
   onToggleCompact: () => void
+  onRestartServer: () => void
   serverStatus: ServerStatus
 }) {
   const isCompact = mode === "compact"
@@ -91,13 +93,12 @@ function SideBar({
   if (serverStatus === "portUnavailable") {
     serverIcon = MdOutlineWarningAmber
     iconColor = "#bb9af7"
-    serverText = `Port ${getConfiguredServerPort()} unavailable`
+    serverText = `Retry port ${getConfiguredServerPort()}`
   }
 
   const retryConnection = () => {
     if (serverStatus === "portUnavailable") {
-      // TODO: Reconnect more elegantly than forcing a reload
-      window.location.reload()
+      onRestartServer()
     }
   }
 

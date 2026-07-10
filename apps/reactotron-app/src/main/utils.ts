@@ -1,5 +1,57 @@
 import childProcess from "child_process"
+import http from "http"
 import { type BrowserWindow, dialog, ipcMain } from "electron"
+
+const reloadReactNativeViaMetro = (metroPort: number) =>
+  new Promise<string>((resolve, reject) => {
+    const request = http.get(
+      {
+        host: "localhost",
+        port: metroPort,
+        path: "/reload",
+      },
+      (response) => {
+        let body = ""
+
+        response.setEncoding("utf8")
+        response.on("data", (chunk) => {
+          body += chunk
+        })
+        response.on("end", () => {
+          if (response.statusCode && response.statusCode >= 400) {
+            reject(new Error(`Metro returned ${response.statusCode}: ${body}`))
+            return
+          }
+
+          resolve(body)
+        })
+      }
+    )
+
+    request.setTimeout(3000, () => {
+      request.destroy(new Error(`Metro did not respond on port ${metroPort}.`))
+    })
+    request.on("error", reject)
+  })
+
+export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("reload-ios-simulator", async () => {
+    const metroPort = Number(process.env.REACTOTRON_METRO_PORT ?? process.env.METRO_PORT ?? 8081)
+    console.log(`[Reactotron Desktop] React Native reload requested via Metro port ${metroPort}.`)
+
+    try {
+      await reloadReactNativeViaMetro(metroPort)
+
+      const message = `Sent reload request to Metro on port ${metroPort}.`
+      console.log(`[Reactotron Desktop] ${message}`)
+      return { ok: true, message }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.log("[Reactotron Desktop] Failed to reload via Metro.", message)
+      return { ok: false, message }
+    }
+  })
+}
 
 // This function sets up numerous IPC commands for communicating with android devices.
 // It also watches for android devices being plugged in and unplugged.

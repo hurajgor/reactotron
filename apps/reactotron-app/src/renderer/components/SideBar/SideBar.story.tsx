@@ -9,6 +9,11 @@ export default {
 
 export const Default = () => (
   <Router>
-    <SideBar mode="expanded" onToggleCompact={() => {}} serverStatus="started" />
+    <SideBar
+      mode="expanded"
+      onRestartServer={() => {}}
+      onToggleCompact={() => {}}
+      serverStatus="started"
+    />
   </Router>
 )

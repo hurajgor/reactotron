@@ -6,12 +6,13 @@ import SidebarStateless from "./Sidebar"
 
 function SideBar() {
   const { sideBarMode, toggleSideBar } = useContext(LayoutContext)
-  const { serverStatus } = useContext(StandaloneContext)
+  const { restartServer, serverStatus } = useContext(StandaloneContext)
 
   return (
     <SidebarStateless
       mode={sideBarMode}
       onToggleCompact={toggleSideBar}
+      onRestartServer={restartServer}
       serverStatus={serverStatus}
     />
   )

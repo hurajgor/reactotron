@@ -10,6 +10,12 @@ import useStandalone, { Connection, ServerStatus } from "./useStandalone"
 
 export type McpStatus = "stopped" | "started" | "error"
 
+const PORT_RECOVERY_RELOADS_KEY = "reactotronPortRecoveryReloads"
+
+type ReactotronGlobal = typeof globalThis & {
+  __REACTOTRON_DESKTOP_SERVER__?: Server
+}
+
 function readRedactionConfig(): McpRedactionServerConfig {
   return {
     defaults: {
@@ -28,6 +34,7 @@ interface Context {
   connections: Connection[]
   selectedConnection: Connection
   selectConnection: (clientId: string) => void
+  restartServer: () => void
   mcpStatus: McpStatus
   mcpPort: number | null
   toggleMcp: () => void
@@ -44,6 +51,7 @@ const StandaloneContext = React.createContext<Context>({
   connections: [],
   selectedConnection: null,
   selectConnection: null,
+  restartServer: () => {},
   mcpStatus: "stopped",
   mcpPort: null,
   toggleMcp: () => {},
@@ -57,6 +65,8 @@ const StandaloneContext = React.createContext<Context>({
 
 const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const reactotronServer = useRef<Server>(null)
+  const portRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const {
     serverStatus,
@@ -74,23 +84,28 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     portUnavailable,
   } = useStandalone()
 
-  useEffect(() => {
-    reactotronServer.current = createServer({ port: getConfiguredServerPort() })
-
-    reactotronServer.current.on("start", serverStarted)
-    reactotronServer.current.on("stop", serverStopped)
-    // @ts-expect-error need to sync these types between reactotron-core-server and reactotron-app
-    reactotronServer.current.on("connectionEstablished", connectionEstablished)
-    reactotronServer.current.on("command", commandReceived)
-    // @ts-expect-error need to sync these types between reactotron-core-server and reactotron-app
-    reactotronServer.current.on("disconnect", connectionDisconnected)
-    reactotronServer.current.on("portUnavailable", portUnavailable)
-
-    reactotronServer.current.start()
-
-    return () => {
-      reactotronServer.current.stop()
-    }
+  const attachServerEventHandlers = useCallback((server: Server) => {
+    server.on("start", () => {
+      console.log(`[Reactotron Desktop] Server started on port ${getConfiguredServerPort()}.`)
+      serverStarted()
+    })
+    server.on("stop", () => {
+      console.log("[Reactotron Desktop] Server stopped.")
+      serverStopped()
+    })
+    server.on("connectionEstablished", (connection) => {
+      console.log("[Reactotron Desktop] Connection established.", connection)
+      connectionEstablished(connection)
+    })
+    server.on("command", commandReceived)
+    server.on("disconnect", (connection) => {
+      console.log("[Reactotron Desktop] Connection disconnected.", connection)
+      connectionDisconnected(connection)
+    })
+    server.on("portUnavailable", (port) => {
+      console.warn(`[Reactotron Desktop] Port ${port} unavailable.`)
+      portUnavailable()
+    })
   }, [
     serverStarted,
     serverStopped,
@@ -99,6 +114,100 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     connectionDisconnected,
     portUnavailable,
   ])
+
+  const startReactotronServer = useCallback(() => {
+    const globalServer = (globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__
+    if (globalServer && globalServer !== reactotronServer.current) {
+      try {
+        globalServer.stop()
+      } catch (error) {
+        console.warn("Unable to stop previous Reactotron server before start", error)
+      }
+    }
+
+    const server = createServer({ port: getConfiguredServerPort() })
+    attachServerEventHandlers(server)
+    reactotronServer.current = server
+    ;(globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__ = server
+
+    console.log(`[Reactotron Desktop] Starting server on port ${getConfiguredServerPort()}.`)
+    server.start()
+
+    return server
+  }, [attachServerEventHandlers])
+
+  const restartServer = useCallback(() => {
+    if (restartTimer.current) {
+      clearTimeout(restartTimer.current)
+    }
+
+    if (reactotronServer.current) {
+      try {
+        reactotronServer.current.stop()
+      } catch (error) {
+        console.warn("Unable to stop Reactotron server before restart", error)
+      }
+      reactotronServer.current = null
+    }
+
+    restartTimer.current = setTimeout(() => {
+      startReactotronServer()
+      restartTimer.current = null
+    }, 250)
+  }, [startReactotronServer])
+
+  useEffect(() => {
+    startReactotronServer()
+
+    return () => {
+      if (restartTimer.current) {
+        clearTimeout(restartTimer.current)
+      }
+      if (portRetryTimer.current) {
+        clearTimeout(portRetryTimer.current)
+      }
+      try {
+        reactotronServer.current?.stop()
+      } catch (error) {
+        console.warn("Unable to stop Reactotron server during cleanup", error)
+      }
+      if ((globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__ === reactotronServer.current) {
+        delete (globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__
+      }
+      reactotronServer.current = null
+    }
+  }, [startReactotronServer])
+
+  useEffect(() => {
+    if (serverStatus === "started") {
+      sessionStorage.removeItem(PORT_RECOVERY_RELOADS_KEY)
+    }
+  }, [serverStatus])
+
+  useEffect(() => {
+    if (serverStatus !== "portUnavailable") return undefined
+
+    portRetryTimer.current = setTimeout(() => {
+      restartServer()
+      portRetryTimer.current = null
+    }, 1000)
+
+    const portRecoveryReloadTimer = setTimeout(() => {
+      const reloads = Number(sessionStorage.getItem(PORT_RECOVERY_RELOADS_KEY) ?? 0)
+      if (reloads > 0) return
+
+      sessionStorage.setItem(PORT_RECOVERY_RELOADS_KEY, String(reloads + 1))
+      window.location.reload()
+    }, 3000)
+
+    return () => {
+      if (portRetryTimer.current) {
+        clearTimeout(portRetryTimer.current)
+        portRetryTimer.current = null
+      }
+      clearTimeout(portRecoveryReloadTimer)
+    }
+  }, [restartServer, serverStatus])
 
   const mcpServerRef = useRef<ReactotronMcpServer>(null)
   const [mcpStatus, setMcpStatus] = useState<McpStatus>("stopped")
@@ -195,6 +304,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         connections,
         selectedConnection,
         selectConnection,
+        restartServer,
         mcpStatus,
         mcpPort,
         toggleMcp,

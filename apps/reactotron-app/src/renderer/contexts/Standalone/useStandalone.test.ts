@@ -3,6 +3,26 @@ import { act, renderHook } from "@testing-library/react"
 import useStandalone from "./useStandalone"
 
 describe("contexts/Standalone/useStandalone", () => {
+  describe("Server Handling", () => {
+    it("should clear port unavailable when the server starts again", () => {
+      const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation()
+      const { result } = renderHook(() => useStandalone())
+
+      act(() => {
+        result.current.portUnavailable()
+      })
+
+      expect(result.current.serverStatus).toEqual("portUnavailable")
+
+      act(() => {
+        result.current.serverStarted()
+      })
+
+      expect(result.current.serverStatus).toEqual("started")
+      consoleErrorSpy.mockRestore()
+    })
+  })
+
   describe("Connection Handling", () => {
     it("should handle new connections and add them to our list", () => {
       const { result } = renderHook(() => useStandalone())

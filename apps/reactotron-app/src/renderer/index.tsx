@@ -28,4 +28,7 @@ root.render(
 // accept it like it's hot
 if ((module as any).hot) {
   ;(module as any).hot.accept()
+  ;(module as any).hot.dispose(() => {
+    root.unmount()
+  })
 }

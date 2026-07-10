@@ -7,7 +7,7 @@ import { autoUpdater } from "electron-updater"
 import windowStateKeeper from "electron-window-state"
 
 import createMenu from "./menu"
-import { setupAndroidDeviceIPCCommands } from "./utils"
+import { setupAndroidDeviceIPCCommands, setupSimulatorIPCCommands } from "./utils"
 
 const isDevelopment = process.env.NODE_ENV !== "production"
 const isDevApp = process.env.REACTOTRON_DEV_APP === "1"
@@ -125,4 +125,5 @@ app.on("ready", () => {
 
   // Sets up the electron IPC commands for android functionality on the Help screen.
   setupAndroidDeviceIPCCommands(mainWindow)
+  setupSimulatorIPCCommands()
 })
