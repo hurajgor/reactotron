@@ -16,7 +16,17 @@ type BodyMode = "pretty" | "tree" | "raw"
 type InspectorTab = "summary" | "request" | "response" | "headers" | "raw"
 type LogLevel = "debug" | "info" | "warn" | "error"
 type LogLevelSelection = Record<LogLevel, boolean>
-type TableColumn = "kind" | "status" | "time"
+type NetworkFilterKey =
+  | "method"
+  | "status"
+  | "duration"
+  | "contentType"
+  | "timeWindow"
+  | "duplicate"
+  | "endpoint"
+  | "host"
+type NetworkFilters = Record<NetworkFilterKey, string>
+type TableColumn = "kind" | "status" | "duration" | "time"
 type TableColumns = Record<TableColumn, number>
 type TreeValueType = "string" | "number" | "boolean" | "null" | "undefined" | "object"
 
@@ -29,9 +39,11 @@ type ConsoleItem = {
   searchText: string
   method: string
   status: string
+  contentType: string
   tone: "good" | "warn" | "bad" | "muted" | "redirect"
   time: string
   duration?: number
+  timestamp: number
 }
 
 type ApiRequest = Partial<ApiResponsePayload["request"]>
@@ -47,7 +59,19 @@ const defaultLogLevels: LogLevelSelection = {
 const defaultTableColumns: TableColumns = {
   kind: 92,
   status: 72,
+  duration: 86,
   time: 96,
+}
+
+const defaultNetworkFilters: NetworkFilters = {
+  method: "",
+  status: "",
+  duration: "",
+  contentType: "",
+  timeWindow: "",
+  duplicate: "",
+  endpoint: "",
+  host: "",
 }
 
 const verboseLogLevels: LogLevelSelection = {
@@ -63,6 +87,10 @@ const logLevelOptions: Array<{ level: LogLevel; label: string }> = [
   { level: "warn", label: "Warnings" },
   { level: "error", label: "Errors" },
 ]
+
+const durationFilterOptions = ["500 ms+", "1 s+", "3 s+"]
+const timeWindowFilterOptions = ["Last 30s", "Last 1m", "Last 5m"]
+const duplicateFilterValue = "duplicates-only"
 
 const treeValueColor: Record<TreeValueType, string> = {
   string: "#9ece6a",
@@ -86,21 +114,45 @@ const Container = styled.div`
 
 const Toolbar = styled.div`
   display: flex;
+  flex-direction: column;
   flex-wrap: wrap;
-  align-items: center;
   gap: 10px;
+  min-width: 0;
   padding: 12px 16px;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
-const ToolbarControls = styled.div`
+const ToolbarRow = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  flex-shrink: 0;
   gap: 10px;
-  margin-left: auto;
+  width: 100%;
   min-width: 0;
+`
+
+const SearchRow = styled(ToolbarRow)`
+  flex-wrap: nowrap;
+`
+
+const FilterRow = styled(ToolbarRow)`
+  align-items: stretch;
+`
+
+const FilterGroup = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 10px;
+  border-right: 1px solid ${(props) => props.theme.chromeLine};
+
+  &:last-child {
+    padding-right: 0;
+    border-right: 0;
+  }
 `
 
 const ToggleCount = styled.span`
@@ -111,8 +163,7 @@ const SearchBox = styled.label`
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  flex-basis: 0;
+  flex: 1 1 auto;
   min-width: 220px;
   min-height: 34px;
   padding: 0 10px;
@@ -157,9 +208,48 @@ const Toggle = styled.label`
   }
 `
 
+const FilterSelect = styled.select`
+  flex: 0 1 150px;
+  width: 150px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 28px 0 10px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
+  outline: 0;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
+  font-size: 12px;
+  cursor: pointer;
+
+  &:focus {
+    border-color: ${(props) => props.theme.highlight};
+    box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.16);
+  }
+`
+
+const InlineFilterInput = styled.input`
+  flex: 0 1 92px;
+  width: 92px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
+  outline: 0;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
+  font-size: 12px;
+
+  &:focus {
+    border-color: ${(props) => props.theme.highlight};
+    box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.16);
+  }
+`
+
 const LogLevelMenu = styled.details`
   position: relative;
-  flex: 0 0 190px;
+  flex: 0 1 190px;
   width: 190px;
   min-width: 0;
   color: ${(props) => props.theme.foreground};
@@ -252,16 +342,14 @@ const LogLevelOption = styled.label`
 const Workspace = styled.div<{ $inspectorWidth: number }>`
   flex: 1;
   display: grid;
-  grid-template-columns:
-    minmax(120px, calc(100% - ${(props) => props.$inspectorWidth}px - 7px)) 7px
-    minmax(240px, 1fr);
+  grid-template-columns: minmax(0, 1fr) 7px minmax(240px, ${(props) => props.$inspectorWidth}px);
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   overflow: hidden;
 
   @media (max-width: 520px) {
-    grid-template-columns:
-      minmax(96px, calc(100% - ${(props) => props.$inspectorWidth}px - 7px)) 7px
-      minmax(220px, 1fr);
+    grid-template-columns: minmax(0, 1fr) 7px minmax(220px, ${(props) => props.$inspectorWidth}px);
   }
 `
 
@@ -306,7 +394,8 @@ const SplitResizeHandle = styled.div`
 const TableGrid = styled.div<{ $columns: TableColumns }>`
   grid-template-columns:
     ${(props) => props.$columns.kind}px minmax(120px, 1fr)
-    ${(props) => props.$columns.status}px ${(props) => props.$columns.time}px;
+    ${(props) => props.$columns.status}px ${(props) => props.$columns.duration}px
+    ${(props) => props.$columns.time}px;
 `
 
 const TableHeader = styled(TableGrid)`
@@ -892,6 +981,7 @@ function resizeTableColumn(
   const limits: Record<TableColumn, { min: number; max: number }> = {
     kind: { min: 58, max: 150 },
     status: { min: 58, max: 130 },
+    duration: { min: 68, max: 150 },
     time: { min: 62, max: 170 },
   }
 
@@ -922,27 +1012,51 @@ function Network({ title = "Network" }: { title?: string }) {
   const [query, setQuery] = useState("")
   const [showNetwork, setShowNetwork] = useState(true)
   const [showLogs, setShowLogs] = useState(true)
+  const [isRegexSearch, setIsRegexSearch] = useState(false)
   const [logLevels, setLogLevels] = useState<LogLevelSelection>(defaultLogLevels)
+  const [networkFilters, setNetworkFilters] = useState<NetworkFilters>(defaultNetworkFilters)
   const [selectedId, setSelectedId] = useState<string>("")
   const [inspectorWidth, setInspectorWidth] = useState(560)
   const [tableColumns, setTableColumns] = useState<TableColumns>(defaultTableColumns)
 
   const items = useMemo(() => buildItems(commands), [commands])
+  const networkItems = useMemo(() => items.filter((item) => item.kind === "network"), [items])
   const networkCount = useMemo(
-    () => items.filter((item) => item.kind === "network").length,
-    [items]
+    () => networkItems.length,
+    [networkItems]
   )
   const logCount = useMemo(() => items.filter((item) => item.kind === "log").length, [items])
+  const networkFilterOptions = useMemo(() => buildNetworkFilterOptions(networkItems), [networkItems])
+  const activeNetworkFilters = useMemo(
+    () => normalizeNetworkFilters(networkFilters, networkFilterOptions),
+    [networkFilters, networkFilterOptions]
+  )
+  const duplicateNetworkKeys = useMemo(() => duplicateRequestKeys(networkItems), [networkItems])
   const visibleItems = useMemo(() => {
-    const needle = query.trim().toLowerCase()
+    const searchMatcher = buildSearchMatcher(query, isRegexSearch)
+    const now = Date.now()
     return items
       .filter((item) => (item.kind === "network" ? showNetwork : showLogs))
+      .filter(
+        (item) =>
+          item.kind !== "network" ||
+          matchesNetworkFilters(item, activeNetworkFilters, duplicateNetworkKeys, now)
+      )
       .filter((item) => item.kind !== "log" || logLevels[item.status as LogLevel])
       .filter((item) => {
-        if (!needle) return true
-        return item.searchText.toLowerCase().includes(needle)
+        if (!searchMatcher) return true
+        return searchMatcher(item.searchText)
       })
-  }, [items, logLevels, query, showLogs, showNetwork])
+  }, [
+    activeNetworkFilters,
+    duplicateNetworkKeys,
+    isRegexSearch,
+    items,
+    logLevels,
+    query,
+    showLogs,
+    showNetwork,
+  ])
   const filteredItemCount = items.length - visibleItems.length
 
   const selectedItem = selectedId
@@ -953,43 +1067,70 @@ function Network({ title = "Network" }: { title?: string }) {
     <Container>
       <Header title={title} isDraggable />
       <Toolbar>
-        <SearchBox>
-          <MdOutlineSearch size={16} />
-          <SearchInput
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search endpoints, logs, status, hosts"
-          />
-        </SearchBox>
-        <ToolbarControls>
-          <Toggle>
+        <SearchRow>
+          <SearchBox>
+            <MdOutlineSearch size={16} />
+            <SearchInput
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={
+                isRegexSearch
+                  ? "Regex search endpoints, logs, status, hosts"
+                  : "Search endpoints, logs, status, hosts"
+              }
+            />
+          </SearchBox>
+          <Toggle title="Interpret search as a regular expression">
             <input
               type="checkbox"
-              checked={showNetwork}
-              onChange={(event) => setShowNetwork(event.target.checked)}
+              checked={isRegexSearch}
+              onChange={(event) => setIsRegexSearch(event.target.checked)}
             />
-            Network <ToggleCount>{networkCount}</ToggleCount>
+            Regex
           </Toggle>
-          <Toggle>
-            <input
-              type="checkbox"
-              checked={showLogs}
-              onChange={(event) => setShowLogs(event.target.checked)}
-            />
-            Logs <ToggleCount>{logCount}</ToggleCount>
-          </Toggle>
-          <LogLevelFilter levels={logLevels} setLevels={setLogLevels} />
           <ActionButton
             type="button"
             onClick={() => {
               clearCommands()
+              setNetworkFilters(defaultNetworkFilters)
               setSelectedId("")
             }}
           >
             <MdOutlineDeleteSweep size={14} />
             Clear
           </ActionButton>
-        </ToolbarControls>
+        </SearchRow>
+        <FilterRow>
+          <FilterGroup>
+            <Toggle>
+              <input
+                type="checkbox"
+                checked={showNetwork}
+                onChange={(event) => setShowNetwork(event.target.checked)}
+              />
+              Network <ToggleCount>{networkCount}</ToggleCount>
+            </Toggle>
+            {showNetwork ? (
+              <NetworkFilterControls
+                filters={activeNetworkFilters}
+                networkCount={networkCount}
+                options={networkFilterOptions}
+                setFilters={setNetworkFilters}
+              />
+            ) : null}
+          </FilterGroup>
+          <FilterGroup>
+            <Toggle>
+              <input
+                type="checkbox"
+                checked={showLogs}
+                onChange={(event) => setShowLogs(event.target.checked)}
+              />
+              Logs <ToggleCount>{logCount}</ToggleCount>
+            </Toggle>
+            {showLogs ? <LogLevelFilter levels={logLevels} setLevels={setLogLevels} /> : null}
+          </FilterGroup>
+        </FilterRow>
       </Toolbar>
       <Workspace $inspectorWidth={inspectorWidth}>
         <EventTable>
@@ -1012,6 +1153,16 @@ function Network({ title = "Network" }: { title?: string }) {
                 title="Resize status column"
                 onMouseDown={(event) =>
                   resizeTableColumn(event, "status", tableColumns, setTableColumns)
+                }
+              />
+            </TableHeaderCell>
+            <TableHeaderCell>
+              Duration
+              <ColumnResizeHandle
+                type="button"
+                title="Resize duration column"
+                onMouseDown={(event) =>
+                  resizeTableColumn(event, "duration", tableColumns, setTableColumns)
                 }
               />
             </TableHeaderCell>
@@ -1062,6 +1213,11 @@ function Network({ title = "Network" }: { title?: string }) {
                 ) : (
                   <EmptyStatus />
                 )}
+                <Time>
+                  {item.kind === "network" && item.duration != null
+                    ? formatDuration(item.duration)
+                    : ""}
+                </Time>
                 <Time>{item.time}</Time>
               </EventRow>
             ))
@@ -1124,6 +1280,181 @@ function LogLevelFilter({
         ))}
       </LogLevelPanel>
     </LogLevelMenu>
+  )
+}
+
+function NetworkFilterControls({
+  filters,
+  networkCount,
+  options,
+  setFilters,
+}: {
+  filters: NetworkFilters
+  networkCount: number
+  options: Record<NetworkFilterKey, string[]>
+  setFilters: React.Dispatch<React.SetStateAction<NetworkFilters>>
+}) {
+  const setFilter = (key: NetworkFilterKey, value: string) => {
+    setFilters((current) => ({ ...current, [key]: value }))
+  }
+
+  return (
+    <>
+      <NetworkFilterSelect
+        label="Method"
+        value={filters.method}
+        options={options.method}
+        onChange={(value) => setFilter("method", value)}
+      />
+      <NetworkFilterSelect
+        label="Status"
+        value={filters.status}
+        options={options.status}
+        onChange={(value) => setFilter("status", value)}
+      />
+      <NetworkFilterSelect
+        label="Duration"
+        value={filters.duration}
+        options={durationFilterOptions}
+        onChange={(value) => setFilter("duration", value)}
+        showWhenEmpty={networkCount > 0}
+      />
+      <NetworkFilterSelect
+        label="Type"
+        value={filters.contentType}
+        options={options.contentType}
+        onChange={(value) => setFilter("contentType", value)}
+      />
+      <TimeWindowFilterSelect
+        value={filters.timeWindow}
+        options={timeWindowFilterOptions}
+        onChange={(value) => setFilter("timeWindow", value)}
+        visible={networkCount > 0}
+      />
+      <DuplicateFilterToggle
+        value={filters.duplicate}
+        onChange={(value) => setFilter("duplicate", value)}
+        visible={networkCount > 0}
+      />
+      <NetworkFilterSelect
+        label="Endpoint"
+        value={filters.endpoint}
+        options={options.endpoint}
+        onChange={(value) => setFilter("endpoint", value)}
+      />
+      <NetworkFilterSelect
+        label="Host"
+        value={filters.host}
+        options={options.host}
+        onChange={(value) => setFilter("host", value)}
+      />
+    </>
+  )
+}
+
+function NetworkFilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+  showWhenEmpty = false,
+}: {
+  label: string
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+  showWhenEmpty?: boolean
+}) {
+  if (options.length === 0 && !showWhenEmpty) return null
+
+  const selectedValue = options.includes(value) ? value : ""
+
+  return (
+    <FilterSelect
+      aria-label={`Filter network requests by ${label.toLowerCase()}`}
+      value={selectedValue}
+      title={`Filter by ${label.toLowerCase()}`}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">All {label.toLowerCase()}</option>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </FilterSelect>
+  )
+}
+
+function TimeWindowFilterSelect({
+  value,
+  options,
+  onChange,
+  visible,
+}: {
+  value: string
+  options: string[]
+  onChange: (value: string) => void
+  visible: boolean
+}) {
+  if (!visible) return null
+
+  const isCustom = value.startsWith("custom:")
+  const selectedValue = isCustom ? "custom" : options.includes(value) ? value : ""
+  const customValue = isCustom ? value.slice("custom:".length) : ""
+
+  return (
+    <>
+      <FilterSelect
+        aria-label="Filter network requests by time window"
+        value={selectedValue}
+        title="Filter by time window"
+        onChange={(event) => {
+          const nextValue = event.target.value
+          onChange(nextValue === "custom" ? "custom:" : nextValue)
+        }}
+      >
+        <option value="">All window</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+        <option value="custom">Custom</option>
+      </FilterSelect>
+      {isCustom ? (
+        <InlineFilterInput
+          aria-label="Custom network time window"
+          placeholder="45s"
+          title="Use ms, s, or m. Bare numbers are seconds."
+          value={customValue}
+          onChange={(event) => onChange(`custom:${event.target.value}`)}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function DuplicateFilterToggle({
+  value,
+  onChange,
+  visible,
+}: {
+  value: string
+  onChange: (value: string) => void
+  visible: boolean
+}) {
+  if (!visible) return null
+
+  return (
+    <Toggle title="Show only repeated requests with the same method and endpoint">
+      <input
+        type="checkbox"
+        checked={value === duplicateFilterValue}
+        onChange={(event) => onChange(event.target.checked ? duplicateFilterValue : "")}
+      />
+      Duplicates only
+    </Toggle>
   )
 }
 
@@ -1531,6 +1862,150 @@ function FieldTable({ rows }: { rows: Array<[string, unknown]> }) {
   )
 }
 
+function buildNetworkFilterOptions(items: ConsoleItem[]): Record<NetworkFilterKey, string[]> {
+  const exactStatuses = uniqueSorted(items.map((item) => item.status))
+  const statusFamilies = ["2xx", "3xx", "4xx", "5xx"].filter((family) =>
+    items.some((item) => statusMatchesFamily(item.status, family))
+  )
+
+  return {
+    method: uniqueSorted(items.map((item) => item.method)),
+    status: [...statusFamilies, ...exactStatuses],
+    duration: durationFilterOptions,
+    contentType: uniqueSorted(items.map((item) => item.contentType)),
+    timeWindow: timeWindowFilterOptions,
+    duplicate: [duplicateFilterValue],
+    endpoint: uniqueSorted(items.map((item) => item.title)),
+    host: uniqueSorted(items.map((item) => item.subtitle)),
+  }
+}
+
+function normalizeNetworkFilters(
+  filters: NetworkFilters,
+  options: Record<NetworkFilterKey, string[]>
+): NetworkFilters {
+  return {
+    method: options.method.includes(filters.method) ? filters.method : "",
+    status: options.status.includes(filters.status) ? filters.status : "",
+    duration: options.duration.includes(filters.duration) ? filters.duration : "",
+    contentType: options.contentType.includes(filters.contentType) ? filters.contentType : "",
+    timeWindow:
+      options.timeWindow.includes(filters.timeWindow) || filters.timeWindow.startsWith("custom:")
+        ? filters.timeWindow
+        : "",
+    duplicate: filters.duplicate === duplicateFilterValue ? filters.duplicate : "",
+    endpoint: options.endpoint.includes(filters.endpoint) ? filters.endpoint : "",
+    host: options.host.includes(filters.host) ? filters.host : "",
+  }
+}
+
+function matchesNetworkFilters(
+  item: ConsoleItem,
+  filters: NetworkFilters,
+  duplicateKeys: Set<string>,
+  now: number
+) {
+  return (
+    (!filters.method || item.method === filters.method) &&
+    (!filters.status ||
+      item.status === filters.status ||
+      statusMatchesFamily(item.status, filters.status)) &&
+    (!filters.duration || matchesDurationFilter(item.duration, filters.duration)) &&
+    (!filters.contentType || item.contentType === filters.contentType) &&
+    (!filters.timeWindow || matchesTimeWindowFilter(item.timestamp, filters.timeWindow, now)) &&
+    (!filters.duplicate || duplicateKeys.has(requestKey(item))) &&
+    (!filters.endpoint || item.title === filters.endpoint) &&
+    (!filters.host || item.subtitle === filters.host)
+  )
+}
+
+function duplicateRequestKeys(items: ConsoleItem[]) {
+  const counts = new Map<string, number>()
+
+  items.forEach((item) => {
+    const key = requestKey(item)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  })
+
+  return new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([key]) => key)
+  )
+}
+
+function requestKey(item: ConsoleItem) {
+  return `${item.method} ${item.title}`
+}
+
+function statusMatchesFamily(status: string, family: string) {
+  return /^[2-5]xx$/.test(family) && status.startsWith(family[0])
+}
+
+function matchesDurationFilter(duration: number | undefined, filter: string) {
+  if (duration == null) return false
+  if (filter === "500 ms+") return duration >= 500
+  if (filter === "1 s+") return duration >= 1000
+  if (filter === "3 s+") return duration >= 3000
+  return true
+}
+
+function matchesTimeWindowFilter(timestamp: number, filter: string, now: number) {
+  const age = now - timestamp
+  if (filter === "Last 30s") return age <= 30_000
+  if (filter === "Last 1m") return age <= 60_000
+  if (filter === "Last 5m") return age <= 300_000
+  if (filter.startsWith("custom:")) {
+    const duration = parseWindowDuration(filter.slice("custom:".length))
+    return duration == null ? true : age <= duration
+  }
+  return true
+}
+
+function parseWindowDuration(value: string) {
+  const match = value.trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)?$/)
+  if (!match) return undefined
+
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return undefined
+
+  const unit = match[2] ?? "s"
+  if (unit === "ms") return amount
+  if (unit === "m") return amount * 60_000
+  return amount * 1000
+}
+
+function headerValue(headers: ApiRequest["headers"] | ApiResponse["headers"], name: string) {
+  if (!headers) return undefined
+  const entry = Object.entries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase())
+  return entry?.[1]
+}
+
+function contentTypeCategory(value: unknown) {
+  const contentType = String(value ?? "").toLowerCase()
+
+  if (!contentType) return ""
+  if (contentType.includes("json")) return "JSON"
+  if (contentType.includes("html")) return "HTML"
+  if (contentType.startsWith("image/")) return "Image"
+  if (contentType.startsWith("text/")) return "Text"
+  if (
+    contentType.includes("octet-stream") ||
+    contentType.includes("application/pdf") ||
+    contentType.includes("application/zip")
+  ) {
+    return "Binary"
+  }
+
+  return "Other"
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+  )
+}
+
 function buildItems(commands: Command[]): ConsoleItem[] {
   return commands
     .filter((command) => command.type === "api.response" || command.type === "log")
@@ -1543,6 +2018,9 @@ function networkItem(command: Command): ConsoleItem {
   const response: ApiResponse = payload.response ?? {}
   const status = response.status
   const url = String(request.url ?? "")
+  const contentType = contentTypeCategory(
+    headerValue(response.headers, "content-type") ?? headerValue(request.headers, "content-type")
+  )
 
   return {
     id: String(command.messageId),
@@ -1550,14 +2028,16 @@ function networkItem(command: Command): ConsoleItem {
     command,
     title: urlPath(url),
     subtitle: hostName(url),
-    searchText: [request.method, url, hostName(url), response.status, payload.duration]
+    searchText: [request.method, url, hostName(url), response.status, payload.duration, contentType]
       .map(searchableText)
       .join(" "),
     method: String(request.method ?? "HTTP").toUpperCase(),
     status: status == null ? "pending" : String(status),
+    contentType,
     tone: toneForStatus(status),
-    time: payload.duration != null ? formatDuration(payload.duration) : formatTime(command.date),
+    time: formatTime(command.date),
     duration: payload.duration,
+    timestamp: command.date.getTime(),
   }
 }
 
@@ -1579,8 +2059,10 @@ function logItem(command: Command): ConsoleItem {
       .join(" "),
     method: displayLogLevel(level),
     status: normalizeLogLevel(level),
+    contentType: "",
     tone: toneForLogLevel(level),
     time: formatTime(command.date),
+    timestamp: command.date.getTime(),
   }
 }
 
@@ -1995,6 +2477,51 @@ function searchableText(value: unknown) {
     return JSON.stringify(value)
   } catch {
     return String(value)
+  }
+}
+
+function buildSearchMatcher(search: string, isRegexSearch: boolean) {
+  const needle = search.trim()
+  if (!needle) return null
+
+  if (isRegexSearch) {
+    try {
+      const regex = new RegExp(needle, "i")
+      return (value: string) => regex.test(value)
+    } catch {
+      const wildcardRegex = wildcardSearchRegex(needle)
+      if (!wildcardRegex) return () => false
+      return (value: string) => wildcardRegex.test(value)
+    }
+  }
+
+  const regexMatch = needle.match(/^\/(.+)\/([dgimsuvy]*)$/)
+  if (regexMatch) {
+    try {
+      const flags = regexMatch[2].includes("i") ? regexMatch[2] : `${regexMatch[2]}i`
+      const regex = new RegExp(regexMatch[1], flags)
+      return (value: string) => regex.test(value)
+    } catch {
+      return () => false
+    }
+  }
+
+  const lowerNeedle = needle.toLowerCase()
+  return (value: string) => value.toLowerCase().includes(lowerNeedle)
+}
+
+function wildcardSearchRegex(search: string) {
+  if (!search.includes("*")) return null
+
+  const pattern = search
+    .split("*")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*")
+
+  try {
+    return new RegExp(pattern, "i")
+  } catch {
+    return null
   }
 }
 
