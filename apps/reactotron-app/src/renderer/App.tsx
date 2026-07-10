@@ -1,9 +1,11 @@
-import React, { useContext } from "react"
+import React, { useContext, useState } from "react"
 import { HashRouter as Router, Route, Routes } from "react-router-dom"
+import { LuPanelRight } from "react-icons/lu"
 import styled from "styled-components"
 
 import SideBar from "./components/SideBar"
 import Footer from "./components/Footer"
+import DeviceSurface from "./components/DeviceSurface"
 import AppPreferencesContext from "./contexts/AppPreferences"
 import RootContextProvider from "./contexts"
 import RootModals from "./RootModals"
@@ -32,6 +34,7 @@ const AppContainer = styled.div`
 `
 
 const TopSection = styled.div`
+  position: relative;
   overflow: hidden;
   display: flex;
   flex-grow: 1;
@@ -42,6 +45,29 @@ const MainContainer = styled.div`
   display: flex;
   flex-direction: row;
   flex: 1;
+  min-width: 0;
+`
+
+const PanelToggle = styled.button<{ $isOpen: boolean }>`
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: ${(props) => (props.$isOpen ? props.theme.backgroundLighter : "transparent")};
+  color: ${(props) => props.theme.foregroundDark};
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    color: ${(props) => props.theme.foreground};
+  }
 `
 
 function TimelineRoute() {
@@ -51,6 +77,8 @@ function TimelineRoute() {
 }
 
 function App() {
+  const [isDeviceSurfaceOpen, setIsDeviceSurfaceOpen] = useState(true)
+
   return (
     <Router>
       <RootContextProvider>
@@ -90,6 +118,17 @@ function App() {
                 <Route path="/help" element={<Help />} />
               </Routes>
             </MainContainer>
+            <DeviceSurface isOpen={isDeviceSurfaceOpen} />
+            <PanelToggle
+              type="button"
+              $isOpen={isDeviceSurfaceOpen}
+              title={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
+              aria-label={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
+              aria-pressed={isDeviceSurfaceOpen}
+              onClick={() => setIsDeviceSurfaceOpen((isOpen) => !isOpen)}
+            >
+              <LuPanelRight size={18} />
+            </PanelToggle>
           </TopSection>
           <Footer />
         </AppContainer>

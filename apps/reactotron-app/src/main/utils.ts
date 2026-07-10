@@ -1,6 +1,174 @@
 import childProcess from "child_process"
+import fs from "fs"
 import http from "http"
-import { type BrowserWindow, dialog, ipcMain } from "electron"
+import net from "net"
+import path from "path"
+import {
+  app,
+  type BrowserWindow,
+  BrowserWindow as ElectronBrowserWindow,
+  dialog,
+  ipcMain,
+} from "electron"
+
+type IOSSimulator = {
+  name: string
+  udid: string
+  runtime: string
+}
+
+const serveSimProcesses = new Map<
+  string,
+  { process: childProcess.ChildProcess; previewUrl: string }
+>()
+const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
+
+function runCommand(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const process = childProcess.spawn(command, args, { shell: false })
+    let output = ""
+    let errorOutput = ""
+
+    process.stdout.on("data", (data) => {
+      output += data.toString()
+    })
+    process.stderr.on("data", (data) => {
+      errorOutput += data.toString()
+    })
+    process.on("error", reject)
+    process.on("close", (code) => {
+      if (code === 0) {
+        resolve(output)
+        return
+      }
+
+      reject(new Error(errorOutput || output || `${command} exited with code ${code}.`))
+    })
+  })
+}
+
+function getServeSimCliPath(): string {
+  const cliPath = path.join("node_modules", "serve-sim", "dist", "serve-sim.js")
+  const candidates = new Set([
+    path.join(process.resourcesPath, "app.asar.unpacked", cliPath),
+    path.join(process.resourcesPath, "app", cliPath),
+  ])
+
+  for (const startDirectory of [process.cwd(), app.getAppPath(), __dirname]) {
+    let directory = startDirectory
+    let parentDirectory = path.dirname(directory)
+    while (directory !== parentDirectory) {
+      candidates.add(path.join(directory, cliPath))
+      directory = parentDirectory
+      parentDirectory = path.dirname(directory)
+    }
+  }
+
+  const pathToCli = Array.from(candidates).find((candidate) => fs.existsSync(candidate))
+
+  if (!pathToCli) {
+    throw new Error("serve-sim is not installed. Reinstall Reactotron and try again.")
+  }
+
+  return pathToCli
+}
+
+function getAvailablePort(startingPort = 3200): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const tryPort = (port: number) => {
+      const server = net.createServer()
+      server.once("error", () => {
+        if (port >= startingPort + 49) {
+          reject(new Error("No available local port for the simulator preview."))
+          return
+        }
+        tryPort(port + 1)
+      })
+      server.once("listening", () => {
+        server.close(() => resolve(port))
+      })
+      server.listen(port, "127.0.0.1")
+    }
+
+    tryPort(startingPort)
+  })
+}
+
+async function getBootedIOSSimulators(): Promise<IOSSimulator[]> {
+  const output = await runCommand("xcrun", ["simctl", "list", "devices", "--json"])
+  const devices = JSON.parse(output).devices as Record<string, Array<Record<string, unknown>>>
+
+  return Object.entries(devices)
+    .filter(([runtime]) => runtime.includes("SimRuntime.iOS"))
+    .flatMap(([runtime, runtimeDevices]) =>
+      runtimeDevices
+        .filter((device) => device.state === "Booted" && device.isAvailable !== false)
+        .map((device) => ({
+          name: String(device.name),
+          udid: String(device.udid),
+          runtime: runtime.replace("com.apple.CoreSimulator.SimRuntime.", ""),
+        }))
+    )
+}
+
+async function startServeSim(udid: string): Promise<{ previewUrl: string }> {
+  const existingSurface = serveSimProcesses.get(udid)
+  if (existingSurface && existingSurface.process.exitCode === null) {
+    return { previewUrl: existingSurface.previewUrl }
+  }
+
+  const port = await getAvailablePort()
+  const previewUrl = `http://127.0.0.1:${port}`
+  const serveSimProcess = childProcess.spawn(
+    process.env.REACTOTRON_NODE_PATH || "node",
+    [getServeSimCliPath(), "--port", String(port), "--codec", "auto", udid],
+    { shell: false }
+  )
+
+  return new Promise((resolve, reject) => {
+    let output = ""
+    let settled = false
+    const timeout = setTimeout(() => {
+      finish(new Error("Timed out waiting for serve-sim to start."))
+    }, 20000)
+
+    const finish = (error?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        serveSimProcess.kill()
+        reject(error)
+      } else {
+        serveSimProcesses.set(udid, { process: serveSimProcess, previewUrl })
+        resolve({ previewUrl })
+      }
+    }
+
+    const receiveOutput = (data: Buffer) => {
+      output += data.toString()
+      if (output.includes(`http://localhost:${port}`)) finish()
+    }
+
+    serveSimProcess.stdout.on("data", receiveOutput)
+    serveSimProcess.stderr.on("data", receiveOutput)
+    serveSimProcess.on("error", (error) => finish(error))
+    serveSimProcess.on("close", (code) => {
+      serveSimProcesses.delete(udid)
+      if (!settled) finish(new Error(output || `serve-sim exited with code ${code}.`))
+    })
+  })
+}
+
+function assertIOSSimulatorUdid(udid: unknown): asserts udid is string {
+  if (typeof udid !== "string" || !iosSimulatorUdid.test(udid)) {
+    throw new Error("Invalid iOS simulator identifier.")
+  }
+}
+
+async function runServeSimCommand(args: string[]) {
+  return runCommand(process.env.REACTOTRON_NODE_PATH || "node", [getServeSimCliPath(), ...args])
+}
 
 const reloadReactNativeViaMetro = (metroPort: number) =>
   new Promise<string>((resolve, reject) => {
@@ -35,6 +203,69 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
   })
 
 export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("list-booted-ios-simulators", async () => {
+    try {
+      return { ok: true, simulators: await getBootedIOSSimulators() }
+    } catch (error) {
+      return {
+        ok: false,
+        simulators: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("start-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const simulators = await getBootedIOSSimulators()
+      if (!simulators.some((simulator) => simulator.udid === udid)) {
+        throw new Error("That simulator is no longer booted.")
+      }
+
+      return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    "ios-simulator-surface-command",
+    async (_event, udid: unknown, command: unknown) => {
+      try {
+        assertIOSSimulatorUdid(udid)
+        if (command === "home") {
+          await runServeSimCommand(["button", "home", "--device", udid])
+        } else if (command === "landscape_left" || command === "portrait") {
+          await runServeSimCommand(["rotate", command, "--device", udid])
+        } else {
+          throw new Error("Unsupported iOS simulator command.")
+        }
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle("save-ios-simulator-screenshot", async (event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const result = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Simulator Screenshot",
+        defaultPath: "simulator-screenshot.png",
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      })
+      if (result.canceled || !result.filePath) return { ok: true, canceled: true }
+
+      await runCommand("xcrun", ["simctl", "io", udid, "screenshot", result.filePath])
+      return { ok: true, filePath: result.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle("reload-ios-simulator", async () => {
     const metroPort = Number(process.env.REACTOTRON_METRO_PORT ?? process.env.METRO_PORT ?? 8081)
     console.log(`[Reactotron Desktop] React Native reload requested via Metro port ${metroPort}.`)
@@ -51,6 +282,11 @@ export const setupSimulatorIPCCommands = () => {
       return { ok: false, message }
     }
   })
+}
+
+export const stopIOSSimulatorSurfaces = () => {
+  serveSimProcesses.forEach(({ process }) => process.kill())
+  serveSimProcesses.clear()
 }
 
 // This function sets up numerous IPC commands for communicating with android devices.

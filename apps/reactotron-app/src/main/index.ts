@@ -7,7 +7,11 @@ import { autoUpdater } from "electron-updater"
 import windowStateKeeper from "electron-window-state"
 
 import createMenu from "./menu"
-import { setupAndroidDeviceIPCCommands, setupSimulatorIPCCommands } from "./utils"
+import {
+  setupAndroidDeviceIPCCommands,
+  setupSimulatorIPCCommands,
+  stopIOSSimulatorSurfaces,
+} from "./utils"
 
 const isDevelopment = process.env.NODE_ENV !== "production"
 const isDevApp = process.env.REACTOTRON_DEV_APP === "1"
@@ -111,6 +115,8 @@ function createMainWindow() {
 
 // quit application when all windows are closed
 app.on("window-all-closed", app.quit)
+
+app.on("before-quit", stopIOSSimulatorSurfaces)
 
 app.on("activate", () => {
   // on macOS it is common to re-create a window even after all windows have been closed
