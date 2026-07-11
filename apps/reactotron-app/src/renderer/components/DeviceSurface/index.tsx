@@ -4,6 +4,7 @@ import {
   MdAdd,
   MdHome,
   MdOutlineLink,
+  MdOutlinePowerSettingsNew,
   MdPhoneIphone,
   MdRefresh,
   MdRotateRight,
@@ -14,6 +15,7 @@ import styled from "styled-components"
 type Simulator = {
   name: string
   runtime: string
+  state: string
   udid: string
 }
 
@@ -212,11 +214,35 @@ const EmptyCopy = styled.p`
   line-height: 1.45;
 `
 
-const DeviceSelect = styled.select`
+const ActionStack = styled.div`
+  display: flex;
   width: 100%;
   max-width: 300px;
+  flex-direction: column;
+  gap: 16px;
+`
+
+const ActionSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const ActionLabel = styled.span`
+  color: ${(props) => props.theme.foregroundDark};
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+`
+
+const ActionDivider = styled.div`
+  height: 1px;
+  background: ${(props) => props.theme.chromeLine};
+`
+
+const DeviceSelect = styled.select`
+  width: 100%;
   min-height: 34px;
-  margin-bottom: 10px;
   padding: 0 9px;
   border: 1px solid ${(props) => props.theme.chromeLine};
   border-radius: 4px;
@@ -226,6 +252,7 @@ const DeviceSelect = styled.select`
 `
 
 const PrimaryButton = styled.button`
+  width: 100%;
   min-height: 34px;
   padding: 0 12px;
   border: 1px solid ${(props) => props.theme.highlight};
@@ -242,7 +269,6 @@ const PrimaryButton = styled.button`
 `
 
 const SecondaryButton = styled(PrimaryButton)`
-  margin-top: 8px;
   border-color: ${(props) => props.theme.chromeLine};
   background: ${(props) => props.theme.backgroundLighter};
   color: ${(props) => props.theme.foregroundLight};
@@ -295,7 +321,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     )
     setStatus(
       result.simulators.length === 0
-        ? "No booted iOS simulators found. Boot one in Xcode, then refresh this panel."
+        ? "No iOS simulators found. Create one here or add one in Xcode."
         : ""
     )
     setIsError(false)
@@ -341,6 +367,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       simulator.udid
     )) as IPCResponse & {
       previewUrl?: string
+      simulator?: Simulator
     }
     setIsLoading(false)
     if (!result.ok || !result.previewUrl) {
@@ -351,9 +378,15 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
     const surface: Surface = {
       ...simulator,
+      ...result.simulator,
       previewUrl: result.previewUrl,
       orientation: "portrait",
     }
+    setSimulators((current) =>
+      current.map((item) =>
+        item.udid === simulator.udid ? { ...item, ...result.simulator } : item
+      )
+    )
     setSurfaces((current) => [...current, surface])
     setActiveUdid(simulator.udid)
     setIsChoosing(false)
@@ -439,6 +472,32 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
           : surface
       )
     )
+    setStatus("")
+  }
+
+  const shutdown = async () => {
+    if (!activeSurface) return
+
+    const result = (await ipcRenderer.invoke(
+      "shutdown-ios-simulator-surface",
+      activeSurface.udid
+    )) as IPCResponse
+    if (!result.ok) {
+      setStatus(result.message || "Could not shut down the simulator.")
+      setIsError(true)
+      return
+    }
+
+    const activeIndex = surfaces.findIndex((surface) => surface.udid === activeSurface.udid)
+    const remainingSurfaces = surfaces.filter((surface) => surface.udid !== activeSurface.udid)
+    setSurfaces(remainingSurfaces)
+    setSimulators((current) =>
+      current.map((simulator) =>
+        simulator.udid === activeSurface.udid ? { ...simulator, state: "Shutdown" } : simulator
+      )
+    )
+    setActiveUdid(remainingSurfaces[Math.max(0, activeIndex - 1)]?.udid || null)
+    setIsChoosing(remainingSurfaces.length === 0)
     setStatus("")
   }
 
@@ -551,6 +610,13 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                   </IconButton>
                   <IconButton
                     type="button"
+                    title="Shut down simulator"
+                    onClick={() => shutdown().catch(() => undefined)}
+                  >
+                    <MdOutlinePowerSettingsNew size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
                     title="Rotate simulator"
                     onClick={() =>
                       runSurfaceCommand(
@@ -583,51 +649,62 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
             <EmptyState>
               <EmptyIcon size={34} />
               <EmptyTitle>Open a surface</EmptyTitle>
-              <EmptyCopy>
-                Choose a booted iOS Simulator to stream and control inside Reactotron.
-              </EmptyCopy>
-              <DeviceSelect
-                aria-label="Booted iOS simulators"
-                value={selectedUdid}
-                disabled={isLoading || simulators.length === 0}
-                onChange={(event) => setSelectedUdid(event.target.value)}
-              >
-                {simulators.map((simulator) => (
-                  <option key={simulator.udid} value={simulator.udid}>
-                    {simulator.name} ({simulator.runtime})
-                  </option>
-                ))}
-              </DeviceSelect>
-              <PrimaryButton
-                type="button"
-                disabled={!selectedUdid || isLoading}
-                onClick={() => openSurface().catch(() => undefined)}
-              >
-                {isLoading ? "Opening..." : "Open iOS Simulator"}
-              </PrimaryButton>
-              {creationOptions.length > 0 && (
-                <>
+              <EmptyCopy>Attach a booted simulator or create a new one.</EmptyCopy>
+              <ActionStack>
+                <ActionSection>
+                  <ActionLabel>Available simulators</ActionLabel>
                   <DeviceSelect
-                    aria-label="New iOS simulator type"
-                    value={selectedDeviceType}
-                    disabled={isLoading}
-                    onChange={(event) => setSelectedDeviceType(event.target.value)}
+                    aria-label="Available iOS simulators"
+                    value={selectedUdid}
+                    disabled={isLoading || simulators.length === 0}
+                    onChange={(event) => setSelectedUdid(event.target.value)}
                   >
-                    {creationOptions.map((option) => (
-                      <option key={option.deviceTypeIdentifier} value={option.deviceTypeIdentifier}>
-                        New {option.name} ({option.runtimeName})
+                    {simulators.map((simulator) => (
+                      <option key={simulator.udid} value={simulator.udid}>
+                        {simulator.name} ({simulator.runtime}){" "}
+                        {simulator.state === "Booted" ? "- Booted" : ""}
                       </option>
                     ))}
                   </DeviceSelect>
-                  <SecondaryButton
+                  <PrimaryButton
                     type="button"
-                    disabled={isLoading}
-                    onClick={() => createSurface().catch(() => undefined)}
+                    disabled={!selectedUdid || isLoading}
+                    onClick={() => openSurface().catch(() => undefined)}
                   >
-                    {isLoading ? "Creating..." : "Create iOS Simulator"}
-                  </SecondaryButton>
-                </>
-              )}
+                    {isLoading ? "Starting..." : "Open simulator"}
+                  </PrimaryButton>
+                </ActionSection>
+                {creationOptions.length > 0 && (
+                  <>
+                    <ActionDivider />
+                    <ActionSection>
+                      <ActionLabel>Create simulator</ActionLabel>
+                      <DeviceSelect
+                        aria-label="New iOS simulator type"
+                        value={selectedDeviceType}
+                        disabled={isLoading}
+                        onChange={(event) => setSelectedDeviceType(event.target.value)}
+                      >
+                        {creationOptions.map((option) => (
+                          <option
+                            key={option.deviceTypeIdentifier}
+                            value={option.deviceTypeIdentifier}
+                          >
+                            {option.name} ({option.runtimeName})
+                          </option>
+                        ))}
+                      </DeviceSelect>
+                      <SecondaryButton
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => createSurface().catch(() => undefined)}
+                      >
+                        {isLoading ? "Creating..." : "Create simulator"}
+                      </SecondaryButton>
+                    </ActionSection>
+                  </>
+                )}
+              </ActionStack>
               <Status $error={isError}>{status}</Status>
               <IconButton
                 type="button"
