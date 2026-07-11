@@ -13,6 +13,7 @@ import {
 
 type IOSSimulator = {
   name: string
+  state: string
   udid: string
   runtime: string
 }
@@ -101,7 +102,7 @@ function getAvailablePort(startingPort = 3200): Promise<number> {
   })
 }
 
-async function getBootedIOSSimulators(): Promise<IOSSimulator[]> {
+async function getAvailableIOSSimulators(): Promise<IOSSimulator[]> {
   const output = await runCommand("xcrun", ["simctl", "list", "devices", "--json"])
   const devices = JSON.parse(output).devices as Record<string, Array<Record<string, unknown>>>
 
@@ -109,13 +110,27 @@ async function getBootedIOSSimulators(): Promise<IOSSimulator[]> {
     .filter(([runtime]) => runtime.includes("SimRuntime.iOS"))
     .flatMap(([runtime, runtimeDevices]) =>
       runtimeDevices
-        .filter((device) => device.state === "Booted" && device.isAvailable !== false)
+        .filter((device) => device.isAvailable !== false)
         .map((device) => ({
           name: String(device.name),
+          state: String(device.state),
           udid: String(device.udid),
           runtime: runtime.replace("com.apple.CoreSimulator.SimRuntime.", ""),
         }))
     )
+}
+
+async function bootIOSSimulator(udid: string): Promise<IOSSimulator> {
+  const simulators = await getAvailableIOSSimulators()
+  const simulator = simulators.find((item) => item.udid === udid)
+  if (!simulator) throw new Error("That iOS simulator is no longer available.")
+
+  if (simulator.state !== "Booted") {
+    await runCommand("xcrun", ["simctl", "boot", udid])
+    await runCommand("xcrun", ["simctl", "bootstatus", udid, "-b"])
+  }
+
+  return { ...simulator, state: "Booted" }
 }
 
 async function getIOSSimulatorCreationOptions(): Promise<IOSSimulatorCreationOption[]> {
@@ -240,7 +255,7 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
 export const setupSimulatorIPCCommands = () => {
   ipcMain.handle("list-booted-ios-simulators", async () => {
     try {
-      return { ok: true, simulators: await getBootedIOSSimulators() }
+      return { ok: true, simulators: await getAvailableIOSSimulators() }
     } catch (error) {
       return {
         ok: false,
@@ -253,12 +268,8 @@ export const setupSimulatorIPCCommands = () => {
   ipcMain.handle("start-ios-simulator-surface", async (_event, udid: unknown) => {
     try {
       assertIOSSimulatorUdid(udid)
-      const simulators = await getBootedIOSSimulators()
-      if (!simulators.some((simulator) => simulator.udid === udid)) {
-        throw new Error("That simulator is no longer booted.")
-      }
-
-      return { ok: true, ...(await startServeSim(udid)) }
+      const simulator = await bootIOSSimulator(udid)
+      return { ok: true, simulator, ...(await startServeSim(udid)) }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -274,6 +285,21 @@ export const setupSimulatorIPCCommands = () => {
       }
 
       return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("shutdown-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const existingSurface = serveSimProcesses.get(udid)
+      if (existingSurface) {
+        existingSurface.process.kill()
+        serveSimProcesses.delete(udid)
+      }
+      await runCommand("xcrun", ["simctl", "shutdown", udid])
+      return { ok: true }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -314,7 +340,7 @@ export const setupSimulatorIPCCommands = () => {
 
       return {
         ok: true,
-        simulator: { name, runtime: option.runtimeName, udid },
+        simulator: { name, runtime: option.runtimeName, state: "Booted", udid },
         ...(await startServeSim(udid)),
       }
     } catch (error) {
