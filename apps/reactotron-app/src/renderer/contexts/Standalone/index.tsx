@@ -1,6 +1,12 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo } from "react"
+import { ipcRenderer } from "electron"
 import Server, { createServer } from "reactotron-core-server"
-import { createMcpServer, type ReactotronMcpServer, type McpRedactionServerConfig } from "reactotron-mcp"
+import {
+  createMcpServer,
+  type ReactotronDesktopHost,
+  type ReactotronMcpServer,
+  type McpRedactionServerConfig,
+} from "reactotron-mcp"
 import type { McpRedactionConfig } from "reactotron-core-contract"
 
 import ReactotronBrain from "../../ReactotronBrain"
@@ -11,6 +17,23 @@ import useStandalone, { Connection, ServerStatus } from "./useStandalone"
 export type McpStatus = "stopped" | "started" | "error"
 
 const PORT_RECOVERY_RELOADS_KEY = "reactotronPortRecoveryReloads"
+
+const desktopMcpHost: ReactotronDesktopHost = {
+  listIOSSimulators: () => ipcRenderer.invoke("list-ios-simulator-surfaces"),
+  listIOSSimulatorCreationOptions: () => ipcRenderer.invoke("list-ios-simulator-creation-options"),
+  openIOSSimulator: (udid) => ipcRenderer.invoke("start-ios-simulator-surface", udid),
+  createIOSSimulator: (deviceTypeIdentifier) =>
+    ipcRenderer.invoke("create-ios-simulator-surface", deviceTypeIdentifier),
+  reconnectIOSSimulator: (udid) => ipcRenderer.invoke("reconnect-ios-simulator-surface", udid),
+  shutdownIOSSimulator: (udid) => ipcRenderer.invoke("shutdown-ios-simulator-surface", udid),
+  controlIOSSimulator: (udid, command) =>
+    ipcRenderer.invoke("ios-simulator-surface-command", udid, command),
+  reloadIOSSimulator: () => ipcRenderer.invoke("reload-ios-simulator"),
+  toggleIOSSimulatorAppearance: (udid) =>
+    ipcRenderer.invoke("toggle-ios-simulator-appearance", udid),
+  captureIOSSimulatorScreenshot: (udid) =>
+    ipcRenderer.invoke("capture-ios-simulator-screenshot", udid),
+}
 
 type ReactotronGlobal = typeof globalThis & {
   __REACTOTRON_DESKTOP_SERVER__?: Server
@@ -275,7 +298,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setMcpPort(null)
     } else {
       const port = getConfiguredMcpPort()
-      const mcp = createMcpServer(reactotronServer.current, mcpRedactionConfig)
+      const mcp = createMcpServer(reactotronServer.current, mcpRedactionConfig, desktopMcpHost)
       mcp.start(port).then(() => {
         mcpServerRef.current = mcp
         setMcpStatus("started")

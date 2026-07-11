@@ -103,6 +103,15 @@ function getAvailablePort(startingPort = 3200): Promise<number> {
   })
 }
 
+async function captureIOSSimulatorScreenshot(udid: string) {
+  assertIOSSimulatorUdid(udid)
+  const directory = path.join(app.getPath("temp"), "reactotron", "simulator-screenshots")
+  await fs.promises.mkdir(directory, { recursive: true })
+  const filePath = path.join(directory, `simulator-${udid}-${Date.now()}.png`)
+  await runCommand("xcrun", ["simctl", "io", udid, "screenshot", filePath])
+  return filePath
+}
+
 async function getAvailableIOSSimulators(): Promise<IOSSimulator[]> {
   const output = await runCommand("xcrun", ["simctl", "list", "devices", "--json"])
   const devices = JSON.parse(output).devices as Record<string, Array<Record<string, unknown>>>
@@ -266,6 +275,25 @@ export const setupSimulatorIPCCommands = () => {
     }
   })
 
+  ipcMain.handle("list-ios-simulator-surfaces", async () => {
+    try {
+      const simulators = await getAvailableIOSSimulators()
+      return {
+        ok: true,
+        simulators: simulators.map((simulator) => ({
+          ...simulator,
+          streaming: serveSimProcesses.has(simulator.udid),
+        })),
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        simulators: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
   ipcMain.handle("start-ios-simulator-surface", async (_event, udid: unknown) => {
     try {
       assertIOSSimulatorUdid(udid)
@@ -379,8 +407,20 @@ export const setupSimulatorIPCCommands = () => {
       })
       if (result.canceled || !result.filePath) return { ok: true, canceled: true }
 
-      await runCommand("xcrun", ["simctl", "io", udid, "screenshot", result.filePath])
+      const temporaryScreenshot = await captureIOSSimulatorScreenshot(udid)
+      await fs.promises.copyFile(temporaryScreenshot, result.filePath)
       return { ok: true, filePath: result.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("capture-ios-simulator-screenshot", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const filePath = await captureIOSSimulatorScreenshot(udid)
+      const imageBase64 = await fs.promises.readFile(filePath, "base64")
+      return { ok: true, filePath, imageBase64, mimeType: "image/png" }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }

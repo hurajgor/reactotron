@@ -1,6 +1,7 @@
 import { getPort } from "get-port-please"
 import { createServer } from "reactotron-core-server"
 import { createMcpServer } from "../src/mcp-server"
+import type { ReactotronDesktopHost } from "../src/desktop-host"
 import WebSocket from "ws"
 import http from "http"
 
@@ -290,6 +291,41 @@ describe("tools", () => {
     expect(names).toContain("clear_timeline")
     expect(names).toContain("subscribe_state")
     expect(names).toContain("unsubscribe_state")
+    expect(names).not.toContain("list_ios_simulators")
+  })
+
+  test("registers desktop simulator tools only when a desktop host is supplied", async () => {
+    const host: ReactotronDesktopHost = {
+      listIOSSimulators: async () => ({ ok: true, simulators: [] }),
+      listIOSSimulatorCreationOptions: async () => ({ ok: true, options: [] }),
+      openIOSSimulator: async () => ({ ok: true }),
+      createIOSSimulator: async () => ({ ok: true }),
+      reconnectIOSSimulator: async () => ({ ok: true }),
+      shutdownIOSSimulator: async () => ({ ok: true }),
+      controlIOSSimulator: async () => ({ ok: true }),
+      reloadIOSSimulator: async () => ({ ok: true }),
+      toggleIOSSimulatorAppearance: async () => ({ ok: true }),
+      captureIOSSimulatorScreenshot: async () => ({ ok: true, imageBase64: "iVBORw0KGgo=", mimeType: "image/png" }),
+    }
+    const desktopPort = await getPort({ random: true })
+    const desktopMcp = createMcpServer(relay, undefined, host)
+    await desktopMcp.start(desktopPort)
+
+    try {
+      const res = await mcpRequest(desktopPort, {
+        jsonrpc: "2.0",
+        method: "tools/list",
+        id: 10,
+        params: {},
+      })
+      const result = parseSSE(res.body)
+      const names = result.result.tools.map((tool: any) => tool.name)
+      expect(names).toContain("list_ios_simulators")
+      expect(names).toContain("ios_simulator_screenshot")
+      expect(names).toContain("shutdown_ios_simulator")
+    } finally {
+      desktopMcp.stop()
+    }
   })
 
   test("send_custom_command errors with no apps connected", async () => {

@@ -13,6 +13,8 @@ import { extname } from "path"
 
 import { MAX_RESPONSE_CHARS, safeSerialize } from "./serialization"
 import { createRedactor, type McpRedactionServerConfig } from "./redaction"
+import type { ReactotronDesktopHost } from "./desktop-host"
+import { registerDesktopTools } from "./desktop-tools"
 
 /** Extract width/height from PNG or JPEG buffer */
 function getImageSize(buf: Buffer, ext: string): { width: number; height: number } | null {
@@ -150,8 +152,11 @@ export function registerTools(
   mcp: McpServer,
   server: ReactotronServer,
   commandBuffer: Command[],
-  serverRedactionConfig: McpRedactionServerConfig
+  serverRedactionConfig: McpRedactionServerConfig,
+  desktopHost?: ReactotronDesktopHost
 ) {
+  if (desktopHost) registerDesktopTools(mcp, desktopHost)
+
   mcp.registerTool("dispatch_action", {
     description: [
       "Dispatch a Redux action to the connected app.",
