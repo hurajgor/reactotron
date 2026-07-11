@@ -501,7 +501,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setStatus("")
   }
 
-  const saveScreenshot = async () => {
+  const saveScreenshot = useCallback(async () => {
     if (!activeSurface) return
     const result = (await ipcRenderer.invoke(
       "save-ios-simulator-screenshot",
@@ -517,7 +517,53 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       )
       setIsError(!result.ok)
     }
-  }
+  }, [activeSurface])
+
+  const toggleRecording = useCallback(async () => {
+    if (!activeSurface) return
+
+    const result = (await ipcRenderer.invoke(
+      "toggle-ios-simulator-recording",
+      activeSurface.udid
+    )) as IPCResponse & { canceled?: boolean; recording?: boolean }
+    if (!result.ok) {
+      setStatus(result.message || "Could not change simulator recording.")
+      setIsError(true)
+      return
+    }
+    if (!result.canceled) {
+      setStatus(result.recording ? "Recording simulator video." : "Stopped simulator recording.")
+      setIsError(false)
+    }
+  }, [activeSurface])
+
+  const toggleAppearance = useCallback(async () => {
+    if (!activeSurface) return
+
+    const result = (await ipcRenderer.invoke(
+      "toggle-ios-simulator-appearance",
+      activeSurface.udid
+    )) as IPCResponse & { appearance?: string }
+    setStatus(
+      result.message ||
+        (result.ok ? `Simulator appearance: ${result.appearance}.` : "Could not change appearance.")
+    )
+    setIsError(!result.ok)
+  }, [activeSurface])
+
+  useEffect(() => {
+    const handleShortcut = (_event: unknown, shortcut: string) => {
+      if (!activeSurface) return
+      if (shortcut === "screenshot") saveScreenshot().catch(() => undefined)
+      if (shortcut === "record") toggleRecording().catch(() => undefined)
+      if (shortcut === "appearance") toggleAppearance().catch(() => undefined)
+    }
+
+    ipcRenderer.on("ios-simulator-shortcut", handleShortcut)
+    return () => {
+      ipcRenderer.removeListener("ios-simulator-shortcut", handleShortcut)
+    }
+  }, [activeSurface, saveScreenshot, toggleAppearance, toggleRecording])
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()

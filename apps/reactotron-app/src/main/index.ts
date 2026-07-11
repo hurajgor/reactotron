@@ -106,6 +106,24 @@ function createMainWindow() {
     })
   })
 
+  window.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !input.meta) return
+
+    const key = input.key.toLowerCase()
+    const shortcut =
+      input.shift && key === "a"
+        ? "appearance"
+        : key === "s"
+          ? "screenshot"
+          : key === "r"
+            ? "record"
+            : null
+    if (!shortcut) return
+
+    event.preventDefault()
+    window.webContents.send("ios-simulator-shortcut", shortcut)
+  })
+
   createMenu(window, isDevelopment)
 
   new AppUpdater() // eslint-disable-line no-new
