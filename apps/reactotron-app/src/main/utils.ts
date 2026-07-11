@@ -29,6 +29,7 @@ const serveSimProcesses = new Map<
   string,
   { process: childProcess.ChildProcess; previewUrl: string }
 >()
+const simulatorRecordings = new Map<string, childProcess.ChildProcess>()
 const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
 
 function runCommand(command: string, args: string[]): Promise<string> {
@@ -385,6 +386,56 @@ export const setupSimulatorIPCCommands = () => {
     }
   })
 
+  ipcMain.handle("toggle-ios-simulator-recording", async (event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const activeRecording = simulatorRecordings.get(udid)
+      if (activeRecording) {
+        activeRecording.kill("SIGINT")
+        simulatorRecordings.delete(udid)
+        return { ok: true, recording: false }
+      }
+
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const result = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Simulator Recording",
+        defaultPath: "simulator-recording.mov",
+        filters: [{ name: "QuickTime movie", extensions: ["mov"] }],
+      })
+      if (result.canceled || !result.filePath) return { ok: true, canceled: true, recording: false }
+
+      const recordingProcess = childProcess.spawn(
+        "xcrun",
+        ["simctl", "io", udid, "recordVideo", result.filePath],
+        { shell: false }
+      )
+      simulatorRecordings.set(udid, recordingProcess)
+      recordingProcess.on("close", () => {
+        if (simulatorRecordings.get(udid) === recordingProcess) simulatorRecordings.delete(udid)
+      })
+      recordingProcess.on("error", () => {
+        if (simulatorRecordings.get(udid) === recordingProcess) simulatorRecordings.delete(udid)
+      })
+      return { ok: true, recording: true }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("toggle-ios-simulator-appearance", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const currentAppearance = (
+        await runCommand("xcrun", ["simctl", "ui", udid, "appearance"])
+      ).trim()
+      const appearance = currentAppearance === "dark" ? "light" : "dark"
+      await runCommand("xcrun", ["simctl", "ui", udid, "appearance", appearance])
+      return { ok: true, appearance }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle("reload-ios-simulator", async () => {
     const metroPort = Number(process.env.REACTOTRON_METRO_PORT ?? process.env.METRO_PORT ?? 8081)
     console.log(`[Reactotron Desktop] React Native reload requested via Metro port ${metroPort}.`)
@@ -406,6 +457,8 @@ export const setupSimulatorIPCCommands = () => {
 export const stopIOSSimulatorSurfaces = () => {
   serveSimProcesses.forEach(({ process }) => process.kill())
   serveSimProcesses.clear()
+  simulatorRecordings.forEach((process) => process.kill("SIGINT"))
+  simulatorRecordings.clear()
 }
 
 // This function sets up numerous IPC commands for communicating with android devices.
