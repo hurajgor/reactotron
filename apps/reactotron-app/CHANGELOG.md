@@ -2,6 +2,21 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [3.12.0](https://github.com/infinitered/reactotron/compare/reactotron-app@3.11.0...reactotron-app@3.12.0) (2026-07-14)
+
+
+### Features
+
+* Add an embedded iOS Simulator surface with lifecycle controls, keyboard shortcuts, and MCP support.
+* Add a dedicated network inspector with filtering, resizable panes, and improved request rendering.
+* Add desktop preferences for themes, timeline settings, layout options, and compact navigation.
+
+
+### Bug Fixes
+
+* Improve connection recovery and refresh stale connected devices.
+* Keep development and release app ports independently configurable.
+
 ## [3.11.0](https://github.com/infinitered/reactotron/compare/reactotron-app@3.10.0...reactotron-app@3.11.0) (2026-05-28)
 
 
