@@ -33,19 +33,9 @@ Use the Timeline to:
 
 ### Agentic development and MCP
 
-The Agent screen turns a connected React Native app into an inspectable runtime surface. Request a UI snapshot, search nodes by `testID`, label, text, role, or placeholder, then run supported press, fill, and scroll actions. Accessibility selectors make the runtime usable by both people and coding agents.
+The Agent screen and MCP server give people and coding agents a shared view of a connected React Native app. Inspect the runtime UI, find elements through `testID` or accessibility metadata, and perform supported interactions such as press, fill, and scroll. The MCP server also provides the app's debug data, state tools, and desktop iOS Simulator workflows to a local coding assistant.
 
-Enable it in a React Native development configuration:
-
-```ts
-import Reactotron, { agentRuntime } from "reactotron-react-native"
-
-Reactotron.configure({ name: "My App" }).use(agentRuntime()).useReactNative().connect()
-```
-
-`agentRuntime()` captures React elements by default and can also be supplied with explicit nodes or action handlers when an interaction needs app-specific behavior.
-
-Reactotron’s MCP server exposes the same runtime and desktop capabilities to supported coding agents. See the [MCP guide](./docs/mcp.md) for setup and available tools.
+See the [MCP guide](./docs/mcp.md) for client setup, redaction, available tools, and iOS Simulator requirements.
 
 ### Themes and layout
 
