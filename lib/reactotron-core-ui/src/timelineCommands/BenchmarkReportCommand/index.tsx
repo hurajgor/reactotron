@@ -1,6 +1,6 @@
 import React, { FunctionComponent } from "react"
 import styled from "styled-components"
-import type { BenchmarkReportPayload } from "reactotron-core-contract"
+import type { BenchmarkReportPayload } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import { TimelineCommandProps, buildTimelineCommand } from "../BaseCommand"

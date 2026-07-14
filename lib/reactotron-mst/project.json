@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-mst",
+  "name": "@hurajgor/reactotron-mst",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

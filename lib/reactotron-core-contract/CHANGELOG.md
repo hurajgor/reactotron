@@ -2,80 +2,80 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
-## [0.5.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.4.0...reactotron-core-contract@0.5.0) (2026-07-14)
+## [0.5.0](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.4.0...@hurajgor/reactotron-core-contract@0.5.0) (2026-07-14)
 
 ### Features
 
 * Add shared command contracts for agent UI snapshots and actions.
 * Add support for informational log payloads.
 
-## [0.4.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.3.2...reactotron-core-contract@0.4.0) (2026-05-28)
+## [0.4.0](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.3.2...@hurajgor/reactotron-core-contract@0.4.0) (2026-05-28)
 
 
 ### Features
 
 * add MCP redaction filtering for sensitive data ([#1607](https://github.com/infinitered/reactotron/issues/1607)) ([c0a72de](https://github.com/infinitered/reactotron/commit/c0a72deabcf40fc2a80c2aed727f86abbb0c807a))
 
-### [0.3.2](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.3.1...reactotron-core-contract@0.3.2) (2025-10-06)
+### [0.3.2](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.3.1...@hurajgor/reactotron-core-contract@0.3.2) (2025-10-06)
 
-### [0.3.1](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.3.0...reactotron-core-contract@0.3.1) (2025-09-16)
+### [0.3.1](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.3.0...@hurajgor/reactotron-core-contract@0.3.1) (2025-09-16)
 
-## [0.3.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.2.5...reactotron-core-contract@0.3.0) (2025-03-16)
+## [0.3.0](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.2.5...@hurajgor/reactotron-core-contract@0.3.0) (2025-03-16)
 
 
 ### Features
 
 * **reactotron-app:** show redux diffs in timeline ([#1531](https://github.com/infinitered/reactotron/issues/1531) by [@camilossantos2809](https://github.com/camilossantos2809)) ([77831ae](https://github.com/infinitered/reactotron/commit/77831aeb928d0e63c8828b90efa17caeab67f699)), closes [#496](https://github.com/infinitered/reactotron/issues/496)
 
-### [0.2.5](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.2.4...reactotron-core-contract@0.2.5) (2025-01-07)
+### [0.2.5](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.2.4...@hurajgor/reactotron-core-contract@0.2.5) (2025-01-07)
 
 
 ### Bug Fixes
 
 * **package.json:** remove "react-native" export condition ([#1530](https://github.com/infinitered/reactotron/issues/1530)) ([47be69f](https://github.com/infinitered/reactotron/commit/47be69fae1e410a22907893a69474857a3e5a854))
 
-### [0.2.4](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.2.3...reactotron-core-contract@0.2.4) (2024-08-26)
+### [0.2.4](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.2.3...@hurajgor/reactotron-core-contract@0.2.4) (2024-08-26)
 
-### [0.2.3](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.2.2...reactotron-core-contract@0.2.3) (2024-02-14)
+### [0.2.3](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.2.2...@hurajgor/reactotron-core-contract@0.2.3) (2024-02-14)
 
-## [0.2.2](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.2.1...reactotron-core-contract@0.2.2) (2024-02-14)
+## [0.2.2](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.2.1...@hurajgor/reactotron-core-contract@0.2.2) (2024-02-14)
 
-### [0.2.1](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.2.0...reactotron-core-contract@0.2.1) (2024-01-25)
+### [0.2.1](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.2.0...@hurajgor/reactotron-core-contract@0.2.1) (2024-01-25)
 
 
 ### Bug Fixes
 
 * **architecture:** Attempt to mitigate compiler error: `Error: Default condition should be last one` ([#1423](https://github.com/infinitered/reactotron/issues/1423)) ([2c7e678](https://github.com/infinitered/reactotron/commit/2c7e678e5afaea79cd01f4ab6e90bd67339fc80a))
 
-## [0.2.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.1.1...reactotron-core-contract@0.2.0) (2023-12-08)
+## [0.2.0](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.1.1...@hurajgor/reactotron-core-contract@0.2.0) (2023-12-08)
 
 
 ### Features
 
 * **ui:** Display error if port is already in use ([#1335](https://github.com/infinitered/reactotron/issues/1335) by [@jamonholmgren](https://github.com/jamonholmgren)) ([e205e37](https://github.com/infinitered/reactotron/commit/e205e3704b5378b1807d781f7ba5ba3338dc7ff7))
 
-### [0.1.1](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.1.0...reactotron-core-contract@0.1.1) (2023-12-05)
+### [0.1.1](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.1.0...@hurajgor/reactotron-core-contract@0.1.1) (2023-12-05)
 
-## [0.1.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.0.6...reactotron-core-contract@0.1.0) (2023-12-01)
+## [0.1.0](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.0.6...@hurajgor/reactotron-core-contract@0.1.0) (2023-12-01)
 
 
 ### Features
 
 * validate workspace package.json, add export condition ([#1326](https://github.com/infinitered/reactotron/issues/1326)) ([ae95cd5](https://github.com/infinitered/reactotron/commit/ae95cd536de187ede034e5183ceeb812f356d273))
 
-### [0.0.6](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.0.5...reactotron-core-contract@0.0.6) (2023-11-06)
+### [0.0.6](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.0.5...@hurajgor/reactotron-core-contract@0.0.6) (2023-11-06)
 
-### [0.0.5](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.0.4...reactotron-core-contract@0.0.5) (2023-10-13)
+### [0.0.5](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.0.4...@hurajgor/reactotron-core-contract@0.0.5) (2023-10-13)
 
-### [0.0.4](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.0.3...reactotron-core-contract@0.0.4) (2023-08-24)
+### [0.0.4](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.0.3...@hurajgor/reactotron-core-contract@0.0.4) (2023-08-24)
 
 
 ### Bug Fixes
 
-* **reactotron-core-contract:** make "clear" payload undefined ([3d355ef](https://github.com/infinitered/reactotron/commit/3d355efcbc9f55dbaeb6ccfba6821a60a1153c19))
+* **@hurajgor/reactotron-core-contract:** make "clear" payload undefined ([3d355ef](https://github.com/infinitered/reactotron/commit/3d355efcbc9f55dbaeb6ccfba6821a60a1153c19))
 
-### [0.0.3](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.0.2...reactotron-core-contract@0.0.3) (2023-07-24)
+### [0.0.3](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.0.2...@hurajgor/reactotron-core-contract@0.0.3) (2023-07-24)
 
-### [0.0.2](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.0.1...reactotron-core-contract@0.0.2) (2023-07-20)
+### [0.0.2](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-contract@0.0.1...@hurajgor/reactotron-core-contract@0.0.2) (2023-07-20)
 
 ### 0.0.1 (2023-07-17)

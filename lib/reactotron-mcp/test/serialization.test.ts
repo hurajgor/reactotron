@@ -7,7 +7,7 @@ import {
   MAX_RESPONSE_CHARS,
   MAX_PAYLOAD_PREVIEW_CHARS,
 } from "../src/serialization"
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 
 function makeCommand(overrides: Partial<Command> = {}): Command {
   return {

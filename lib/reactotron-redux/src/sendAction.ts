@@ -1,4 +1,4 @@
-import type { ReactotronCore } from "reactotron-core-client"
+import type { ReactotronCore } from "@hurajgor/reactotron-core-client"
 
 export default function createSendAction<Client extends ReactotronCore = ReactotronCore>(
   reactotron: Client

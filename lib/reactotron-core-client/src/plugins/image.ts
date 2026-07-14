@@ -1,5 +1,5 @@
-import type { ImagePayload } from "reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "../reactotron-core-client"
+import type { ImagePayload } from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin } from "../@hurajgor/reactotron-core-client"
 
 /**
  * Provides an image.

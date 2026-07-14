@@ -2,7 +2,7 @@ import React, { FunctionComponent, useState } from "react"
 import styled from "styled-components"
 import { MdOutlineCode, MdOutlineRepeat } from "react-icons/md"
 import stringifyObject from "stringify-object"
-import type { Difference } from "reactotron-core-contract"
+import type { Difference } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import ContentView from "../../components/ContentView"

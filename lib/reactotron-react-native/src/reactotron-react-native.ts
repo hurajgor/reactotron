@@ -1,12 +1,12 @@
 import { Platform } from "react-native"
-import { createClient } from "reactotron-core-client"
+import { createClient } from "@hurajgor/reactotron-core-client"
 import type {
   ClientOptions,
   InferFeaturesFromPlugins,
   PluginCreator,
   Reactotron,
   ReactotronCore,
-} from "reactotron-core-client"
+} from "@hurajgor/reactotron-core-client"
 import type { AsyncStorageStatic } from "@react-native-async-storage/async-storage"
 // eslint-disable-next-line import/namespace, import/default
 import NativeSourceCode from "react-native/Libraries/NativeModules/specs/NativeSourceCode"
@@ -60,7 +60,7 @@ const DEFAULTS: ClientOptions<ReactotronReactNative> = {
   reconnect: true,
   environment: process.env.NODE_ENV || (__DEV__ ? "development" : "production"),
   client: {
-    reactotronLibraryName: "reactotron-react-native",
+    reactotronLibraryName: "@hurajgor/reactotron-react-native",
     reactotronLibraryVersion: "REACTOTRON_REACT_NATIVE_VERSION",
     platform: Platform.OS,
     platformVersion: Platform.Version,
@@ -208,7 +208,7 @@ export type {
   AgentUiSnapshot,
   McpRedactionConfig,
   McpRedactionRules,
-} from "reactotron-core-contract"
+} from "@hurajgor/reactotron-core-contract"
 export type {
   AgentRuntimeActionHandler,
   AgentRuntimeOptions,

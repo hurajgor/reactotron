@@ -1,5 +1,5 @@
 import type { ClientOptions } from "./client-options"
-import type { ReactotronCore } from "./reactotron-core-client"
+import type { ReactotronCore } from "./@hurajgor/reactotron-core-client"
 
 const isCreateSocketValid = (
   createSocket: unknown

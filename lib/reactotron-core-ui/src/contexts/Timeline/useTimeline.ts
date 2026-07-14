@@ -1,6 +1,6 @@
 import { useReducer, useEffect } from "react"
 
-import type { CommandTypeKey } from "reactotron-core-contract"
+import type { CommandTypeKey } from "@hurajgor/reactotron-core-contract"
 
 export enum StorageKey {
   ReversedOrder = "ReactotronTimelineReversedOrder",

@@ -1,1 +1,1 @@
-export * from "./reactotron-core-client"
+export * from "./@hurajgor/reactotron-core-client"

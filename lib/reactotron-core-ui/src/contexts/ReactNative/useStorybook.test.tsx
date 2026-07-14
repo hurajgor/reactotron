@@ -3,7 +3,7 @@ import React from "react"
 import { act, renderHook } from "@testing-library/react"
 
 import ReactotronContext from "../Reactotron"
-import { CommandType } from "reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
 
 import useStorybook from "./useStorybook"
 

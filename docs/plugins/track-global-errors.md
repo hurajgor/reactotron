@@ -5,20 +5,20 @@ title: Global Errors
 # Track Global Errors
 
 The goal of this plugin is to ensure all errors are thrown over to Reactotron for display.
-Both `reactotron-react-native` and `reactotron-react-js` ship with this plugin.
+Both `@hurajgor/reactotron-react-native` and `@hurajgor/reactotron-react-js` ship with this plugin.
 
 # Usage
 
 To use the `trackGlobalErrors` plugin, add the additional plugin on the `import` line.
 
 ```js
-import Reactotron, { trackGlobalErrors } from "reactotron-react-native";
+import Reactotron, { trackGlobalErrors } from "@hurajgor/reactotron-react-native";
 ```
 
 or
 
 ```js
-import Reactotron, { trackGlobalErrors } from "reactotron-react-js";
+import Reactotron, { trackGlobalErrors } from "@hurajgor/reactotron-react-js";
 ```
 
 Next, add it as a plugin to Reactotron.

@@ -1,5 +1,5 @@
 import React, { useContext } from "react"
-import { Header } from "reactotron-core-ui"
+import { Header } from "@hurajgor/reactotron-core-ui"
 import styled from "styled-components"
 
 import AppPreferencesContext, { ThemeMode } from "../../contexts/AppPreferences"

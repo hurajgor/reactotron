@@ -1,6 +1,6 @@
 import React from "react"
 import { shell } from "electron"
-import { Header } from "reactotron-core-ui"
+import { Header } from "@hurajgor/reactotron-core-ui"
 import styled from "styled-components"
 import {
   MdAlternateEmail as TwitterIcon,

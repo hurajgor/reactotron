@@ -14,8 +14,8 @@ import {
   EmptyState,
   Header,
   ReactotronContext,
-} from "reactotron-core-ui"
-import type { AgentUiNode, AgentUiResponsePayload, AgentUiSnapshot } from "reactotron-core-contract"
+} from "@hurajgor/reactotron-core-ui"
+import type { AgentUiNode, AgentUiResponsePayload, AgentUiSnapshot } from "@hurajgor/reactotron-core-contract"
 
 type Status = "idle" | "loading" | "success" | "error"
 
@@ -300,7 +300,7 @@ function Agent() {
 
     const timeout = window.setTimeout(() => {
       setStatus("error")
-      setMessage("No agent runtime response received. Verify the app is using the local reactotron-react-native build and has reloaded after install.")
+      setMessage("No agent runtime response received. Verify the app is using the local @hurajgor/reactotron-react-native build and has reloaded after install.")
     }, 2500)
 
     return () => window.clearTimeout(timeout)

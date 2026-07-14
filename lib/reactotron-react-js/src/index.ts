@@ -1,4 +1,4 @@
-import { createClient } from "reactotron-core-client"
+import { createClient } from "@hurajgor/reactotron-core-client"
 import trackGlobalErrors from "./plugins/track-global-errors"
 
 export { trackGlobalErrors }
@@ -42,7 +42,7 @@ const DEFAULTS = {
 
 if (isBrowser()) {
   DEFAULTS.client = {
-    reactotronLibraryName: "reactotron-react-js",
+    reactotronLibraryName: "@hurajgor/reactotron-react-js",
     reactotronLibraryVersion: "REACTOTRON_REACT_JS_VERSION",
     platform: "browser",
     platformVersion: getNavigatorProperty("platform"),

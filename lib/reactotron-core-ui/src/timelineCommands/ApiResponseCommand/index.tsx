@@ -6,7 +6,7 @@ import {
   MdOutlineContentCopy,
   MdOutlineReceipt,
 } from "react-icons/md"
-import type { ApiResponsePayload } from "reactotron-core-contract"
+import type { ApiResponsePayload } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import TimelineCommandTabButton from "../../components/TimelineCommandTabButton"

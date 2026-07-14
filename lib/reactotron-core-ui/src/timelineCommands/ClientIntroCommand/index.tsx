@@ -1,5 +1,5 @@
 import React, { FunctionComponent } from "react"
-import type { ClientIntroPayload } from "reactotron-core-contract"
+import type { ClientIntroPayload } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import makeTable from "../../utils/makeTable"

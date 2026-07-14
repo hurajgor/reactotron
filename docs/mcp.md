@@ -22,7 +22,7 @@ That's it. Claude Code can now read your app's timeline, inspect state, dispatch
 The state and timeline tools work with a regular Reactotron connection. To let an MCP client inspect and operate React Native UI, add `agentRuntime()` to your development configuration:
 
 ```ts
-import Reactotron, { agentRuntime } from "reactotron-react-native"
+import Reactotron, { agentRuntime } from "@hurajgor/reactotron-react-native"
 
 Reactotron.configure({ name: "My App" }).use(agentRuntime()).useReactNative().connect()
 ```

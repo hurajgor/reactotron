@@ -1,4 +1,4 @@
-import type { McpRedactionRules, McpRedactionConfig } from "reactotron-core-contract"
+import type { McpRedactionRules, McpRedactionConfig } from "@hurajgor/reactotron-core-contract"
 import type ReactotronServer from "reactotron-core-server"
 
 export const REDACTED = "[REDACTED]"

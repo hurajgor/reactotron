@@ -1,4 +1,4 @@
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 
 export const commandMetadataFixture: Omit<Command, "payload" | "type" | "payload"> = {
   connectionId: 1,

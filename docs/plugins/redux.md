@@ -2,7 +2,7 @@
 title: Redux
 ---
 
-# reactotron-redux
+# @hurajgor/reactotron-redux
 
 [Redux](http://redux.js.org/) is a library for managing global state. It's pretty damn awesome.
 
@@ -16,16 +16,16 @@ And everyone knows when you combine two great things, you get a super-awesome th
 
 # Installing
 
-`reactotron-redux` is a plugin which lives in a different npm package. You can install it by typing:
+`@hurajgor/reactotron-redux` is a plugin which lives in a different npm package. You can install it by typing:
 
 ```
-npm install --save-dev reactotron-redux
+npm install --save-dev @hurajgor/reactotron-redux
 ```
 
 or
 
 ```
-yarn add reactotron-redux -D
+yarn add @hurajgor/reactotron-redux -D
 ```
 
 # Features
@@ -41,11 +41,11 @@ yarn add reactotron-redux -D
 # Configuring
 
 Two files need to change to hookup Reactotron to Redux. First, in your
-ReactotronConfig, you'll need to add `reactotron-redux` as plugin
+ReactotronConfig, you'll need to add `@hurajgor/reactotron-redux` as plugin
 
 ```diff
 // ReactotronConfig.js
-+ import { reactotronRedux } from 'reactotron-redux'
++ import { reactotronRedux } from '@hurajgor/reactotron-redux'
 
 
 // then add it to the plugin list

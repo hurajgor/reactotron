@@ -8,8 +8,8 @@ import {
   MdOutlineSearch,
 } from "react-icons/md"
 import styled from "styled-components"
-import { ContentView, EmptyState, Header, ReactotronContext } from "reactotron-core-ui"
-import type { ApiResponsePayload, Command, LogPayload } from "reactotron-core-contract"
+import { ContentView, EmptyState, Header, ReactotronContext } from "@hurajgor/reactotron-core-ui"
+import type { ApiResponsePayload, Command, LogPayload } from "@hurajgor/reactotron-core-contract"
 
 type ConsoleKind = "network" | "log"
 type BodyMode = "pretty" | "tree" | "raw"

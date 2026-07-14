@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-core-ui",
+  "name": "@hurajgor/reactotron-core-ui",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

@@ -4,8 +4,8 @@ import type {
   StateKeysResponsePayload,
   StateValuesChangePayload,
   StateValuesResponsePayload,
-} from "reactotron-core-contract"
-import type { ReactotronCore, Plugin, InferFeatures } from "../reactotron-core-client"
+} from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin, InferFeatures } from "../@hurajgor/reactotron-core-client"
 
 /**
  * Provides helper functions for send state responses.

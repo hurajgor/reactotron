@@ -1,1 +1,1 @@
-export * from "./reactotron-core-contract"
+export * from "./@hurajgor/reactotron-core-contract"

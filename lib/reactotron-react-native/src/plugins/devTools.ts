@@ -1,5 +1,5 @@
 import { Platform, TurboModuleRegistry } from "react-native"
-import type { ReactotronCore, Plugin } from "reactotron-core-client"
+import type { ReactotronCore, Plugin } from "@hurajgor/reactotron-core-client"
 import type { Spec } from "react-native/Libraries/NativeModules/specs/NativeDevMenu"
 
 /**

@@ -1,6 +1,6 @@
 import React from "react"
 import mitt from "mitt"
-import type { ReactotronCore, Plugin } from "reactotron-core-client"
+import type { ReactotronCore, Plugin } from "@hurajgor/reactotron-core-client"
 
 import StorybookSwitcher from "./storybook"
 

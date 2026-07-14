@@ -1,4 +1,4 @@
-import { createClient } from "../src/reactotron-core-client"
+import { createClient } from "../src/@hurajgor/reactotron-core-client"
 import WebSocket from "ws"
 import { getPort } from "get-port-please"
 

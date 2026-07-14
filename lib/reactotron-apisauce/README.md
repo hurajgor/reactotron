@@ -1,4 +1,4 @@
-# reactotron-apisauce
+# @hurajgor/reactotron-apisauce
 
 Converts responses sent via [apisauce](https://github.com/infinitered/apisauce) into
 Reactotron.
@@ -6,9 +6,9 @@ Reactotron.
 # Installing
 
 ```bash
-npm i --save-dev reactotron-apisauce
+npm i --save-dev @hurajgor/reactotron-apisauce
 # or
-yarn add -D reactotron-apisauce
+yarn add -D @hurajgor/reactotron-apisauce
 ```
 
 # Configuring
@@ -17,7 +17,7 @@ In the file that you create your Redux store, add these two imports at the top:
 
 ```js
 // in your reactotron config (where you setup Reactotron) add this as a plugin.
-import tronsauce from "reactotron-apisauce"
+import tronsauce from "@hurajgor/reactotron-apisauce"
 
 // then plug it in when you configure Reactotron.
 

@@ -1,5 +1,5 @@
 import type { ISerializedActionCall } from "mobx-state-tree"
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 import { TestUserModel, commandMetadataFixture, createMstPlugin } from "./fixtures"
 
 function createAction(action: ISerializedActionCall) {

@@ -4,16 +4,16 @@ title: MMKV
 
 # React Native MMKV
 
-The `reactotron-react-native-mmkv` plugin allows you to track [MMKV](https://github.com/mrousavy/react-native-mmkv) updates.
+The `@hurajgor/reactotron-react-native-mmkv` plugin allows you to track [MMKV](https://github.com/mrousavy/react-native-mmkv) updates.
 
 ## Installing
 
 ```
-npm i --save-dev reactotron-react-native-mmkv
+npm i --save-dev @hurajgor/reactotron-react-native-mmkv
 ```
 
 ```
-yarn add -D reactotron-react-native-mmkv
+yarn add -D @hurajgor/reactotron-react-native-mmkv
 ```
 
 ## Usage
@@ -28,11 +28,11 @@ export const storage = new MMKV()
 To use the `mmkvPlugin`, add the additional plugin on the `import` line.
 
 ```tsx
-import Reactotron from "reactotron-react-native"
+import Reactotron from "@hurajgor/reactotron-react-native"
 // success-line
-import type { ReactotronReactNative } from "reactotron-react-native"
+import type { ReactotronReactNative } from "@hurajgor/reactotron-react-native"
 // success-line
-import mmkvPlugin from "reactotron-react-native-mmkv"
+import mmkvPlugin from "@hurajgor/reactotron-react-native-mmkv"
 // success-line
 import { storage } from "./mmkv/storage/instance/location" // <--- update this to your mmkv instance.
 ...

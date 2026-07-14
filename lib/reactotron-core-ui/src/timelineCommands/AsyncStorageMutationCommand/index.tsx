@@ -1,5 +1,5 @@
 import React, { FunctionComponent } from "react"
-import type { AsyncStorageMutationPayload } from "reactotron-core-contract"
+import type { AsyncStorageMutationPayload } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import { KeyContainer, RowContainer, ValueContainer } from "../../utils/makeTable"

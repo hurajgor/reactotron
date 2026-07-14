@@ -1,6 +1,6 @@
 import React, { FunctionComponent } from "react"
 
-import type { CommandTypeKey } from "reactotron-core-contract"
+import type { CommandTypeKey } from "@hurajgor/reactotron-core-contract"
 
 import useTimeline from "./useTimeline"
 

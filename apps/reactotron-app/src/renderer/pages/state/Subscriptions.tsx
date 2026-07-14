@@ -5,8 +5,8 @@ import {
   StateContext,
   Header,
   EmptyState,
-} from "reactotron-core-ui"
-import { CommandType } from "reactotron-core-contract"
+} from "@hurajgor/reactotron-core-ui"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
 import {
   MdOutlineAdd,
   MdOutlineDelete,

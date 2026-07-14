@@ -20,11 +20,11 @@ Unzip & run.
 Add Reactotron on your React Native project as a dev dependency.
 
 ```
-npm i --save-dev reactotron-react-native
+npm i --save-dev @hurajgor/reactotron-react-native
 ```
 
 ```
-yarn add reactotron-react-native -D
+yarn add @hurajgor/reactotron-react-native -D
 ```
 
 #### **Step 2 - Initialization**
@@ -32,7 +32,7 @@ yarn add reactotron-react-native -D
 Create a file in your root folder `ReactotronConfig.js` and paste this:
 
 ```js
-import Reactotron from "reactotron-react-native";
+import Reactotron from "@hurajgor/reactotron-react-native";
 
 Reactotron.configure() // controls connection & communication settings
   .useReactNative() // add all built-in react native plugins
@@ -42,7 +42,7 @@ Reactotron.configure() // controls connection & communication settings
 Or using a more advanced way to customize which plugins to include:
 
 ```js
-import Reactotron from "reactotron-react-native";
+import Reactotron from "@hurajgor/reactotron-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 Reactotron.setAsyncStorageHandler(AsyncStorage)
@@ -65,7 +65,7 @@ Reactotron.setAsyncStorageHandler(AsyncStorage)
 Alternatively, you can create your own plugin and provide it via:
 
 ```js
-import Reactotron from "reactotron-react-native";
+import Reactotron from "@hurajgor/reactotron-react-native";
 
 const middleware = (tron) => {
   /* plugin definition */

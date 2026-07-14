@@ -1,4 +1,4 @@
-import { mst } from "../src/reactotron-mst"
+import { mst } from "../src/@hurajgor/reactotron-mst"
 import { createMockReactotron } from "./mocks/create-mock-reactotron"
 
 describe("plugin-interface", () => {

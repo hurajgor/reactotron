@@ -2,7 +2,7 @@
 title: Apisauce
 ---
 
-# reactotron-apisauce
+# @hurajgor/reactotron-apisauce
 
 [Apisauce](http://github.com/skellock/apisauce) is a lightweight wrapper around the fantastic [Axios](https://github.com/mzabriskie/axios) networking library.
 
@@ -11,11 +11,11 @@ title: Apisauce
 ## Installing
 
 ```
-npm i --save-dev reactotron-apisauce
+npm i --save-dev @hurajgor/reactotron-apisauce
 ```
 
 ```
-yarn add reactotron-apisauce -D
+yarn add @hurajgor/reactotron-apisauce -D
 ```
 
 ## Configuration
@@ -23,7 +23,7 @@ yarn add reactotron-apisauce -D
 To use the apisauce plugin, add the additional plugin on the `import` line.
 
 ```js
-import apisaucePlugin from "reactotron-apisauce" //
+import apisaucePlugin from "@hurajgor/reactotron-apisauce" //
 ```
 
 Then plug it in when you configure Reactotron.
@@ -46,10 +46,10 @@ Next, wherever you create api functions for you application, bring in Reactotron
 
 ```js
 //for web
-import Reactotron from "reactotron-react-js"
+import Reactotron from "@hurajgor/reactotron-react-js"
 
 //for mobile
-import Reactotron from "reactotron-react-native"
+import Reactotron from "@hurajgor/reactotron-react-native"
 
 api.addMonitor(Reactotron.apisauce)
 ```

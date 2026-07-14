@@ -1,13 +1,13 @@
-# reactotron-core-client
+# @hurajgor/reactotron-core-client
 
 This provides the core functionality of the clients allowing it talk to talk to the server.
 
-It is used by `reactotron-react-dom` and `reactotron-react-native`.
+It is used by `reactotron-react-dom` and `@hurajgor/reactotron-react-native`.
 
 # Usage
 
 ```js
-import { createClient } from "reactotron-core-client"
+import { createClient } from "@hurajgor/reactotron-core-client"
 
 // setup a reactotron client
 const client = createClient({

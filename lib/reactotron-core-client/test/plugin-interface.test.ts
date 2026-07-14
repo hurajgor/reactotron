@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-import { createClient, corePlugins, ReactotronCore } from "../src/reactotron-core-client"
+import { createClient, corePlugins, ReactotronCore } from "../src/@hurajgor/reactotron-core-client"
 import WebSocket from "ws"
 
 const createSocket = (path) => new WebSocket(path)

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type ReactotronServer from "reactotron-core-server"
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 
 import {
   MAX_RESPONSE_CHARS,

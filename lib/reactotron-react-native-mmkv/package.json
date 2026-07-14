@@ -1,5 +1,4 @@
 {
-  "name": "reactotron-react-native-mmkv",
   "version": "0.2.9",
   "description": "A Reactotron plugin for react-native-mmkv.",
   "author": "Infinite Red",
@@ -43,13 +42,14 @@
     "prepare": "bob build"
   },
   "peerDependencies": {
-    "react-native-mmkv": "*",
-    "reactotron-core-client": "*"
+    "@hurajgor/reactotron-core-client": "*",
+    "react-native-mmkv": "*"
   },
   "devDependencies": {
     "@babel/core": "^7.23.2",
     "@babel/preset-env": "^7.23.2",
     "@babel/preset-typescript": "^7.23.2",
+    "@hurajgor/reactotron-core-client": "workspace:*",
     "@types/jest": "^29.5.7",
     "@types/node": "^18.18.8",
     "@typescript-eslint/eslint-plugin": "^6.7.5",
@@ -69,7 +69,6 @@
     "prettier": "^3.0.3",
     "react-native-builder-bob": "^0.40.13",
     "react-native-mmkv": "^2.10.2",
-    "reactotron-core-client": "workspace:*",
     "testdouble": "^3.20.0",
     "ts-jest": "^29.1.1",
     "typescript": "^4.9.5"

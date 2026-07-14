@@ -4,7 +4,7 @@ title: Image Overlay
 
 # Overlay
 
-Overlay is a plugin for `reactotron-react-native` which allows you to have an image uploaded
+Overlay is a plugin for `@hurajgor/reactotron-react-native` which allows you to have an image uploaded
 to your simulator to stay on top of your app. This helps you to create those pixel perfect screens by helping you compare your app to the design.
 
 ## Configuration
@@ -12,7 +12,7 @@ to your simulator to stay on top of your app. This helps you to create those pix
 To use the Overlay plugin, add the additional plugin on the `import` line.
 
 ```js
-import Reactotron, { overlay } from "reactotron-react-native"
+import Reactotron, { overlay } from "@hurajgor/reactotron-react-native"
 ```
 
 Add it as a plugin to Reactotron.
@@ -45,7 +45,7 @@ export default MyAppWithBenefits
 
 # React Native Production Caveat
 
-One common gotcha here is when you make production builds since `reactotron-react-native` is likely setup in `devDependencies`.
+One common gotcha here is when you make production builds since `@hurajgor/reactotron-react-native` is likely setup in `devDependencies`.
 
 If you'd like to keep it like this (I recommend it!), then perhaps your code might look more like this:
 

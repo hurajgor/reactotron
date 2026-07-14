@@ -9,7 +9,7 @@ import {
   REDACTED,
   type McpRedactionServerConfig,
 } from "../src/redaction"
-import type { McpRedactionConfig, McpRedactionRules } from "reactotron-core-contract"
+import type { McpRedactionConfig, McpRedactionRules } from "@hurajgor/reactotron-core-contract"
 
 describe("redaction integration — network resource data", () => {
   const serverConfig = DEFAULT_SERVER_CONFIG

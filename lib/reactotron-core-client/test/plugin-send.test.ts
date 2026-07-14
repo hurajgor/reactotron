@@ -1,7 +1,7 @@
-import { ReactotronCore, createClient } from "../src/reactotron-core-client"
+import { ReactotronCore, createClient } from "../src/@hurajgor/reactotron-core-client"
 import WebSocket from "ws"
 import { getPort } from "get-port-please"
-import { PluginCreator } from "reactotron-core-client"
+import { PluginCreator } from "@hurajgor/reactotron-core-client"
 
 const createSocket = (path) => new WebSocket(path)
 const mock = { type: "type", payload: "payload" }

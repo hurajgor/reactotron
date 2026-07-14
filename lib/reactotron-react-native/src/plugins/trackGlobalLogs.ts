@@ -4,7 +4,7 @@ import {
   type ReactotronCore,
   assertHasLoggerPlugin,
   type Plugin,
-} from "reactotron-core-client"
+} from "@hurajgor/reactotron-core-client"
 
 /**
  * Track calls to console.log, console.info, console.warn, and console.debug and send them to Reactotron logger

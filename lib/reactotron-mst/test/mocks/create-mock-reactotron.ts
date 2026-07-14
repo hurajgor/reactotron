@@ -1,4 +1,4 @@
-import { type Reactotron } from "reactotron-core-client"
+import { type Reactotron } from "@hurajgor/reactotron-core-client"
 
 /**
  * Creates a mock reactotron instance with test double functions.

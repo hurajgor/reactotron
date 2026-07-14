@@ -4,7 +4,7 @@ import {
   SubscriptionAddModal,
   ReactotronContext,
   StateContext,
-} from "reactotron-core-ui"
+} from "@hurajgor/reactotron-core-ui"
 import StandaloneContext from "./contexts/Standalone"
 import McpSettingsModal from "./components/McpSettingsModal"
 

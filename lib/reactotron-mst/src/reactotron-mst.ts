@@ -19,14 +19,14 @@ import type {
   IMiddlewareEvent,
   ISerializedActionCall,
 } from "mobx-state-tree"
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 import {
   type ReactotronCore,
   type Plugin,
   assertHasStateResponsePlugin,
   type InferFeatures,
   type StateResponsePlugin,
-} from "reactotron-core-client"
+} from "@hurajgor/reactotron-core-client"
 
 import {
   always,

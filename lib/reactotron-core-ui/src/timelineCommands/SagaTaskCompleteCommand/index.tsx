@@ -1,5 +1,5 @@
 import React, { FunctionComponent, useState } from "react"
-import type { SagaTaskCompletePayload } from "reactotron-core-contract"
+import type { SagaTaskCompletePayload } from "@hurajgor/reactotron-core-contract"
 
 import { TimelineCommandProps, buildTimelineCommand } from "../BaseCommand"
 

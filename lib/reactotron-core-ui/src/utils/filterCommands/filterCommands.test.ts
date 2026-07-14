@@ -1,5 +1,5 @@
 import filterCommands, { filterSearch, filterHidden } from "./index"
-import { CommandType } from "reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
 
 const TEST_COMMANDS = [
   { type: "SEARCHTYPE" },

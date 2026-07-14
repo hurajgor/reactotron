@@ -1,5 +1,5 @@
-import { CommandType } from "reactotron-core-contract"
-import type { CommandTypeKey } from "reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
+import type { CommandTypeKey } from "@hurajgor/reactotron-core-contract"
 import { escapeRegex } from "../escape-regex"
 
 function path(...searchPath) {

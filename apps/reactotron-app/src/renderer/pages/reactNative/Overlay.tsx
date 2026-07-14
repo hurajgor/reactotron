@@ -2,7 +2,7 @@ import React, { useContext } from "react"
 import styled from "styled-components"
 import fs from "fs"
 import { nativeImage } from "electron"
-import { Header, ReactNativeContext } from "reactotron-core-ui"
+import { Header, ReactNativeContext } from "@hurajgor/reactotron-core-ui"
 import { MdOutlineAutoStories, MdOutlinePhotoCamera } from "react-icons/md"
 
 import { OverlayAlignment } from "./components/OverlayAlignment"

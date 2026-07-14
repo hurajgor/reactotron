@@ -4,7 +4,7 @@ import styled from "styled-components"
 
 import useColorScheme from "../../hooks/useColorScheme"
 import { ReactotronTheme, themes } from "../../themes"
-import type { Difference } from "reactotron-core-contract"
+import type { Difference } from "@hurajgor/reactotron-core-contract"
 
 // TODO: Ripping this right from reactotron right now... should probably be better.
 const theme = {

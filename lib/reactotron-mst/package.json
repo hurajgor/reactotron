@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-mst",
+  "name": "@hurajgor/reactotron-mst",
   "version": "3.1.12",
   "description": "A Reactotron plugin for mobx-state-tree.",
   "author": "Infinite Red",
@@ -43,9 +43,9 @@
     "prepare": "bob build"
   },
   "peerDependencies": {
+    "@hurajgor/reactotron-core-client": "*",
     "mobx": "^3.4.1 || ^4.1.0 || >6.0.0",
-    "mobx-state-tree": "^1.4.0 || ^2.0.2 || >3.0.0",
-    "reactotron-core-client": "*"
+    "mobx-state-tree": "^1.4.0 || ^2.0.2 || >3.0.0"
   },
   "dependencies": {
     "ramda": "^0.28.0"
@@ -54,6 +54,7 @@
     "@babel/core": "^7.23.2",
     "@babel/preset-env": "^7.23.2",
     "@babel/preset-typescript": "^7.23.2",
+    "@hurajgor/reactotron-core-client": "workspace:*",
     "@types/jest": "^29.5.7",
     "@types/lodash.camelcase": "^4.3.7",
     "@types/node": "^18.18.8",
@@ -77,7 +78,6 @@
     "mobx-state-tree": "^5.3.0",
     "prettier": "^3.0.3",
     "react-native-builder-bob": "^0.40.13",
-    "reactotron-core-client": "workspace:*",
     "ts-jest": "^29.1.1",
     "typescript": "^4.9.5"
   },

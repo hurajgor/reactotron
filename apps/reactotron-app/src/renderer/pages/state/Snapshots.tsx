@@ -6,8 +6,8 @@ import {
   Header,
   EmptyState,
   Tooltip,
-} from "reactotron-core-ui"
-import type { Snapshot } from "reactotron-core-ui"
+} from "@hurajgor/reactotron-core-ui"
+import type { Snapshot } from "@hurajgor/reactotron-core-ui"
 import { clipboard } from "electron"
 import styled from "styled-components"
 import {

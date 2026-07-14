@@ -1,5 +1,5 @@
-import type { BenchmarkReportPayload } from "reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "../reactotron-core-client"
+import type { BenchmarkReportPayload } from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin } from "../@hurajgor/reactotron-core-client"
 
 /**
  * Runs small high-unscientific benchmarks for you.

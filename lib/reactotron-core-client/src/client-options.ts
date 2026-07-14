@@ -1,5 +1,5 @@
-import type { McpRedactionConfig } from "reactotron-core-contract"
-import type { LifeCycleMethods, PluginCreator } from "./reactotron-core-client"
+import type { McpRedactionConfig } from "@hurajgor/reactotron-core-contract"
+import type { LifeCycleMethods, PluginCreator } from "./@hurajgor/reactotron-core-client"
 import NodeWebSocket from "ws"
 
 type BrowserWebSocket = WebSocket

@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-core-contract",
+  "name": "@hurajgor/reactotron-core-contract",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

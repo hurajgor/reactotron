@@ -24,7 +24,7 @@ export const getWorkspaceList = async () => {
      * ```
      * {"location":".","name":"reactotron"}\n
      * {"location":"apps/reactotron-app","name":"reactotron-app"}\n
-     * {"location":"lib/reactotron-apisauce","name":"reactotron-apisauce"}\n
+     * {"location":"lib/reactotron-apisauce","name":"@hurajgor/reactotron-apisauce"}\n
      * \n
      * ```
      */

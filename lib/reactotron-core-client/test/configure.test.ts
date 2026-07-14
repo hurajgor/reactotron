@@ -1,4 +1,4 @@
-import { createClient } from "../src/reactotron-core-client"
+import { createClient } from "../src/@hurajgor/reactotron-core-client"
 import { WebSocket } from "ws"
 
 const createSocket = (path) => new WebSocket(path)
@@ -7,7 +7,7 @@ test("has defaults", () => {
   const client = createClient({ createSocket }) as any
   expect(client.options.host).toBe("localhost")
   expect(client.options.port).toBe(9090)
-  expect(client.options.name).toBe("reactotron-core-client")
+  expect(client.options.name).toBe("@hurajgor/reactotron-core-client")
 })
 
 test("options can be overridden", () => {

@@ -4,14 +4,14 @@ title: Networking
 
 # Networking
 
-The `networking` plugin is `reactotron-react-native` which allows you to track all XMLHttpRequests in React Native.
+The `networking` plugin is `@hurajgor/reactotron-react-native` which allows you to track all XMLHttpRequests in React Native.
 
 ## Usage
 
 To use the `networking` plugin, you need to add the additional plugin on the `import` line.
 
 ```js
-import Reactotron, { networking } from "reactotron-react-native";
+import Reactotron, { networking } from "@hurajgor/reactotron-react-native";
 ```
 
 Next, add it as a plugin to Reactotron.

@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-apisauce",
+  "name": "@hurajgor/reactotron-apisauce",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

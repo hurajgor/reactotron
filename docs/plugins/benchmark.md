@@ -9,7 +9,7 @@ If you have a function that you believe is slow, you can benchmark it to find an
 ## Usage
 
 ```js
-import Reactotron from "reactotron-react-native"
+import Reactotron from "@hurajgor/reactotron-react-native"
 
 function slowFunction() {
   const bench = Reactotron.benchmark("slow function benchmark")

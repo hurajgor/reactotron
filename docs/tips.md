@@ -18,7 +18,7 @@ Reactotron.clear()
 
 Don't... said the stranger on the Internet pretending he knows what's best for you.
 
-Please install `reactotron-react-native`, `reactotron-react-js`, and others with `--save-dev` instead of `--save`.
+Please install `@hurajgor/reactotron-react-native`, `@hurajgor/reactotron-react-js`, and others with `--save-dev` instead of `--save`.
 
 #### React Native
 
@@ -57,7 +57,7 @@ if (process.env.NODE_ENV !== "production") {
 In ES6, you must import Reactotron at the top of your file before using it like this:
 
 ```js
-import Reactotron from "reactotron-react-native"
+import Reactotron from "@hurajgor/reactotron-react-native"
 // or import Reactotron from 'reactotron-react'
 ```
 
@@ -104,7 +104,7 @@ console.tron.display({
 
 ## Redux and Immutable data
 
-If you're using [reactotron-redux](./plugins/redux.md)
+If you're using [@hurajgor/reactotron-redux](./plugins/redux.md)
 and an immutable library such as [seamless-immutable](https://github.com/rtfeldman/seamless-immutable) you need to make sure you transform your state back into an immutable object when using State Snapshots.
 
 To do so you can use the `onRestore` callback like this:

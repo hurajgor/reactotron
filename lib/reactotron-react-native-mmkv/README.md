@@ -1,13 +1,13 @@
-# reactotron-react-native-mmkv
+# @hurajgor/reactotron-react-native-mmkv
 
 Log updates to your [react-native-mmkv](https://github.com/mrousavy/react-native-mmkv) store in the Reactotron timeline.
 
 # Installing
 
 ```bash
-npm i --save-dev reactotron-react-native-mmkv
+npm i --save-dev @hurajgor/reactotron-react-native-mmkv
 # or
-yarn add -D reactotron-react-native-mmkv
+yarn add -D @hurajgor/reactotron-react-native-mmkv
 ```
 
 ## Usage
@@ -22,9 +22,9 @@ export const storage = new MMKV()
 To use the `mmkvPlugin`, add the additional plugin on the `import` line.
 
 ```tsx
-import Reactotron from "reactotron-react-native"
-import type { ReactotronReactNative } from "reactotron-react-native"
-import mmkvPlugin from "reactotron-react-native-mmkv"
+import Reactotron from "@hurajgor/reactotron-react-native"
+import type { ReactotronReactNative } from "@hurajgor/reactotron-react-native"
+import mmkvPlugin from "@hurajgor/reactotron-react-native-mmkv"
 import { storage } from "./mmkv/storage/instance/location" // <--- update this location
 ...
 Reactotron.configure()

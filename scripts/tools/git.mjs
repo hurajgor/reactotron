@@ -8,7 +8,7 @@ import { ROOT_DIR } from "./path.mjs";
  * @see https://gist.github.com/jhorsman/62eeea161a13b80e39f5249281e17c39
  * @example 'v1.1.1'
  * @example 'reactotron-app@3.0.0'
- * @example 'reactotron-apisauce@3.0.1-alpha.1'
+ * @example '@hurajgor/reactotron-apisauce@3.0.1-alpha.1'
  */
 export const GIT_TAG_REGEX =
   /([\w-]+@|v)([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+)?/g; // 'reactotron-app@3.0.0'
@@ -22,9 +22,9 @@ export const GIT_TAG_REGEX =
  *
  * `456b8aea8c243a29463f2dadf49bb7e63bbeacac        refs/tags/v2.8.10`
  *
- * `77716bb4e3146d8b220c9e3c97f3aef4b2825d12        refs/tags/reactotron-apisauce@3.0.0`
+ * `77716bb4e3146d8b220c9e3c97f3aef4b2825d12        refs/tags/@hurajgor/reactotron-apisauce@3.0.0`
  *
- * `d1da997c9105c226533192e013de713f18a74c0f        refs/tags/reactotron-apisauce@3.0.1-alpha.1^{}`
+ * `d1da997c9105c226533192e013de713f18a74c0f        refs/tags/@hurajgor/reactotron-apisauce@3.0.1-alpha.1^{}`
  *
  * @param line {string}
  */

@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-react-native",
+  "name": "@hurajgor/reactotron-react-native",
   "version": "5.3.0",
   "description": "A development tool to explore, inspect, and diagnose your React Native apps.",
   "author": "Infinite Red",
@@ -46,9 +46,9 @@
     "react-native": ">=0.40.0"
   },
   "dependencies": {
-    "mitt": "^3.0.1",
-    "reactotron-core-client": "workspace:*",
-    "reactotron-core-contract": "workspace:*"
+    "@hurajgor/reactotron-core-client": "workspace:*",
+    "@hurajgor/reactotron-core-contract": "workspace:*",
+    "mitt": "^3.0.1"
   },
   "resolutions": {
     "@types/react-native": "0.72.1"

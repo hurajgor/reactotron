@@ -7,7 +7,7 @@ import {
   type ReactotronCore,
   assertHasLoggerPlugin,
   type Plugin,
-} from "reactotron-core-client"
+} from "@hurajgor/reactotron-core-client"
 import _LogBox, {
   type LogBoxStatic as LogBoxStaticPublic,
   // eslint-disable-next-line import/default, import/namespace

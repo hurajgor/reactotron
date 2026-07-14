@@ -1,4 +1,4 @@
-import type { InferFeatures, Reactotron } from "reactotron-core-client"
+import type { InferFeatures, Reactotron } from "@hurajgor/reactotron-core-client"
 import type { ReactotronReduxPlugin } from "."
 
 export const defaultReactotronMock: Reactotron & InferFeatures<Reactotron, ReactotronReduxPlugin> =

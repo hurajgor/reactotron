@@ -57,7 +57,7 @@ This file was generated using [@jscutlery/semver](https://github.com/jscutlery/s
 
 ### Bug Fixes
 
-* **reactotron-core-ui:** Move commandListener callbacks outside of render cycle ([#1544](https://github.com/infinitered/reactotron/issues/1544) by [@jamonholmgren](https://github.com/jamonholmgren)) ([a4bbe6d](https://github.com/infinitered/reactotron/commit/a4bbe6dd302550d16a403d063f2cdd906f048303))
+* **@hurajgor/reactotron-core-ui:** Move commandListener callbacks outside of render cycle ([#1544](https://github.com/infinitered/reactotron/issues/1544) by [@jamonholmgren](https://github.com/jamonholmgren)) ([a4bbe6d](https://github.com/infinitered/reactotron/commit/a4bbe6dd302550d16a403d063f2cdd906f048303))
 
 ### [3.7.8](https://github.com/infinitered/reactotron/compare/reactotron-app@3.7.7...reactotron-app@3.7.8) (2025-03-17)
 
@@ -270,7 +270,7 @@ This file was generated using [@jscutlery/semver](https://github.com/jscutlery/s
 
 ### Bug Fixes
 
-* **reactotron-core-ui:** Fix draggable header eating all onClick events from child components ([1d24482](https://github.com/infinitered/reactotron/commit/1d24482c605014cc6d13a745c2432c9be3912cf6))
+* **@hurajgor/reactotron-core-ui:** Fix draggable header eating all onClick events from child components ([1d24482](https://github.com/infinitered/reactotron/commit/1d24482c605014cc6d13a745c2432c9be3912cf6))
 
 ## [3.0.0-beta.10](https://github.com/infinitered/reactotron/compare/reactotron-app@3.0.0-alpha.21...reactotron-app@3.0.0-beta.10) (2023-04-06)
 

@@ -1,4 +1,4 @@
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 
 export const MAX_RESPONSE_CHARS = 800_000
 export const MAX_PAYLOAD_PREVIEW_CHARS = 200

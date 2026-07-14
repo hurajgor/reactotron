@@ -13,7 +13,7 @@ import {
   ReactotronContext,
   TimelineContext,
   RandomJoke,
-} from "reactotron-core-ui"
+} from "@hurajgor/reactotron-core-ui"
 import {
   MdClose,
   MdOutlineDeleteSweep,

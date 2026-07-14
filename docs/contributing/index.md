@@ -34,7 +34,7 @@ Changes made to the client packages will be reflected in the example application
 
 ## Bring Your Own Application
 
-Let's say that you want to develop features using your own application instead of the example app. If you make changes to the non-electron app packages in this monorepo like `reactotron-react-native` or `reactotron-core-client`, you will need to build the packages and then link them to your react-native app. Luckily, we have a script that will do this for you.
+Let's say that you want to develop features using your own application instead of the example app. If you make changes to the non-electron app packages in this monorepo like `@hurajgor/reactotron-react-native` or `@hurajgor/reactotron-core-client`, you will need to build the packages and then link them to your react-native app. Luckily, we have a script that will do this for you.
 
 You can run `yarn build` to build all reactotron packages, or `yarn build:watch` to watch and rebuild changes automatically.
 

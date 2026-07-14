@@ -6,7 +6,7 @@ import {
   MdOutlineList as MdList,
   MdOutlineRemoveCircleOutline as IconStatusCancelled,
 } from "react-icons/md"
-import type { SagaTaskCompleteChild, SagaTaskCompletePayload } from "reactotron-core-contract"
+import type { SagaTaskCompleteChild, SagaTaskCompletePayload } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import ContentView from "../../components/ContentView"

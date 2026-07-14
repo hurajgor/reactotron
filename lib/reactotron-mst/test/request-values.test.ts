@@ -1,5 +1,5 @@
 import { TestUserModel, commandMetadataFixture, createMstPlugin } from "./fixtures"
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 
 function createAction(path: string) {
   return {

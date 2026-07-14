@@ -3,7 +3,7 @@ import {
   type ReactotronCore,
   type StateResponsePlugin,
   assertHasStateResponsePlugin,
-} from "reactotron-core-client"
+} from "@hurajgor/reactotron-core-client"
 
 import stateCleaner from "./helpers/stateCleaner"
 import pathObject from "./helpers/pathObject"

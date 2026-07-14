@@ -11,7 +11,7 @@ A plugin is a way to extend Reactotron's functionality. Plugins can be used to a
 To install a plugin, you need to add it to your Reactotron client. You can do this by importing the plugin and passing it to the `use` method when you configure Reactotron.
 
 ```js
-import Reactotron from "reactotron-react-native"
+import Reactotron from "@hurajgor/reactotron-react-native"
 
 Reactotron.configure()
   .use(somePlugin())

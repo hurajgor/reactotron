@@ -1,5 +1,5 @@
-import type { ReplExecuteResponsePayload, ReplLsResponsePayload } from "reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "../reactotron-core-client"
+import type { ReplExecuteResponsePayload, ReplLsResponsePayload } from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin } from "../@hurajgor/reactotron-core-client"
 
 // eslint-disable-next-line @typescript-eslint/ban-types
 export type AcceptableRepls = object | Function | string | number

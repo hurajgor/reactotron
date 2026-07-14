@@ -1,5 +1,5 @@
 import { type MMKV } from "react-native-mmkv"
-import type { ReactotronCore } from "reactotron-core-client"
+import type { ReactotronCore } from "@hurajgor/reactotron-core-client"
 
 export interface MmkvPluginConfig {
   /**
@@ -22,7 +22,7 @@ interface Listener {
  *
  * @example
  * import { MMKV } from 'react-native-mmkv'
- * import type { ReactotronReactNative } from 'reactotron-react-native'
+ * import type { ReactotronReactNative } from '@hurajgor/reactotron-react-native'
  * // create your storage instance
  * const storage = new MMKV()
  *

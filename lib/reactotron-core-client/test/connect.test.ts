@@ -1,5 +1,5 @@
-import { CommandType } from "reactotron-core-contract"
-import { createClient } from "../src/reactotron-core-client"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
+import { createClient } from "../src/@hurajgor/reactotron-core-client"
 import WebSocket from "ws"
 import { getPort } from "get-port-please"
 import { createClosingServer } from "./create-closing-server"

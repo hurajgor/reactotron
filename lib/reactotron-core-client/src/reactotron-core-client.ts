@@ -1,5 +1,5 @@
 import WebSocket from "ws"
-import type { Command, CommandTypeKey, DisplayPayload } from "reactotron-core-contract"
+import type { Command, CommandTypeKey, DisplayPayload } from "@hurajgor/reactotron-core-contract"
 import validate from "./validate"
 import logger from "./plugins/logger"
 import image from "./plugins/image"
@@ -232,7 +232,7 @@ export class ReactotronImpl
         createSocket: null as never,
         host: "localhost",
         port: 9090,
-        name: "reactotron-core-client",
+        name: "@hurajgor/reactotron-core-client",
         secure: false,
         plugins: corePlugins,
         safeRecursion: true,

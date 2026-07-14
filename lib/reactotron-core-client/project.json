@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-core-client",
+  "name": "@hurajgor/reactotron-core-client",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

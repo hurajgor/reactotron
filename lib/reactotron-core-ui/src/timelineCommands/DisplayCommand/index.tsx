@@ -1,7 +1,7 @@
 import React, { FunctionComponent } from "react"
 import styled from "styled-components"
 import { MdOutlineContentCopy } from "react-icons/md"
-import type { DisplayPayload } from "reactotron-core-contract"
+import type { DisplayPayload } from "@hurajgor/reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
 import ContentView from "../../components/ContentView"

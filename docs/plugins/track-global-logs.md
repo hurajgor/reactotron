@@ -14,10 +14,10 @@ To integrate the `trackGlobalLogs` plugin into your Reactotron setup, follow the
 
 #### Default
 
-This plugin is included by default in Reactotron when using `reactotron-react-native`.
+This plugin is included by default in Reactotron when using `@hurajgor/reactotron-react-native`.
 
 ```js
-import Reactotron from "reactotron-react-native"
+import Reactotron from "@hurajgor/reactotron-react-native"
 
 Reactotron.configure()
   .useReactNative() // included by default
@@ -31,7 +31,7 @@ If are not using the `useReactNative` method for some reason, you can add the pl
 1. Import the `trackGlobalLogs` function from the Reactotron package:
 
 ```js
-import Reactotron, { trackGlobalLogs } from "reactotron-react-native"
+import Reactotron, { trackGlobalLogs } from "@hurajgor/reactotron-react-native"
 ```
 
 2. Add the `trackGlobalLogs` plugin to your Reactotron configuration as shown below:

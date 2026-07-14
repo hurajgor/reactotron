@@ -42,9 +42,9 @@
     "prepare": "bob build"
   },
   "dependencies": {
+    "@hurajgor/reactotron-core-contract": "workspace:*",
     "mitt": "^3.0.1",
     "ramda": "0.28.0",
-    "reactotron-core-contract": "workspace:*",
     "ws": "^8.14.2"
   },
   "devDependencies": {

@@ -36,13 +36,13 @@ cd this-better-work
 Let's install Reactotron as a dev dependency.
 
 ```
-npm i --save-dev reactotron-react-js
+npm i --save-dev @hurajgor/reactotron-react-js
 ```
 
 I like a separate file for initializing. Create `src/ReactotronConfig.js` in your editor of choice and paste this:
 
 ```js
-import Reactotron from "reactotron-react-js"
+import Reactotron from "@hurajgor/reactotron-react-js"
 
 Reactotron.configure() // we can use plugins here -- more on this later
   .connect() // let's connect!
@@ -75,7 +75,7 @@ Open up `src/App.js`.
 At the top, let's put
 
 ```js
-import Reactotron from "reactotron-react-js"
+import Reactotron from "@hurajgor/reactotron-react-js"
 ```
 
 Next, inside the `render()` function, put this as the first line:

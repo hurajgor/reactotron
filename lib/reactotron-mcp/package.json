@@ -33,15 +33,15 @@
     "zod": "^4.3.0"
   },
   "peerDependencies": {
-    "reactotron-core-contract": "workspace:*",
+    "@hurajgor/reactotron-core-contract": "workspace:*",
     "reactotron-core-server": "workspace:*"
   },
   "devDependencies": {
+    "@hurajgor/reactotron-core-contract": "workspace:*",
     "@types/node": "^18.18.8",
     "get-port-please": "^3.1.1",
     "jest": "^29.7.0",
     "jest-environment-node": "^29.7.0",
-    "reactotron-core-contract": "workspace:*",
     "reactotron-core-server": "workspace:*",
     "rimraf": "5.0.5",
     "ts-jest": "^29.1.1",

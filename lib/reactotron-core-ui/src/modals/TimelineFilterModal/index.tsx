@@ -3,8 +3,8 @@ import styled from "styled-components"
 
 import Modal from "../../components/Modal"
 import Checkbox from "../../components/Checkbox"
-import type { CommandTypeKey } from "reactotron-core-contract"
-import { CommandType } from "reactotron-core-contract"
+import type { CommandTypeKey } from "@hurajgor/reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
 
 const GROUPS = [
   {

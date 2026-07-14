@@ -4,7 +4,7 @@ import {
   createMstPlugin,
   createTestCompany,
 } from "./fixtures"
-import type { Command } from "reactotron-core-contract"
+import type { Command } from "@hurajgor/reactotron-core-contract"
 
 function createAction(paths: string[]) {
   return {

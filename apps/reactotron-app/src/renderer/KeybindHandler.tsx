@@ -1,6 +1,6 @@
 import React, { useContext } from "react"
 import { GlobalHotKeys, KeyEventName } from "react-hotkeys"
-import { ReactotronContext, StateContext, TimelineContext } from "reactotron-core-ui"
+import { ReactotronContext, StateContext, TimelineContext } from "@hurajgor/reactotron-core-ui"
 import LayoutContext from "./contexts/Layout"
 
 const keyMap = {

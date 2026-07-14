@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-react-native",
+  "name": "@hurajgor/reactotron-react-native",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

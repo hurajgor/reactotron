@@ -1,4 +1,4 @@
-import { createClient, corePlugins } from "../src/reactotron-core-client"
+import { createClient, corePlugins } from "../src/@hurajgor/reactotron-core-client"
 import plugin from "../src/plugins/benchmark"
 import WebSocket from "ws"
 

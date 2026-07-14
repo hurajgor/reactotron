@@ -7,7 +7,7 @@ import {
   type ReactotronMcpServer,
   type McpRedactionServerConfig,
 } from "reactotron-mcp"
-import type { McpRedactionConfig } from "reactotron-core-contract"
+import type { McpRedactionConfig } from "@hurajgor/reactotron-core-contract"
 
 import ReactotronBrain from "../../ReactotronBrain"
 import config, { getConfiguredMcpPort, getConfiguredServerPort } from "../../config"

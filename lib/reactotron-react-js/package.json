@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-react-js",
+  "name": "@hurajgor/reactotron-react-js",
   "version": "3.3.17",
   "description": "A development tool to explore, inspect, and diagnose your React JS/DOM apps.",
   "author": "Infinite Red",
@@ -42,7 +42,7 @@
     "prepare": "bob build"
   },
   "dependencies": {
-    "reactotron-core-client": "workspace:*",
+    "@hurajgor/reactotron-core-client": "workspace:*",
     "stacktrace-js": "2.0.1"
   },
   "devDependencies": {

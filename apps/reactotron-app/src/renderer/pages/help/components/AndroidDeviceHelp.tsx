@@ -8,7 +8,7 @@ import {
   MdOutlineSettings as SettingsIcon,
   MdOutlineVibration as ShakeDeviceIcon,
 } from "react-icons/md"
-import { EmptyState, Tooltip } from "reactotron-core-ui"
+import { EmptyState, Tooltip } from "@hurajgor/reactotron-core-ui"
 import { ItemContainer, ItemIconContainer } from "../SharedStyles"
 import { getConfiguredServerPort } from "../../../config"
 

@@ -1,5 +1,5 @@
 {
-  "name": "reactotron-react-native-mmkv",
+  "name": "@hurajgor/reactotron-react-native-mmkv",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "targets": {
     "version": {

@@ -6,7 +6,7 @@ import type {
   AgentUiResponsePayload,
   AgentUiSelector,
   Command,
-} from "reactotron-core-contract"
+} from "@hurajgor/reactotron-core-contract"
 import { z } from "zod/v4"
 import { promises as fsPromises } from "fs"
 import { extname } from "path"
@@ -337,7 +337,7 @@ export function registerTools(
   mcp.registerTool("agent_ui_snapshot", {
     description: [
       "Request a semantic UI snapshot from the connected app's Reactotron agent runtime.",
-      "Requires the app to use the reactotron-react-native agentRuntime plugin.",
+      "Requires the app to use the @hurajgor/reactotron-react-native agentRuntime plugin.",
       "This is testID/runtime-tree based and does not use screenshots.",
     ].join(" "),
     inputSchema: {

@@ -6,8 +6,8 @@ import type {
   AgentUiSnapshot,
   AgentUiSnapshotRequestPayload,
   Command,
-} from "reactotron-core-contract"
-import type { Plugin, ReactotronCore } from "reactotron-core-client"
+} from "@hurajgor/reactotron-core-contract"
+import type { Plugin, ReactotronCore } from "@hurajgor/reactotron-core-client"
 
 export type AgentRuntimeActionHandler = (request: AgentUiActionRequestPayload) => unknown | Promise<unknown>
 export type AgentRuntimeSnapshotProvider = () => AgentUiSnapshot | Promise<AgentUiSnapshot>

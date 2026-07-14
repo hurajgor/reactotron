@@ -1,15 +1,15 @@
-# reactotron-core-contract
+# @hurajgor/reactotron-core-contract
 
-TypeScript contracts for WebSocket messages between `reactotron-core-server` and `reactotron-core-client`.
+TypeScript contracts for WebSocket messages between `reactotron-core-server` and `@hurajgor/reactotron-core-client`.
 
 This package provides the type definitions and command enums that ensure type-safe communication between Reactotron clients, plugins, and servers.
 
 ## Installation
 
 ```bash
-npm install reactotron-core-contract
+npm install @hurajgor/reactotron-core-contract
 # or
-yarn add reactotron-core-contract
+yarn add @hurajgor/reactotron-core-contract
 ```
 
 ## What's Included
@@ -19,7 +19,7 @@ yarn add reactotron-core-contract
 The `CommandType` object contains all available command type strings as constants:
 
 ```typescript
-import { CommandType } from "reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
 
 CommandType.Log // "log"
 CommandType.ApiResponse // "api.response"
@@ -42,7 +42,7 @@ import type {
   ImagePayload,
   StateActionCompletePayload,
   // ... and more
-} from "reactotron-core-contract"
+} from "@hurajgor/reactotron-core-contract"
 ```
 
 ### Command Interface
@@ -50,7 +50,7 @@ import type {
 The base `Command` interface that all messages follow:
 
 ```typescript
-import type { Command, CommandTypeKey } from "reactotron-core-contract"
+import type { Command, CommandTypeKey } from "@hurajgor/reactotron-core-contract"
 
 interface Command<Type extends CommandTypeKey, Payload> {
   type: CommandTypeKey
@@ -70,8 +70,8 @@ interface Command<Type extends CommandTypeKey, Payload> {
 Clients use the contract types to send properly typed commands to the server:
 
 ```typescript
-import { CommandType } from "reactotron-core-contract"
-import type { LogPayload, ApiResponsePayload, DisplayPayload } from "reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
+import type { LogPayload, ApiResponsePayload, DisplayPayload } from "@hurajgor/reactotron-core-contract"
 
 // Sending a log command
 const logPayload: LogPayload = {
@@ -114,8 +114,8 @@ Plugins import payload types to ensure they're sending properly structured data:
 ### Example: API Response Plugin
 
 ```typescript
-import type { ApiResponsePayload } from "reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "reactotron-core-client"
+import type { ApiResponsePayload } from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin } from "@hurajgor/reactotron-core-client"
 
 const apiResponse = () => (reactotron: ReactotronCore) => {
   return {
@@ -135,8 +135,8 @@ const apiResponse = () => (reactotron: ReactotronCore) => {
 ### Example: Benchmark Plugin
 
 ```typescript
-import type { BenchmarkReportPayload } from "reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "reactotron-core-client"
+import type { BenchmarkReportPayload } from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin } from "@hurajgor/reactotron-core-client"
 
 const benchmark = () => (reactotron: ReactotronCore) => {
   const benchmark = (title: string) => {
@@ -168,8 +168,8 @@ const benchmark = () => (reactotron: ReactotronCore) => {
 Plugins can also handle commands from the server by checking the command type:
 
 ```typescript
-import { CommandType } from "reactotron-core-contract"
-import type { StateValuesRequestPayload } from "reactotron-core-contract"
+import { CommandType } from "@hurajgor/reactotron-core-contract"
+import type { StateValuesRequestPayload } from "@hurajgor/reactotron-core-contract"
 
 const myPlugin = () => (reactotron) => {
   return {
@@ -235,7 +235,7 @@ const myPlugin = () => (reactotron) => {
 
 When creating a Reactotron plugin:
 
-1. Import the relevant payload types from `reactotron-core-contract`
+1. Import the relevant payload types from `@hurajgor/reactotron-core-contract`
 2. Use `CommandType` enum for command type strings
 3. Type your plugin functions with the payload types
 4. Return a plugin object that satisfies the `Plugin<ReactotronCore>` interface
@@ -243,8 +243,8 @@ When creating a Reactotron plugin:
 Example plugin structure:
 
 ```typescript
-import type { MyPayloadType } from "reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "reactotron-core-client"
+import type { MyPayloadType } from "@hurajgor/reactotron-core-contract"
+import type { ReactotronCore, Plugin } from "@hurajgor/reactotron-core-client"
 
 export default (config = {}) =>
   (reactotron: ReactotronCore) => {
@@ -274,6 +274,6 @@ export default (config = {}) =>
 
 ## Learn More
 
-- [Reactotron Core Client](../reactotron-core-client/README.md) - How to use the client
+- [Reactotron Core Client](../@hurajgor/reactotron-core-client/README.md) - How to use the client
 - [Creating Plugins](../../docs/plugins/index.md) - Guide to creating plugins
 - [Custom Commands](../../docs/custom-commands.md) - Working with custom commands

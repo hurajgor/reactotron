@@ -1,4 +1,4 @@
-import { createClient } from "../src/reactotron-core-client"
+import { createClient } from "../src/@hurajgor/reactotron-core-client"
 import WebSocket from "ws"
 
 const createSocket = (path) => new WebSocket(path)

@@ -9,7 +9,7 @@ const [gitTag] = args
 const [npmWorkspace, version] = gitTag.split("@")
 
 // #region assert tag matches 'app@1.1.1' format
-const GIT_TAG_REGEX = /^[a-z0-9-]+@[a-z0-9\.-]+$/ // 'reactotron-app@3.0.0' | 'reactotron-core-ui@2.0.1'
+const GIT_TAG_REGEX = /^[a-z0-9-]+@[a-z0-9\.-]+$/ // 'reactotron-app@3.0.0' | '@hurajgor/reactotron-core-ui@2.0.1'
 /** @see https://gist.github.com/jhorsman/62eeea161a13b80e39f5249281e17c39 */
 const SEM_VER_REGEX =
   /^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+)?$/

@@ -8,5 +8,5 @@ export default defineConfig({
   // Bundle the MCP SDK into the output (its CJS exports are broken)
   // Keep reactotron packages external — they're workspace peers
   noExternal: ["@modelcontextprotocol/sdk"],
-  external: ["reactotron-core-server", "reactotron-core-contract"],
+  external: ["reactotron-core-server", "@hurajgor/reactotron-core-contract"],
 })

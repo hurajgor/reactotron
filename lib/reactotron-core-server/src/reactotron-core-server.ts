@@ -10,7 +10,7 @@ import type {
   WssServerOptions,
   ServerEventKey,
   Command,
-} from "reactotron-core-contract"
+} from "@hurajgor/reactotron-core-contract"
 import { Server as WebSocketServer, OPEN, type RawData } from "ws"
 import validate from "./validation"
 import { repair } from "./repair-serialization"

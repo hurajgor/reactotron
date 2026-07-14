@@ -79,7 +79,7 @@ function createMainWindow() {
     }
   })
 
-  window.setBackgroundColor("#1a1b26") // see reactotron-core-ui for background color
+  window.setBackgroundColor("#1a1b26") // see @hurajgor/reactotron-core-ui for background color
 
   mainWindowState.manage(window)
 

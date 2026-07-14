@@ -2,7 +2,7 @@ import React from "react"
 import { shell } from "electron"
 import styled from "styled-components"
 import { reactotronLogo } from "../../images"
-import { EmptyState } from "reactotron-core-ui"
+import { EmptyState } from "@hurajgor/reactotron-core-ui"
 
 const WelcomeText = styled.div`
   font-size: 1.25em;

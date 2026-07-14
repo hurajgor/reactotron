@@ -1,6 +1,6 @@
 import React, { useContext } from "react"
 import styled from "styled-components"
-import { Header, ReactNativeContext } from "reactotron-core-ui"
+import { Header, ReactNativeContext } from "@hurajgor/reactotron-core-ui"
 import {
   MdOutlineAutoStories,
   MdOutlinePhotoCamera,

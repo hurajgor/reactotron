@@ -1,4 +1,4 @@
-import type { Plugin, ReactotronCore } from "reactotron-core-client"
+import type { Plugin, ReactotronCore } from "@hurajgor/reactotron-core-client"
 
 import createCommandHander from "./commandHandler"
 import createSendAction from "./sendAction"
