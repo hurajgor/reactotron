@@ -29,16 +29,27 @@ Use the Timeline to:
 - Select log levels independently from network traffic.
 - Inspect formatted, tree, or raw payloads and copy the data you need.
 - Keep a resizable inspector open while you compare requests and responses.
+- Capture `console.log`, `console.info`, `console.warn`, and `console.debug` calls without losing their additional arguments.
 
 ### Agentic development and MCP
 
-The Agent screen turns a connected React Native app into an inspectable runtime surface. Request a UI snapshot, search nodes by `testID`, label, text, role, or placeholder, then run supported press and fill actions. Accessibility selectors and scroll actions make the runtime usable by both people and coding agents.
+The Agent screen turns a connected React Native app into an inspectable runtime surface. Request a UI snapshot, search nodes by `testID`, label, text, role, or placeholder, then run supported press, fill, and scroll actions. Accessibility selectors make the runtime usable by both people and coding agents.
+
+Enable it in a React Native development configuration:
+
+```ts
+import Reactotron, { agentRuntime } from "reactotron-react-native"
+
+Reactotron.configure({ name: "My App" }).use(agentRuntime()).useReactNative().connect()
+```
+
+`agentRuntime()` captures React elements by default and can also be supplied with explicit nodes or action handlers when an interaction needs app-specific behavior.
 
 Reactotron’s MCP server exposes the same runtime and desktop capabilities to supported coding agents. See the [MCP guide](./docs/mcp.md) for setup and available tools.
 
 ### Themes and layout
 
-Choose a named color theme in Settings, switch to the compact sidebar, and opt into the newer Timeline event-table interface.
+Choose Tokyo Night, T3 Code, Catppuccin, GitHub Dark, One Dark Pro, Nord, Rose Pine, Gruvbox Dark, or Ayu Mirage in Settings. The newer Timeline event-table interface and compact sidebar are enabled by default, and both preferences can be changed there.
 
 ![Reactotron Settings with theme, Timeline, and sidebar preferences](./docs/plugins/images/readme/desktop-settings.png)
 
@@ -83,6 +94,8 @@ Reactotron includes integrations for [global errors](https://docs.infinite.red/r
 - [Architecture](https://docs.infinite.red/reactotron/contributing/architecture/)
 - [Monorepo guide](https://docs.infinite.red/reactotron/contributing/monorepo/)
 - [Release process](https://docs.infinite.red/reactotron/contributing/releasing/)
+
+The desktop development app identifies itself as **Reactotron Dev** and uses ports `9091` (server) and `4568` (MCP) by default, so it can run alongside a release installation. Override either with `REACTOTRON_SERVER_PORT` or `REACTOTRON_MCP_PORT` when needed.
 
 ## Credits
 
