@@ -12,13 +12,18 @@ const Container = styled.div`
   display: flex;
   padding: 4px 8px;
   margin: 20px 0px 50px;
-  border-radius: 4px;
+  border: 1px solid rgba(122, 162, 247, 0.4);
+  border-radius: 7px;
   cursor: pointer;
-  background-color: ${(props) => props.theme.backgroundLighter};
-  color: ${(props) => props.theme.foreground};
+  background-color: rgba(122, 162, 247, 0.14);
+  color: ${(props) => props.theme.highlight};
   align-items: center;
   justify-content: center;
   text-align: center;
+
+  &:hover {
+    background-color: rgba(122, 162, 247, 0.22);
+  }
 `
 
 function openDocs() {

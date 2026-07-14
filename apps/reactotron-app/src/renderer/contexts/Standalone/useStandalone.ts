@@ -1,4 +1,4 @@
-import { useCallback, useReducer } from "react"
+import { useCallback, useReducer, useRef } from "react"
 import { produce } from "immer"
 
 export enum ActionTypes {
@@ -6,10 +6,10 @@ export enum ActionTypes {
   ServerStopped = "SERVER_STOPPED",
   AddConnection = "ADD_CONNECTION",
   RemoveConnection = "REMOVE_CONNECTION",
+  SyncConnections = "SYNC_CONNECTIONS",
   ClearConnectionCommands = "CLEAR_CONNECTION_COMMANDS",
   CommandReceived = "COMMAND_RECEIVED",
   ChangeSelectedClientId = "CHANGE_SELECTED_CLIENT_ID",
-  AddCommandHandler = "ADD_COMMAND_HANDLER",
   PortUnavailable = "PORT_UNAVAILABLE",
 }
 
@@ -39,7 +39,6 @@ interface State {
   connections: Connection[]
   selectedClientId: string
   orphanedCommands: any[] // Command[]
-  commandListeners: ((command: any) => void)[] // ((command: Command) => void)[]
 }
 
 type Action =
@@ -49,10 +48,10 @@ type Action =
       type: ActionTypes.AddConnection | ActionTypes.RemoveConnection
       payload: ReactotronConnection
     }
+  | { type: ActionTypes.SyncConnections; payload: ReactotronConnection[] }
   | { type: ActionTypes.ChangeSelectedClientId; payload: string }
   | { type: ActionTypes.CommandReceived; payload: any } // TODO: Type this better!
   | { type: ActionTypes.ClearConnectionCommands }
-  | { type: ActionTypes.AddCommandHandler; payload: (command: any) => void }
   | { type: ActionTypes.PortUnavailable; payload: undefined }
 
 export function reducer(state: State, action: Action) {
@@ -128,6 +127,33 @@ export function reducer(state: State, action: Action) {
           }
         }
       })
+    case ActionTypes.SyncConnections:
+      return produce(state, (draftState) => {
+        const liveConnections = new Map(
+          action.payload.map((connection) => [connection.clientId, connection])
+        )
+
+        draftState.connections = draftState.connections.filter((connection) =>
+          liveConnections.has(connection.clientId)
+        )
+
+        action.payload.forEach((connection) => {
+          const existingConnection = draftState.connections.find(
+            (candidate) => candidate.clientId === connection.clientId
+          )
+
+          if (existingConnection) {
+            Object.assign(existingConnection, connection, { connected: true })
+            return
+          }
+
+          draftState.connections.push({ ...connection, commands: [], connected: true })
+        })
+
+        if (!liveConnections.has(draftState.selectedClientId)) {
+          draftState.selectedClientId = action.payload[0]?.clientId ?? null
+        }
+      })
     case ActionTypes.CommandReceived:
       return produce(state, (draftState) => {
         if (!action.payload.clientId) {
@@ -166,10 +192,6 @@ export function reducer(state: State, action: Action) {
 
         draftState.selectedClientId = action.payload
       })
-    case ActionTypes.AddCommandHandler:
-      return produce(state, (draftState) => {
-        draftState.commandListeners.push(action.payload)
-      })
     case ActionTypes.PortUnavailable:
       return produce(state, (draftState) => {
         console.error("Port unavailable!")
@@ -181,12 +203,12 @@ export function reducer(state: State, action: Action) {
 }
 
 function useStandalone() {
+  const commandListeners = useRef<((command: any) => void)[]>([])
   const [state, dispatch] = useReducer(reducer, {
     serverStatus: "stopped",
     connections: [],
     selectedClientId: null,
     orphanedCommands: [],
-    commandListeners: [],
   })
 
   // Called when the server successfully starts
@@ -208,20 +230,21 @@ function useStandalone() {
   }, [])
 
   // Called when commands are flowing in.
-  const commandReceived = useCallback(
-    (command: any) => {
-      // First dispatch to update state
-      dispatch({ type: ActionTypes.CommandReceived, payload: command })
+  const commandReceived = useCallback((command: any) => {
+    // First dispatch to update state
+    dispatch({ type: ActionTypes.CommandReceived, payload: command })
 
-      // Then notify listeners
-      state.commandListeners.forEach((cl) => cl(command))
-    },
-    [state.commandListeners]
-  )
+    // Then notify listeners
+    commandListeners.current.forEach((cl) => cl(command))
+  }, [])
 
   // Called when a client disconnects. NOTE: They could be coming back. This could happen with a reload of the simulator!
   const connectionDisconnected = useCallback((connection: ReactotronConnection) => {
     dispatch({ type: ActionTypes.RemoveConnection, payload: connection })
+  }, [])
+
+  const syncConnections = useCallback((connections: ReactotronConnection[]) => {
+    dispatch({ type: ActionTypes.SyncConnections, payload: connections })
   }, [])
 
   const clearSelectedConnectionCommands = useCallback(() => {
@@ -233,7 +256,7 @@ function useStandalone() {
   }, [])
 
   const addCommandListener = useCallback((callback: (command: any) => void) => {
-    dispatch({ type: ActionTypes.AddCommandHandler, payload: callback })
+    commandListeners.current.push(callback)
   }, [])
 
   const portUnavailable = useCallback(() => {
@@ -248,6 +271,7 @@ function useStandalone() {
     serverStopped,
     connectionEstablished,
     connectionDisconnected,
+    syncConnections,
     commandReceived,
     clearSelectedConnectionCommands,
     addCommandListener,

@@ -1,13 +1,16 @@
 import React from "react"
 import { ipcRenderer } from "electron"
 import styled from "styled-components"
-import { GoGear as SettingsIcon } from "react-icons/go"
-import { MdCompareArrows as ReverseTunnelIcon } from "react-icons/md"
-import { CgSmartphoneShake as ShakeDeviceIcon } from "react-icons/cg"
-import { IoReloadOutline as ReloadAppIcon } from "react-icons/io5"
+import {
+  MdOutlineAndroid,
+  MdOutlineCompareArrows as ReverseTunnelIcon,
+  MdOutlineReplay as ReloadAppIcon,
+  MdOutlineSettings as SettingsIcon,
+  MdOutlineVibration as ShakeDeviceIcon,
+} from "react-icons/md"
 import { EmptyState, Tooltip } from "reactotron-core-ui"
-import { FaAndroid } from "react-icons/fa"
 import { ItemContainer, ItemIconContainer } from "../SharedStyles"
+import { getConfiguredServerPort } from "../../../config"
 
 const Container = styled.div`
   margin: 50px 0px;
@@ -17,7 +20,7 @@ const TitleContainer = styled.div`
   display: flex;
   margin: 10px 0;
   padding-bottom: 10px;
-  border-bottom: 1px solid ${(props) => props.theme.highlight};
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   justify-content: space-between;
   align-items: baseline;
   gap: 20px;
@@ -49,29 +52,29 @@ const DeviceID = styled.div`
   font-size: 16px;
   margin-top: 15px;
   margin-bottom: 0px;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.support};
 `
 const HighlightedText = styled.div`
   display: inline-block;
   border-radius: 5px;
-  border: 1px solid ${(props) => props.theme.highlight};
-  padding: 2px;
-  color: ${(props) => props.theme.tag};
-  background-color: ${(props) => props.theme.line};
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  padding: 2px 5px;
+  color: ${(props) => props.theme.support};
+  background-color: ${(props) => props.theme.backgroundLighter};
 `
 const PortSettingsTitle = styled.div`
   font-size: 18px;
   margin: 10px 0;
   padding-bottom: 2px;
   color: ${(props) => props.theme.foregroundLight};
-  border-bottom: 1px solid ${(props) => props.theme.highlight};
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
 `
 const PortSettingsContainer = styled.div`
   display: flex;
   flex-direction: column;
   margin-bottom: 10px;
   padding: 10px;
-  border-radius: 5px;
+  border-radius: 8px;
   border: 1px solid ${(props) => props.theme.chromeLine};
   background-color: ${(props) => props.theme.chrome};
 `
@@ -91,10 +94,12 @@ const ArgName = styled.div`
 const ArgInput = styled.input`
   padding: 10px 12px;
   outline: none;
-  border-radius: 4px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
   width: 100px;
-  border: none;
-  font-size: 16px;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
+  font-size: 13px;
 `
 const PortSettingsIconContainer = styled.div`
   color: ${(props) => props.theme.foregroundLight};
@@ -103,7 +108,7 @@ const PortSettingsIconContainer = styled.div`
 function AndroidDeviceHelp() {
   const [androidDevices, setAndroidDevices] = React.useState([])
   const [portsVisible, setPortsVisible] = React.useState(false)
-  const [reactotronPort, setReactotronPort] = React.useState("9090")
+  const [reactotronPort, setReactotronPort] = React.useState(String(getConfiguredServerPort()))
   const [metroPort, setMetroPort] = React.useState("8081")
 
   // When the page loads, get the list of devices from ADB to help users debug android issues.
@@ -188,7 +193,7 @@ function AndroidDeviceHelp() {
           </PortSettingsContainer>
         )}
         {androidDevices.length === 0 ? (
-          <EmptyState icon={FaAndroid}>No Android devices connected via USB.</EmptyState>
+          <EmptyState icon={MdOutlineAndroid}>No Android devices connected via USB.</EmptyState>
         ) : (
           <AndroidDeviceList
             devices={androidDevices}
@@ -224,7 +229,7 @@ const AndroidDeviceList = ({
               data-for="reverse-tunnel"
             >
               <ItemIconContainer>
-                <ReverseTunnelIcon size={40} />
+                <ReverseTunnelIcon size={22} />
               </ItemIconContainer>
               Reverse Tunnel
               <Tooltip id="reverse-tunnel" multiline />
@@ -235,7 +240,7 @@ const AndroidDeviceList = ({
               data-for="reload-app"
             >
               <ItemIconContainer>
-                <ReloadAppIcon size={40} />
+                <ReloadAppIcon size={22} />
               </ItemIconContainer>
               Reload App
               <Tooltip id="reload-app" multiline />
@@ -246,7 +251,7 @@ const AndroidDeviceList = ({
               data-for="shake-device"
             >
               <ItemIconContainer>
-                <ShakeDeviceIcon size={40} />
+                <ShakeDeviceIcon size={22} />
               </ItemIconContainer>
               Shake
               <Tooltip id="shake-device" multiline />

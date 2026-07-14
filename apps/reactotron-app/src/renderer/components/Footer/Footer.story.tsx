@@ -54,6 +54,11 @@ const testConnections: Connection[] = [
   },
 ]
 
+const reloadHandlers = {
+  onRefreshConnections: () => {},
+  onReloadMetro: () => {},
+}
+
 storiesOf("components/Footer", module)
   .add("Collpased", () => (
     <Footer
@@ -68,6 +73,7 @@ storiesOf("components/Footer", module)
       onToggleMcp={() => {}}
       mcpRedactionEnforced
       onOpenMcpSettings={() => {}}
+      {...reloadHandlers}
     />
   ))
   .add("Collpased w/ connections", () => (
@@ -83,6 +89,7 @@ storiesOf("components/Footer", module)
       onToggleMcp={() => {}}
       mcpRedactionEnforced
       onOpenMcpSettings={() => {}}
+      {...reloadHandlers}
     />
   ))
   .add("Expanded", () => (
@@ -98,6 +105,7 @@ storiesOf("components/Footer", module)
       onToggleMcp={() => {}}
       mcpRedactionEnforced
       onOpenMcpSettings={() => {}}
+      {...reloadHandlers}
     />
   ))
   .add("Expanded w/ connections", () => (
@@ -113,6 +121,7 @@ storiesOf("components/Footer", module)
       onToggleMcp={() => {}}
       mcpRedactionEnforced
       onOpenMcpSettings={() => {}}
+      {...reloadHandlers}
     />
   ))
   .add("Expanded w/ lots connections", () => (
@@ -128,5 +137,6 @@ storiesOf("components/Footer", module)
       onToggleMcp={() => {}}
       mcpRedactionEnforced
       onOpenMcpSettings={() => {}}
+      {...reloadHandlers}
     />
   ))

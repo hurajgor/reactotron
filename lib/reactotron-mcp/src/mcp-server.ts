@@ -7,6 +7,7 @@ import type { Command } from "reactotron-core-contract"
 import { registerResources } from "./resources"
 import { registerTools } from "./tools"
 import { DEFAULT_SERVER_CONFIG, type McpRedactionServerConfig } from "./redaction"
+import type { ReactotronDesktopHost } from "./desktop-host"
 
 export interface ReactotronMcpServer {
   start(port?: number): Promise<void>
@@ -21,7 +22,8 @@ export interface ReactotronMcpServer {
 
 export function createMcpServer(
   reactotronServer: ReactotronServer,
-  redactionConfig?: Partial<McpRedactionServerConfig>
+  redactionConfig?: Partial<McpRedactionServerConfig>,
+  desktopHost?: ReactotronDesktopHost
 ): ReactotronMcpServer {
   let serverRedactionConfig: McpRedactionServerConfig = {
     ...DEFAULT_SERVER_CONFIG,
@@ -62,7 +64,7 @@ export function createMcpServer(
       { capabilities: { resources: {}, tools: {} } }
     )
     registerResources(mcp, reactotronServer, commandBuffer, serverRedactionConfig)
-    registerTools(mcp, reactotronServer, commandBuffer, serverRedactionConfig)
+    registerTools(mcp, reactotronServer, commandBuffer, serverRedactionConfig, desktopHost)
     return mcp
   }
 

@@ -3,7 +3,7 @@ sidebar_position: 6
 title: MCP Server (Claude Code)
 ---
 
-Reactotron includes a built-in [MCP](https://modelcontextprotocol.io/) server that lets AI coding assistants like [Claude Code](https://claude.ai/claude-code) read your app's debug events and send commands — all within a coding conversation.
+Reactotron includes a built-in [MCP](https://modelcontextprotocol.io/) server that lets AI coding assistants like [Claude Code](https://claude.ai/claude-code) read your app's debug events, inspect a React Native runtime, and send commands from a coding conversation.
 
 ## Getting started
 
@@ -15,7 +15,19 @@ Reactotron includes a built-in [MCP](https://modelcontextprotocol.io/) server th
 claude mcp add --transport http reactotron http://localhost:4567/mcp
 ```
 
-That's it. Claude Code can now read your app's timeline, inspect state, dispatch actions, and more.
+That's it. Claude Code can now read your app's timeline, inspect state, dispatch actions, and more. The development desktop app, **Reactotron Dev**, uses port `4568` by default, so use `http://localhost:4568/mcp` when that is the app you started.
+
+## Enable the React Native agent runtime
+
+The state and timeline tools work with a regular Reactotron connection. To let an MCP client inspect and operate React Native UI, add `agentRuntime()` to your development configuration:
+
+```ts
+import Reactotron, { agentRuntime } from "reactotron-react-native"
+
+Reactotron.configure({ name: "My App" }).use(agentRuntime()).useReactNative().connect()
+```
+
+The runtime captures React elements by default. You can also register explicit nodes, action handlers, or a custom snapshot provider when your app needs behavior that cannot be inferred from its rendered tree.
 
 ## What can Claude Code do?
 
@@ -44,6 +56,28 @@ Claude Code can also interact with your running app:
 - **Show image overlay** — overlay a design mockup on the running app (supports local files)
 - **Subscribe to state paths** — watch specific parts of state for changes
 - **Clear the event buffer** — reset what Claude sees to focus on new interactions
+
+### Inspect and operate React Native UI
+
+When `agentRuntime()` is enabled, MCP clients can work with semantic UI instead of screen coordinates:
+
+- **`agent_ui_snapshot`** — request the current runtime tree.
+- **`agent_ui_find`** — search that tree by `testID`, runtime `id` or type, text, accessibility label, role, hint, placeholder, enabled state, or visibility.
+- **`agent_ui_press`**, **`agent_ui_fill`**, and **`agent_ui_scroll`** — shortcuts for common actions. Scroll supports `ScrollView`, `FlatList`, and `SectionList` arguments.
+- **`agent_ui_action`** — run a registered or inferred action when the shortcut tools do not fit.
+
+Start with a snapshot or find request, prefer an exact `testID`, then use an accessibility selector when one is not available. Text, label, hint, and placeholder matching is case-insensitive substring matching. If more than one node matches, use the returned `id`, add selector fields, or pass `index` to choose one match. Actions return a fresh snapshot by default; the press, fill, and scroll shortcuts omit it by default for speed.
+
+## Control an embedded iOS Simulator
+
+On macOS, the desktop MCP host can control the iOS Simulators that Reactotron embeds. This requires Xcode Command Line Tools and an installed iOS Simulator runtime. These are local desktop operations, not React Native runtime actions.
+
+1. Use `list_ios_simulators` to find an available device and its UDID.
+2. Use `open_ios_simulator` to boot it and begin its Reactotron stream. Use `list_ios_simulator_creation_options` followed by `create_ios_simulator` only when you need a new persistent simulator.
+3. Use `agent_ui_snapshot`, `agent_ui_find`, and the action tools above to operate the app inside the device. Use `control_ios_simulator` only for device-level Home and orientation controls.
+4. Use `ios_simulator_screenshot` for visual verification, `reload_ios_app` to request a Metro reload, or `toggle_ios_simulator_appearance` to switch light and dark appearance.
+
+`create_ios_simulator` and `shutdown_ios_simulator` require `confirm: true`: creating a simulator persists it on the machine, while shutdown stops its stream and powers it off. `reconnect_ios_simulator` restarts a disconnected preview stream.
 
 ### Multi-app support
 
@@ -118,7 +152,9 @@ A few specific things worth knowing:
 
 ## Configuration
 
-The MCP port defaults to **4567**. There's no in-app UI to change it; the value is stored as `mcpPort` in Reactotron's electron-store config — at `~/Library/Application Support/Reactotron/config.json` on macOS, `%APPDATA%\Reactotron\config.json` on Windows, or `~/.config/Reactotron/config.json` on Linux. Edit the JSON and restart Reactotron to pick up the new port.
+The release desktop app defaults to MCP port **4567**; **Reactotron Dev** defaults to **4568** so it can run beside a release installation. The footer displays the active port whenever MCP is running. There is no in-app port editor: the release-app value is stored as `mcpPort` in Reactotron's electron-store config — at `~/Library/Application Support/Reactotron/config.json` on macOS, `%APPDATA%\Reactotron\config.json` on Windows, or `~/.config/Reactotron/config.json` on Linux. Edit the JSON and restart Reactotron to pick up a release-app port change.
+
+For a development run, set `REACTOTRON_MCP_PORT` before starting the app. The development identity keeps its own application data and pins its defaults to the development ports.
 
 The server only binds to `127.0.0.1` (localhost) and is not accessible from other machines on your network.
 
@@ -159,7 +195,8 @@ React Native app
     v
 Reactotron Desktop
     ├── relay server (reactotron-core-server)
-    └── MCP server (reactotron-mcp, HTTP on configurable port)
+    └── MCP server (reactotron-mcp, HTTP on a local port)
           ↑
-Claude Code
+          ├── coding assistant
+          └── desktop host (Agent runtime and iOS Simulator tools)
 ```

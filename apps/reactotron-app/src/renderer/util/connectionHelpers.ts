@@ -1,12 +1,9 @@
 import {
-  FaQuestion as IconDefault,
-  FaApple as IconPhoneApple,
-  FaAndroid as IconPhoneAndroid,
-  FaFirefox as IconBrowserFirefox,
-  FaSafari as IconBrowserSafari,
-  FaEdge as IconBrowserEdge,
-  FaChrome as IconBrowserChrome,
-} from "react-icons/fa"
+  MdOutlineAndroid as IconPhoneAndroid,
+  MdOutlineHelpOutline as IconDefault,
+  MdOutlineLanguage as IconBrowser,
+  MdOutlinePhoneIphone as IconPhoneApple,
+} from "react-icons/md"
 
 import { Connection } from "../contexts/Standalone/useStandalone"
 
@@ -88,16 +85,9 @@ const PHONE_ICONS = {
   ios: IconPhoneApple,
   android: IconPhoneAndroid,
 }
-const BROWSER_ICONS = {
-  Firefox: IconBrowserFirefox,
-  Chrome: IconBrowserChrome,
-  Safari: IconBrowserSafari,
-  Edge: IconBrowserEdge,
-}
-
 export function getIcon(connection: Connection) {
   if (connection.platform === "browser") {
-    return BROWSER_ICONS[getBrowserApp(connection)] || IconDefault
+    return IconBrowser
   } else {
     return PHONE_ICONS[connection.platform] || IconDefault
   }

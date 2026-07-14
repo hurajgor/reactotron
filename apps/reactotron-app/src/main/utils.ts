@@ -1,5 +1,570 @@
 import childProcess from "child_process"
-import { type BrowserWindow, dialog, ipcMain } from "electron"
+import fs from "fs"
+import http from "http"
+import net from "net"
+import path from "path"
+import {
+  app,
+  type BrowserWindow,
+  BrowserWindow as ElectronBrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  nativeImage,
+} from "electron"
+
+type IOSSimulator = {
+  name: string
+  state: string
+  udid: string
+  runtime: string
+}
+
+type IOSSimulatorCreationOption = {
+  deviceTypeIdentifier: string
+  name: string
+  runtimeIdentifier: string
+  runtimeName: string
+}
+
+const serveSimProcesses = new Map<
+  string,
+  { process: childProcess.ChildProcess; previewUrl: string }
+>()
+const simulatorRecordings = new Map<
+  string,
+  { filePath: string; process: childProcess.ChildProcess }
+>()
+const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
+
+function runCommand(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const process = childProcess.spawn(command, args, { shell: false })
+    let output = ""
+    let errorOutput = ""
+
+    process.stdout.on("data", (data) => {
+      output += data.toString()
+    })
+    process.stderr.on("data", (data) => {
+      errorOutput += data.toString()
+    })
+    process.on("error", reject)
+    process.on("close", (code) => {
+      if (code === 0) {
+        resolve(output)
+        return
+      }
+
+      reject(new Error(errorOutput || output || `${command} exited with code ${code}.`))
+    })
+  })
+}
+
+function getServeSimCliPath(): string {
+  const cliPath = path.join("node_modules", "serve-sim", "dist", "serve-sim.js")
+  const candidates = new Set([
+    path.join(process.resourcesPath, "app.asar.unpacked", cliPath),
+    path.join(process.resourcesPath, "app", cliPath),
+  ])
+
+  for (const startDirectory of [process.cwd(), app.getAppPath(), __dirname]) {
+    let directory = startDirectory
+    let parentDirectory = path.dirname(directory)
+    while (directory !== parentDirectory) {
+      candidates.add(path.join(directory, cliPath))
+      directory = parentDirectory
+      parentDirectory = path.dirname(directory)
+    }
+  }
+
+  const pathToCli = Array.from(candidates).find((candidate) => fs.existsSync(candidate))
+
+  if (!pathToCli) {
+    throw new Error("serve-sim is not installed. Reinstall Reactotron and try again.")
+  }
+
+  return pathToCli
+}
+
+function getAvailablePort(startingPort = 3200): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const tryPort = (port: number) => {
+      const server = net.createServer()
+      server.once("error", () => {
+        if (port >= startingPort + 49) {
+          reject(new Error("No available local port for the simulator preview."))
+          return
+        }
+        tryPort(port + 1)
+      })
+      server.once("listening", () => {
+        server.close(() => resolve(port))
+      })
+      server.listen(port, "127.0.0.1")
+    }
+
+    tryPort(startingPort)
+  })
+}
+
+async function captureIOSSimulatorScreenshot(udid: string) {
+  assertIOSSimulatorUdid(udid)
+  const directory = path.join(app.getPath("temp"), "reactotron", "simulator-screenshots")
+  await fs.promises.mkdir(directory, { recursive: true })
+  const filePath = path.join(directory, `simulator-${udid}-${Date.now()}.png`)
+  await runCommand("xcrun", ["simctl", "io", udid, "screenshot", filePath])
+  return filePath
+}
+
+async function getAvailableIOSSimulators(): Promise<IOSSimulator[]> {
+  const output = await runCommand("xcrun", ["simctl", "list", "devices", "--json"])
+  const devices = JSON.parse(output).devices as Record<string, Array<Record<string, unknown>>>
+
+  return Object.entries(devices)
+    .filter(([runtime]) => runtime.includes("SimRuntime.iOS"))
+    .flatMap(([runtime, runtimeDevices]) =>
+      runtimeDevices
+        .filter((device) => device.isAvailable !== false)
+        .map((device) => ({
+          name: String(device.name),
+          state: String(device.state),
+          udid: String(device.udid),
+          runtime: runtime.replace("com.apple.CoreSimulator.SimRuntime.", ""),
+        }))
+    )
+}
+
+async function bootIOSSimulator(udid: string): Promise<IOSSimulator> {
+  const simulators = await getAvailableIOSSimulators()
+  const simulator = simulators.find((item) => item.udid === udid)
+  if (!simulator) throw new Error("That iOS simulator is no longer available.")
+
+  if (simulator.state !== "Booted") {
+    await runCommand("xcrun", ["simctl", "boot", udid])
+    await runCommand("xcrun", ["simctl", "bootstatus", udid, "-b"])
+  }
+
+  return { ...simulator, state: "Booted" }
+}
+
+async function getIOSSimulatorCreationOptions(): Promise<IOSSimulatorCreationOption[]> {
+  const output = await runCommand("xcrun", ["simctl", "list", "runtimes", "--json"])
+  const runtimes = JSON.parse(output).runtimes as Array<Record<string, unknown>>
+  const [runtime] = runtimes
+    .filter(
+      (item) =>
+        item.platform === "iOS" &&
+        item.isAvailable === true &&
+        Array.isArray(item.supportedDeviceTypes)
+    )
+    .sort((left, right) =>
+      String(right.version).localeCompare(String(left.version), undefined, { numeric: true })
+    )
+
+  if (!runtime) throw new Error("No available iOS Simulator runtime is installed.")
+
+  return (runtime.supportedDeviceTypes as Array<Record<string, unknown>>)
+    .filter((deviceType) => deviceType.productFamily === "iPhone")
+    .map((deviceType) => ({
+      deviceTypeIdentifier: String(deviceType.identifier),
+      name: String(deviceType.name),
+      runtimeIdentifier: String(runtime.identifier),
+      runtimeName: String(runtime.name),
+    }))
+}
+
+async function startServeSim(
+  udid: string
+): Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }> {
+  const existingSurface = serveSimProcesses.get(udid)
+  if (existingSurface && existingSurface.process.exitCode === null) {
+    const previewUrl = existingSurface.previewUrl
+    return {
+      previewUrl,
+      streamUrl: `${previewUrl.replace(/\?.*$/, "")}/helper/${udid}/stream.mjpeg`,
+      wsUrl: `ws://127.0.0.1:${new URL(previewUrl).port}/helper/${udid}/ws`,
+    }
+  }
+
+  const port = await getAvailablePort()
+  const previewUrl = `http://127.0.0.1:${port}?device=${udid}&session=${Date.now()}`
+  const serveSimProcess = childProcess.spawn(
+    process.env.REACTOTRON_NODE_PATH || "node",
+    [getServeSimCliPath(), "--port", String(port), "--codec", "auto", udid],
+    { shell: false }
+  )
+
+  return new Promise((resolve, reject) => {
+    let output = ""
+    let settled = false
+    const timeout = setTimeout(() => {
+      finish(new Error("Timed out waiting for serve-sim to start."))
+    }, 20000)
+
+    const finish = (error?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        serveSimProcess.kill()
+        reject(error)
+      } else {
+        serveSimProcesses.set(udid, { process: serveSimProcess, previewUrl })
+        resolve({
+          previewUrl,
+          streamUrl: `http://127.0.0.1:${port}/helper/${udid}/stream.mjpeg`,
+          wsUrl: `ws://127.0.0.1:${port}/helper/${udid}/ws`,
+        })
+      }
+    }
+
+    const receiveOutput = (data: Buffer) => {
+      output += data.toString()
+      if (output.includes(`http://localhost:${port}`)) finish()
+    }
+
+    serveSimProcess.stdout.on("data", receiveOutput)
+    serveSimProcess.stderr.on("data", receiveOutput)
+    serveSimProcess.on("error", (error) => finish(error))
+    serveSimProcess.on("close", (code) => {
+      if (serveSimProcesses.get(udid)?.process === serveSimProcess) {
+        serveSimProcesses.delete(udid)
+      }
+      if (!settled) finish(new Error(output || `serve-sim exited with code ${code}.`))
+    })
+  })
+}
+
+function assertIOSSimulatorUdid(udid: unknown): asserts udid is string {
+  if (typeof udid !== "string" || !iosSimulatorUdid.test(udid)) {
+    throw new Error("Invalid iOS simulator identifier.")
+  }
+}
+
+async function runServeSimCommand(args: string[]) {
+  return runCommand(process.env.REACTOTRON_NODE_PATH || "node", [getServeSimCliPath(), ...args])
+}
+
+const reloadReactNativeViaMetro = (metroPort: number) =>
+  new Promise<string>((resolve, reject) => {
+    const request = http.get(
+      {
+        host: "localhost",
+        port: metroPort,
+        path: "/reload",
+      },
+      (response) => {
+        let body = ""
+
+        response.setEncoding("utf8")
+        response.on("data", (chunk) => {
+          body += chunk
+        })
+        response.on("end", () => {
+          if (response.statusCode && response.statusCode >= 400) {
+            reject(new Error(`Metro returned ${response.statusCode}: ${body}`))
+            return
+          }
+
+          resolve(body)
+        })
+      }
+    )
+
+    request.setTimeout(3000, () => {
+      request.destroy(new Error(`Metro did not respond on port ${metroPort}.`))
+    })
+    request.on("error", reject)
+  })
+
+export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("list-booted-ios-simulators", async () => {
+    try {
+      return { ok: true, simulators: await getAvailableIOSSimulators() }
+    } catch (error) {
+      return {
+        ok: false,
+        simulators: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("list-ios-simulator-surfaces", async () => {
+    try {
+      const simulators = await getAvailableIOSSimulators()
+      return {
+        ok: true,
+        simulators: simulators.map((simulator) => ({
+          ...simulator,
+          streaming: serveSimProcesses.has(simulator.udid),
+        })),
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        simulators: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("start-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const simulator = await bootIOSSimulator(udid)
+      return { ok: true, simulator, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("reconnect-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const existingSurface = serveSimProcesses.get(udid)
+      if (existingSurface) {
+        existingSurface.process.kill()
+        serveSimProcesses.delete(udid)
+      }
+
+      return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("shutdown-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const existingSurface = serveSimProcesses.get(udid)
+      if (existingSurface) {
+        existingSurface.process.kill()
+        serveSimProcesses.delete(udid)
+      }
+      await runCommand("xcrun", ["simctl", "shutdown", udid])
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("list-ios-simulator-creation-options", async () => {
+    try {
+      return { ok: true, options: await getIOSSimulatorCreationOptions() }
+    } catch (error) {
+      return {
+        ok: false,
+        options: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("create-ios-simulator-surface", async (_event, deviceTypeIdentifier: unknown) => {
+    try {
+      if (typeof deviceTypeIdentifier !== "string") throw new Error("Invalid iOS simulator type.")
+      const options = await getIOSSimulatorCreationOptions()
+      const option = options.find((item) => item.deviceTypeIdentifier === deviceTypeIdentifier)
+      if (!option) throw new Error("That iOS simulator type is not available.")
+
+      const name = `Reactotron ${option.name} ${new Date().toISOString().replace(/[:.]/g, "-")}`
+      const udid = (
+        await runCommand("xcrun", [
+          "simctl",
+          "create",
+          name,
+          option.deviceTypeIdentifier,
+          option.runtimeIdentifier,
+        ])
+      ).trim()
+      assertIOSSimulatorUdid(udid)
+      await runCommand("xcrun", ["simctl", "boot", udid])
+      await runCommand("xcrun", ["simctl", "bootstatus", udid, "-b"])
+
+      return {
+        ok: true,
+        simulator: { name, runtime: option.runtimeName, state: "Booted", udid },
+        ...(await startServeSim(udid)),
+      }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    "ios-simulator-surface-command",
+    async (_event, udid: unknown, command: unknown) => {
+      try {
+        assertIOSSimulatorUdid(udid)
+        if (command === "home") {
+          await runServeSimCommand(["button", "home", "--device", udid])
+        } else if (command === "landscape_left" || command === "portrait") {
+          await runServeSimCommand(["rotate", command, "--device", udid])
+        } else {
+          throw new Error("Unsupported iOS simulator command.")
+        }
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle("save-ios-simulator-screenshot", async (event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const result = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Simulator Screenshot",
+        defaultPath: "simulator-screenshot.png",
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      })
+      if (result.canceled || !result.filePath) return { ok: true, canceled: true }
+
+      const temporaryScreenshot = await captureIOSSimulatorScreenshot(udid)
+      await fs.promises.copyFile(temporaryScreenshot, result.filePath)
+      return { ok: true, filePath: result.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("ios-simulator-screenshot", async (event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const choice = await dialog.showMessageBox(window ?? undefined, {
+        title: "Simulator Screenshot",
+        message: "What would you like to do with this screenshot?",
+        buttons: ["Save to File", "Copy to Clipboard", "Cancel"],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      })
+      if (choice.response === 2) return { ok: true, canceled: true }
+
+      const temporaryScreenshot = await captureIOSSimulatorScreenshot(udid)
+      if (choice.response === 1) {
+        clipboard.writeImage(nativeImage.createFromPath(temporaryScreenshot))
+        return { ok: true, action: "copied" }
+      }
+
+      const save = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Simulator Screenshot",
+        defaultPath: "simulator-screenshot.png",
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      })
+      if (save.canceled || !save.filePath) return { ok: true, canceled: true }
+      await fs.promises.copyFile(temporaryScreenshot, save.filePath)
+      return { ok: true, action: "saved", filePath: save.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("capture-ios-simulator-screenshot", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const filePath = await captureIOSSimulatorScreenshot(udid)
+      const imageBase64 = await fs.promises.readFile(filePath, "base64")
+      return { ok: true, filePath, imageBase64, mimeType: "image/png" }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("toggle-ios-simulator-recording", async (event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const activeRecording = simulatorRecordings.get(udid)
+      if (activeRecording) {
+        const finished = new Promise<void>((resolve) =>
+          activeRecording.process.once("close", resolve)
+        )
+        activeRecording.process.kill("SIGINT")
+        await finished
+        simulatorRecordings.delete(udid)
+        const window = ElectronBrowserWindow.fromWebContents(event.sender)
+        const save = await dialog.showSaveDialog(window ?? undefined, {
+          title: "Save Simulator Recording",
+          defaultPath: "simulator-recording.mov",
+          filters: [{ name: "QuickTime movie", extensions: ["mov"] }],
+        })
+        if (save.canceled || !save.filePath) {
+          await fs.promises.rm(activeRecording.filePath, { force: true })
+          return { ok: true, canceled: true, recording: false }
+        }
+        await fs.promises.copyFile(activeRecording.filePath, save.filePath)
+        await fs.promises.rm(activeRecording.filePath, { force: true })
+        return { ok: true, recording: false, filePath: save.filePath }
+      }
+
+      const directory = path.join(app.getPath("temp"), "reactotron", "simulator-recordings")
+      await fs.promises.mkdir(directory, { recursive: true })
+      const filePath = path.join(directory, `simulator-recording-${udid}-${Date.now()}.mov`)
+
+      const recordingProcess = childProcess.spawn(
+        "xcrun",
+        ["simctl", "io", udid, "recordVideo", filePath],
+        { shell: false }
+      )
+      simulatorRecordings.set(udid, { process: recordingProcess, filePath })
+      recordingProcess.on("close", () => {
+        if (simulatorRecordings.get(udid)?.process === recordingProcess) {
+          simulatorRecordings.delete(udid)
+        }
+      })
+      recordingProcess.on("error", () => {
+        if (simulatorRecordings.get(udid)?.process === recordingProcess) {
+          simulatorRecordings.delete(udid)
+        }
+      })
+      return { ok: true, recording: true }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("toggle-ios-simulator-appearance", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const currentAppearance = (
+        await runCommand("xcrun", ["simctl", "ui", udid, "appearance"])
+      ).trim()
+      const appearance = currentAppearance === "dark" ? "light" : "dark"
+      await runCommand("xcrun", ["simctl", "ui", udid, "appearance", appearance])
+      return { ok: true, appearance }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("reload-ios-simulator", async () => {
+    const metroPort = Number(process.env.REACTOTRON_METRO_PORT ?? process.env.METRO_PORT ?? 8081)
+    console.log(`[Reactotron Desktop] React Native reload requested via Metro port ${metroPort}.`)
+
+    try {
+      await reloadReactNativeViaMetro(metroPort)
+
+      const message = `Sent reload request to Metro on port ${metroPort}.`
+      console.log(`[Reactotron Desktop] ${message}`)
+      return { ok: true, message }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.log("[Reactotron Desktop] Failed to reload via Metro.", message)
+      return { ok: false, message }
+    }
+  })
+}
+
+export const stopIOSSimulatorSurfaces = () => {
+  serveSimProcesses.forEach(({ process }) => process.kill())
+  serveSimProcesses.clear()
+  simulatorRecordings.forEach(({ process }) => process.kill("SIGINT"))
+  simulatorRecordings.clear()
+}
 
 // This function sets up numerous IPC commands for communicating with android devices.
 // It also watches for android devices being plugged in and unplugged.

@@ -7,6 +7,7 @@ import { Platform, TurboModuleRegistry } from "react-native"
 
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import { ArgType } from "reactotron-core-client"
+import { agentRuntime } from "reactotron-react-native"
 import { mst } from "reactotron-mst"
 import apisaucePlugin from "reactotron-apisauce"
 import { reactotronRedux } from "reactotron-redux"
@@ -29,6 +30,7 @@ const reactotron = Reactotron.configure({
     additionalRules: { sensitiveKeys: ["myInternalField"] },
   },
 })
+  .use(agentRuntime())
   .use(apisaucePlugin({ ignoreContentTypes: /^(image)\/.*$/i }))
   .use(reactotronRedux())
   .use(

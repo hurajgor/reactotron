@@ -22,7 +22,7 @@ const Container = styled.div`
 const ContentContainer = styled.div`
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 18px;
   overflow-y: scroll;
 `
 
@@ -30,16 +30,21 @@ const ConnectionContainer = styled.div`
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 10px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid ${(props) => props.theme.line};
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 const IconContainer = styled.div`
-  color: ${(props) => props.theme.foregroundLight};
+  color: ${(props) => props.theme.highlight};
 `
 const AppName = styled.div`
   padding-left: 10px;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.foregroundLight};
   width: 25%;
+  font-weight: 700;
 `
 const PlatformDetails = styled.div`
   border-left: 1px solid ${(props) => props.theme.subtleLine};
@@ -49,7 +54,7 @@ const PlatformDetails = styled.div`
 `
 const Screen = styled.div`
   border-left: 1px solid ${(props) => props.theme.subtleLine};
-  color: ${(props) => props.theme.backgroundHighlight};
+  color: ${(props) => props.theme.support};
   padding-left: 10px;
   margin-left: 10px;
 `
@@ -68,7 +73,7 @@ function ConnectionCell({ connection }: { connection: Connection }) {
   return (
     <ConnectionContainer>
       <IconContainer>
-        <ConnectionIcon size={32} />
+        <ConnectionIcon size={20} />
       </IconContainer>
       <AppName>{connectionName}</AppName>
       <PlatformDetails>
@@ -86,10 +91,12 @@ function Connections() {
     <Container>
       <Header title="Connections" isDraggable />
       <ContentContainer>
-        {connections.length > 0 ? (
-          connections.map((connection) => (
-            <ConnectionCell key={connection.clientId} connection={connection} />
-          ))
+        {connections.some((connection) => connection.connected) ? (
+          connections
+            .filter((connection) => connection.connected)
+            .map((connection) => (
+              <ConnectionCell key={connection.clientId} connection={connection} />
+            ))
         ) : (
           <Welcome />
         )}

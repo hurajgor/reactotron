@@ -1,6 +1,7 @@
 import { getPort } from "get-port-please"
 import { createServer } from "reactotron-core-server"
 import { createMcpServer } from "../src/mcp-server"
+import type { ReactotronDesktopHost } from "../src/desktop-host"
 import WebSocket from "ws"
 import http from "http"
 
@@ -280,10 +281,51 @@ describe("tools", () => {
     expect(names).toContain("swap_state")
     expect(names).toContain("send_custom_command")
     expect(names).toContain("list_custom_commands")
+    expect(names).toContain("agent_ui_snapshot")
+    expect(names).toContain("agent_ui_action")
+    expect(names).toContain("agent_ui_find")
+    expect(names).toContain("agent_ui_press")
+    expect(names).toContain("agent_ui_fill")
+    expect(names).toContain("agent_ui_scroll")
     expect(names).toContain("show_overlay")
     expect(names).toContain("clear_timeline")
     expect(names).toContain("subscribe_state")
     expect(names).toContain("unsubscribe_state")
+    expect(names).not.toContain("list_ios_simulators")
+  })
+
+  test("registers desktop simulator tools only when a desktop host is supplied", async () => {
+    const host: ReactotronDesktopHost = {
+      listIOSSimulators: async () => ({ ok: true, simulators: [] }),
+      listIOSSimulatorCreationOptions: async () => ({ ok: true, options: [] }),
+      openIOSSimulator: async () => ({ ok: true }),
+      createIOSSimulator: async () => ({ ok: true }),
+      reconnectIOSSimulator: async () => ({ ok: true }),
+      shutdownIOSSimulator: async () => ({ ok: true }),
+      controlIOSSimulator: async () => ({ ok: true }),
+      reloadIOSSimulator: async () => ({ ok: true }),
+      toggleIOSSimulatorAppearance: async () => ({ ok: true }),
+      captureIOSSimulatorScreenshot: async () => ({ ok: true, imageBase64: "iVBORw0KGgo=", mimeType: "image/png" }),
+    }
+    const desktopPort = await getPort({ random: true })
+    const desktopMcp = createMcpServer(relay, undefined, host)
+    await desktopMcp.start(desktopPort)
+
+    try {
+      const res = await mcpRequest(desktopPort, {
+        jsonrpc: "2.0",
+        method: "tools/list",
+        id: 10,
+        params: {},
+      })
+      const result = parseSSE(res.body)
+      const names = result.result.tools.map((tool: any) => tool.name)
+      expect(names).toContain("list_ios_simulators")
+      expect(names).toContain("ios_simulator_screenshot")
+      expect(names).toContain("shutdown_ios_simulator")
+    } finally {
+      desktopMcp.stop()
+    }
   })
 
   test("send_custom_command errors with no apps connected", async () => {
@@ -349,6 +391,252 @@ describe("tools", () => {
       expect(data.status).toBe("success")
       expect(data.commands.length).toBe(1)
       expect(data.commands[0].command).toBe("reload")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_snapshot returns app semantic UI tree", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.snapshot.request") {
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              snapshot: {
+                route: "Login",
+                nodes: [
+                  { testID: "login-email-input", type: "TextInput", enabled: true, visible: true },
+                  { testID: "login-submit-button", type: "Pressable", text: "Sign In", enabled: true, visible: true },
+                ],
+              },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 22,
+        params: { name: "agent_ui_snapshot", arguments: {} },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.snapshot.route).toBe("Login")
+      expect(data.snapshot.nodes.map((node: any) => node.testID)).toContain("login-submit-button")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_find returns nodes matching accessibility selector", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.snapshot.request") {
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              snapshot: {
+                nodes: [
+                  { id: "node-1", type: "Pressable", role: "button", label: "Sign In", enabled: true, visible: true },
+                  { id: "node-2", type: "TextInput", role: "text", placeholder: "Email address", enabled: true, visible: true },
+                ],
+              },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 26,
+        params: {
+          name: "agent_ui_find",
+          arguments: { selector: { role: "button", label: "sign" } },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.count).toBe(1)
+      expect(data.matches[0].id).toBe("node-1")
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_press sends a testID action and returns app result", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              testID: parsed.payload.testID,
+              result: { pressed: true },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 23,
+        params: { name: "agent_ui_press", arguments: { testID: "login-submit-button" } },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("press")
+      expect(data.testID).toBe("login-submit-button")
+      expect(data.result.pressed).toBe(true)
+      expect(received[0].payload.action).toBe("press")
+      expect(received[0].payload.includeSnapshot).toBe(false)
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_press sends selector action when testID is unavailable", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              result: { selector: parsed.payload.selector },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 27,
+        params: {
+          name: "agent_ui_press",
+          arguments: { selector: { role: "button", label: "Sign In" } },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("press")
+      expect(received[0].payload.testID).toBeUndefined()
+      expect(received[0].payload.selector).toEqual({ role: "button", label: "Sign In" })
+      expect(received[0].payload.includeSnapshot).toBe(false)
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_fill sends text value to app handler", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              testID: parsed.payload.testID,
+              result: { value: parsed.payload.value },
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 24,
+        params: {
+          name: "agent_ui_fill",
+          arguments: { testID: "login-email-input", text: "qa@example.com" },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("fill")
+      expect(data.result.value).toBe("qa@example.com")
+      expect(received[0].payload.includeSnapshot).toBe(false)
+    } finally {
+      app.close()
+    }
+  })
+
+  test("agent_ui_scroll sends scroll args to app handler", async () => {
+    const app = await connectMockApp(relayPort)
+    try {
+      const received: any[] = []
+      app.on("message", (msg) => {
+        const parsed = JSON.parse(msg.toString())
+        if (parsed.type === "agent.ui.action.request") {
+          received.push(parsed)
+          app.send(JSON.stringify({
+            type: "agent.ui.response",
+            payload: {
+              requestId: parsed.payload.requestId,
+              status: "success",
+              action: parsed.payload.action,
+              testID: parsed.payload.testID,
+              result: parsed.payload.args,
+            },
+          }))
+        }
+      })
+
+      const res = await mcpRequest(mcpPort, {
+        jsonrpc: "2.0",
+        method: "tools/call",
+        id: 25,
+        params: {
+          name: "agent_ui_scroll",
+          arguments: { testID: "results-list", offset: 320, animated: false },
+        },
+      })
+      const result = parseSSE(res.body)
+      const data = JSON.parse(result.result.content[0].text)
+      expect(data.status).toBe("success")
+      expect(data.action).toBe("scroll")
+      expect(data.result.offset).toBe(320)
+      expect(data.result.animated).toBe(false)
+      expect(received[0].payload.action).toBe("scroll")
+      expect(received[0].payload.args.offset).toBe(320)
+      expect(received[0].payload.includeSnapshot).toBe(false)
     } finally {
       app.close()
     }

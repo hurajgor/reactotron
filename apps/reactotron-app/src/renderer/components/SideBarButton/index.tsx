@@ -12,6 +12,7 @@ type Props = {
   text: string
   hideTopBar?: boolean
   iconSize?: number
+  isCompact?: boolean
   onPress?: () => void
 }
 

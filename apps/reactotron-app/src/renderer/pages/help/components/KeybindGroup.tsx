@@ -10,7 +10,8 @@ const Contianer = styled.div`
 `
 
 const Name = styled.div`
-  color: ${(props) => props.theme.highlight};
+  color: ${(props) => props.theme.foregroundLight};
+  font-weight: 700;
 `
 
 const KeybindContainer = styled.div`

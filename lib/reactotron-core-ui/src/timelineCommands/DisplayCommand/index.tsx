@@ -1,6 +1,6 @@
 import React, { FunctionComponent } from "react"
 import styled from "styled-components"
-import { MdContentCopy } from "react-icons/md"
+import { MdOutlineContentCopy } from "react-icons/md"
 import type { DisplayPayload } from "reactotron-core-contract"
 
 import TimelineCommand from "../../components/TimelineCommand"
@@ -21,7 +21,7 @@ function buildToolbar(commandPayload, copyToClipboard: (text: string) => void) {
 
   return [
     {
-      icon: MdContentCopy,
+      icon: MdOutlineContentCopy,
       onClick: () => {
         const message = commandPayload.value
 

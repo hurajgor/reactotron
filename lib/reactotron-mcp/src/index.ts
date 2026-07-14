@@ -1,5 +1,10 @@
 export { createMcpServer } from "./mcp-server"
 export type { ReactotronMcpServer } from "./mcp-server"
+export type {
+  IOSSimulator,
+  IOSSimulatorCreationOption,
+  ReactotronDesktopHost,
+} from "./desktop-host"
 export {
   DEFAULT_REDACTION_RULES,
   DEFAULT_SERVER_CONFIG,

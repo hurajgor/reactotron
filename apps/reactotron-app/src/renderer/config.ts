@@ -12,11 +12,30 @@ type StoreType = {
   mcpAllowClientRemoveRules: boolean
 }
 
+function readRuntimeConfig() {
+  const isDevAppFromEnv = process.env.REACTOTRON_DEV_APP === "1"
+  const defaultServerPortFromEnv = Number(
+    process.env.REACTOTRON_SERVER_PORT ?? (isDevAppFromEnv ? 9091 : 9090)
+  )
+  const defaultMcpPortFromEnv = Number(
+    process.env.REACTOTRON_MCP_PORT ?? (isDevAppFromEnv ? 4568 : 4567)
+  )
+
+  return {
+    isDevApp: isDevAppFromEnv,
+    defaultServerPort: defaultServerPortFromEnv,
+    defaultMcpPort: defaultMcpPortFromEnv,
+  }
+}
+
+export const runtimeConfig = readRuntimeConfig()
+const { isDevApp, defaultServerPort, defaultMcpPort } = runtimeConfig
+
 const config = new Store<StoreType>({
   schema: {
     serverPort: {
       type: "number",
-      default: 9090,
+      default: defaultServerPort,
     },
     commandHistory: {
       type: "number",
@@ -24,7 +43,7 @@ const config = new Store<StoreType>({
     },
     mcpPort: {
       type: "number",
-      default: 4567,
+      default: defaultMcpPort,
     },
     mcpRedactionSensitiveKeys: {
       type: "array",
@@ -54,13 +73,32 @@ const config = new Store<StoreType>({
 
 // Setup defaults
 if (!config.has("serverPort")) {
-  config.set("serverPort", 9090)
+  config.set("serverPort", defaultServerPort)
 }
 if (!config.has("commandHistory")) {
   config.set("commandHistory", 500)
 }
 if (!config.has("mcpPort")) {
-  config.set("mcpPort", 4567)
+  config.set("mcpPort", defaultMcpPort)
+}
+
+// The dev app must run beside the released app. Keep its saved defaults pinned
+// away from the production ports so stale config cannot restart it on 9090.
+if (isDevApp && config.get("serverPort") !== defaultServerPort) {
+  config.set("serverPort", defaultServerPort)
+}
+if (isDevApp && config.get("mcpPort") !== defaultMcpPort) {
+  config.set("mcpPort", defaultMcpPort)
+}
+
+export function getConfiguredServerPort() {
+  if (isDevApp) return defaultServerPort
+  return config.get("serverPort") as number
+}
+
+export function getConfiguredMcpPort() {
+  if (isDevApp) return defaultMcpPort
+  return config.get("mcpPort") as number
 }
 
 export default config

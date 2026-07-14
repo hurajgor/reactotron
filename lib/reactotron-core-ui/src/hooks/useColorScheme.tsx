@@ -1,32 +1,33 @@
 import React from "react"
-import { ColorScheme } from "../themes"
+import { themeNames, type ThemeName } from "../themes"
 
-function getColorScheme({ matches }: MediaQueryList | MediaQueryListEvent): ColorScheme {
-  return matches ? "dark" : "light"
+const themeModeStorageKey = "reactotron.themeMode"
+const themeModeChangeEvent = "reactotron-theme-mode-changed"
+
+function getStoredThemeName(): ThemeName {
+  if (typeof window === "undefined") return "tokyoNight"
+
+  const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
+  if (themeNames.includes(savedThemeMode as ThemeName)) return savedThemeMode as ThemeName
+
+  return "tokyoNight"
 }
 
-function useColorScheme(): ColorScheme {
-  const mediaQueryRef = React.useRef<MediaQueryList | null>(window?.matchMedia?.("(prefers-color-scheme: dark)") || null)
-
-  const [colorScheme, setColorScheme] = React.useState<ColorScheme>(() => {
-    if (typeof window === "undefined" || !mediaQueryRef.current) return "dark"
-    return getColorScheme(mediaQueryRef.current)
-  })
+function useColorScheme(): ThemeName {
+  const [themeName, setThemeName] = React.useState<ThemeName>(getStoredThemeName)
 
   React.useEffect(() => {
-    const mediaQuery = mediaQueryRef.current
-
-    if (!mediaQuery) return () => {}
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setColorScheme(getColorScheme(e))
+    const handleThemeModeChange = () => {
+      setThemeName(getStoredThemeName())
     }
 
-    mediaQuery.addEventListener("change", handleChange)
-    return () => mediaQuery.removeEventListener("change", handleChange)
+    window.addEventListener(themeModeChangeEvent, handleThemeModeChange)
+    return () => {
+      window.removeEventListener(themeModeChangeEvent, handleThemeModeChange)
+    }
   }, [])
 
-  return colorScheme
+  return themeName
 }
 
 export default useColorScheme

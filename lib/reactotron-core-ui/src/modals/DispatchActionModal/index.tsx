@@ -23,12 +23,13 @@ const ActionLabel = styled.label`
   color: ${(props) => props.theme.heading};
 `
 const ActionInput = styled.textarea`
-  border: 0;
-  border-bottom: 1px solid ${(props) => props.theme.line};
-  font-size: 25px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
+  padding: 10px;
+  font-size: 14px;
   color: ${(props) => props.theme.foregroundLight};
-  line-height: 40px;
-  background-color: inherit;
+  line-height: 20px;
+  background-color: ${(props) => props.theme.background};
   min-width: 462px;
   max-width: 462px;
   height: 150px;

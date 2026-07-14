@@ -1,19 +1,25 @@
-import React from "react"
+import React, { useContext, useState } from "react"
 import { HashRouter as Router, Route, Routes } from "react-router-dom"
+import { LuPanelRight } from "react-icons/lu"
 import styled from "styled-components"
 
 import SideBar from "./components/SideBar"
 import Footer from "./components/Footer"
+import DeviceSurface from "./components/DeviceSurface"
+import AppPreferencesContext from "./contexts/AppPreferences"
 import RootContextProvider from "./contexts"
 import RootModals from "./RootModals"
 
 import Home from "./pages/home"
 import Timeline from "./pages/timeline"
+import Network from "./pages/network"
+import Agent from "./pages/agent"
 import Subscriptions from "./pages/state/Subscriptions"
 import Snapshots from "./pages/state/Snapshots"
 import Overlay from "./pages/reactNative/Overlay"
 import Storybook from "./pages/reactNative/Storybook"
 import CustomCommands from "./pages/customCommands"
+import Settings from "./pages/settings"
 import Help from "./pages/help"
 
 const AppContainer = styled.div`
@@ -28,6 +34,7 @@ const AppContainer = styled.div`
 `
 
 const TopSection = styled.div`
+  position: relative;
   overflow: hidden;
   display: flex;
   flex-grow: 1;
@@ -38,9 +45,40 @@ const MainContainer = styled.div`
   display: flex;
   flex-direction: row;
   flex: 1;
+  min-width: 350px;
 `
 
+const PanelToggle = styled.button<{ $isOpen: boolean }>`
+  position: absolute;
+  z-index: 3;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: ${(props) => (props.$isOpen ? props.theme.backgroundLighter : "transparent")};
+  color: ${(props) => props.theme.foregroundDark};
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+
+  &:hover {
+    color: ${(props) => props.theme.foreground};
+  }
+`
+
+function TimelineRoute() {
+  const { enableNewTimeline } = useContext(AppPreferencesContext)
+
+  return enableNewTimeline ? <Network title="Timeline" /> : <Timeline />
+}
+
 function App() {
+  const [isDeviceSurfaceOpen, setIsDeviceSurfaceOpen] = useState(true)
+
   return (
     <Router>
       <RootContextProvider>
@@ -54,7 +92,13 @@ function App() {
                 <Route path="/" element={<Home />} />
 
                 {/* Timeline */}
-                <Route path="/timeline" element={<Timeline />} />
+                <Route path="/timeline" element={<TimelineRoute />} />
+
+                {/* Network */}
+                <Route path="/network" element={<Network />} />
+
+                {/* Agent */}
+                <Route path="/agent" element={<Agent />} />
 
                 {/* State */}
                 <Route path="/state/subscriptions" element={<Subscriptions />} />
@@ -67,10 +111,24 @@ function App() {
                 {/* Custom Commands */}
                 <Route path="/customCommands" element={<CustomCommands />} />
 
+                {/* Settings */}
+                <Route path="/settings" element={<Settings />} />
+
                 {/* Help */}
                 <Route path="/help" element={<Help />} />
               </Routes>
             </MainContainer>
+            <DeviceSurface isOpen={isDeviceSurfaceOpen} />
+            <PanelToggle
+              type="button"
+              $isOpen={isDeviceSurfaceOpen}
+              title={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
+              aria-label={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
+              aria-pressed={isDeviceSurfaceOpen}
+              onClick={() => setIsDeviceSurfaceOpen((isOpen) => !isOpen)}
+            >
+              <LuPanelRight size={18} />
+            </PanelToggle>
           </TopSection>
           <Footer />
         </AppContainer>

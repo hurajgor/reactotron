@@ -13,9 +13,11 @@ export const Row = styled.div`
 `
 
 export const Title = styled.div`
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.foregroundLight};
   margin-bottom: 10px;
   margin-top: 20px;
+  font-size: 13px;
+  font-weight: 700;
 `
 
 export const Text = styled.div`

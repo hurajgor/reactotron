@@ -69,6 +69,17 @@ export interface ClientOptions<Client> extends Omit<LifeCycleMethods, "onCommand
   onDisconnect?: () => void
 
   /**
+   * Automatically reconnect when the websocket closes unexpectedly.
+   * Default: false. React Native enables this by default.
+   */
+  reconnect?: boolean
+
+  /**
+   * Delay between reconnect attempts in milliseconds. Default: 2000.
+   */
+  reconnectDelay?: number
+
+  /**
    * The NODE_ENV environment, if any.
    */
   environment?: string

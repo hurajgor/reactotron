@@ -1,14 +1,39 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, ipcMain } from "electron"
 import path from "path"
 import { format as formatUrl } from "url"
 import log from "electron-log"
+import Store from "electron-store"
 import { autoUpdater } from "electron-updater"
 import windowStateKeeper from "electron-window-state"
 
 import createMenu from "./menu"
-import { setupAndroidDeviceIPCCommands } from "./utils"
+import {
+  setupAndroidDeviceIPCCommands,
+  setupSimulatorIPCCommands,
+  stopIOSSimulatorSurfaces,
+} from "./utils"
 
 const isDevelopment = process.env.NODE_ENV !== "production"
+const isDevApp = process.env.REACTOTRON_DEV_APP === "1"
+const appName = isDevApp ? "Reactotron Dev" : "Reactotron"
+
+Store.initRenderer()
+
+if (isDevApp) {
+  app.setName(appName)
+  app.setPath("userData", path.join(app.getPath("appData"), appName))
+}
+
+ipcMain.on("get-runtime-config", (event) => {
+  const defaultServerPort = Number(process.env.REACTOTRON_SERVER_PORT ?? (isDevApp ? 9091 : 9090))
+  const defaultMcpPort = Number(process.env.REACTOTRON_MCP_PORT ?? (isDevApp ? 4568 : 4567))
+
+  event.returnValue = {
+    isDevApp,
+    defaultServerPort,
+    defaultMcpPort,
+  }
+})
 
 class AppUpdater {
   constructor() {
@@ -22,13 +47,13 @@ let mainWindow: BrowserWindow | null
 
 function createMainWindow() {
   const mainWindowState = windowStateKeeper({
-    file: "reactotron-window-state.json",
+    file: isDevApp ? "reactotron-dev-window-state.json" : "reactotron-window-state.json",
     defaultWidth: 650,
     defaultHeight: 800,
   })
 
   const window = new BrowserWindow({
-    title: "Reactotron",
+    title: appName,
     x: mainWindowState.x,
     y: mainWindowState.y,
     width: mainWindowState.width,
@@ -54,7 +79,7 @@ function createMainWindow() {
     }
   })
 
-  window.setBackgroundColor("#1e1e1e") // see reactotron-core-ui for background color
+  window.setBackgroundColor("#1a1b26") // see reactotron-core-ui for background color
 
   mainWindowState.manage(window)
 
@@ -81,6 +106,24 @@ function createMainWindow() {
     })
   })
 
+  window.webContents.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown" || !input.meta) return
+
+    const key = input.key.toLowerCase()
+    const shortcut =
+      input.shift && key === "a"
+        ? "appearance"
+        : key === "s"
+          ? "screenshot"
+          : key === "r"
+            ? "record"
+            : null
+    if (!shortcut) return
+
+    event.preventDefault()
+    window.webContents.send("ios-simulator-shortcut", shortcut)
+  })
+
   createMenu(window, isDevelopment)
 
   new AppUpdater() // eslint-disable-line no-new
@@ -90,6 +133,8 @@ function createMainWindow() {
 
 // quit application when all windows are closed
 app.on("window-all-closed", app.quit)
+
+app.on("before-quit", stopIOSSimulatorSurfaces)
 
 app.on("activate", () => {
   // on macOS it is common to re-create a window even after all windows have been closed
@@ -104,4 +149,5 @@ app.on("ready", () => {
 
   // Sets up the electron IPC commands for android functionality on the Help screen.
   setupAndroidDeviceIPCCommands(mainWindow)
+  setupSimulatorIPCCommands()
 })

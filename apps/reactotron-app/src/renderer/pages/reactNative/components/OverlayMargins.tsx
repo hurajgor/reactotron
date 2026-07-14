@@ -8,11 +8,12 @@ import type { ChangeEvent } from "react"
 const Input = styled.input`
   margin-right: 4px;
   width: 45px;
-  border: 0;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
   padding: 8px 5px;
-  font-size: 1.1rem;
-  background-color: ${(props) => props.theme.backgroundLight};
-  color: ${(props) => props.theme.backgroundColor};
+  font-size: 13px;
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
 `
 
 type OverlayMargin = "marginTop" | "marginLeft" | "marginBottom" | "marginRight"

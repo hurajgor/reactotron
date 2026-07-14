@@ -29,6 +29,10 @@ export interface ErrorLogPayload {
 
 export type LogPayload =
   | {
+      level: "info"
+      message: string
+    }
+  | {
       level: "debug"
       message: string
     }

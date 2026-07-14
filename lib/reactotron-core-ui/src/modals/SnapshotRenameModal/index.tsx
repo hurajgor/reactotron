@@ -13,12 +13,13 @@ const NameLabel = styled.label`
   color: ${(props) => props.theme.heading};
 `
 const NameInput = styled.input`
-  border: 0;
-  border-bottom: 1px solid ${(props) => props.theme.line};
-  font-size: 25px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 7px;
+  padding: 0 10px;
+  font-size: 14px;
   color: ${(props) => props.theme.foregroundLight};
-  line-height: 40px;
-  background-color: inherit;
+  line-height: 36px;
+  background-color: ${(props) => props.theme.background};
 `
 
 interface Props {

@@ -2,8 +2,7 @@ import React, { useState, useContext, useReducer } from "react"
 import { Header, EmptyState, CustomCommandsContext } from "reactotron-core-ui"
 import type { CustomCommand } from "reactotron-core-ui"
 import styled from "styled-components"
-import { MdSearch } from "react-icons/md"
-import { FaMagic } from "react-icons/fa"
+import { MdOutlineAutoFixHigh, MdOutlineSearch } from "react-icons/md"
 import { produce } from "immer"
 
 const Container = styled.div`
@@ -16,7 +15,7 @@ const CommandsContainer = styled.div`
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 20px 40px;
+  padding: 18px 28px;
   padding-bottom: 0;
 `
 
@@ -33,12 +32,12 @@ const SearchLabel = styled.p`
   color: ${(props) => props.theme.foregroundDark};
 `
 const SearchInput = styled.input`
-  border-radius: 4px;
+  border-radius: 7px;
   padding: 10px;
   flex: 1;
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
-  border: none;
-  color: ${(props) => props.theme.foregroundDark};
+  background-color: ${(props) => props.theme.background};
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  color: ${(props) => props.theme.foreground};
   font-size: 14px;
 `
 
@@ -47,13 +46,20 @@ const ButtonContianer = styled.div`
   flex-direction: column;
   width: 100%;
   margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 8px;
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
   color: ${(props) => props.theme.foreground};
 `
 const Title = styled.div`
-  font-size: 24px;
+  color: ${(props) => props.theme.foregroundLight};
+  font-size: 16px;
+  font-weight: 700;
   margin-bottom: 12px;
 `
 const Description = styled.div`
+  color: ${(props) => props.theme.foregroundDark};
   margin-bottom: 12px;
 `
 const ArgsContainer = styled.div`
@@ -63,17 +69,20 @@ const SendButton = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: ${(props) => props.theme.backgroundLighter};
-  border-radius: 4px;
-  width: 200px;
-  min-height: 50px;
+  background-color: rgba(122, 162, 247, 0.14);
+  border: 1px solid rgba(122, 162, 247, 0.4);
+  border-radius: 7px;
+  width: 170px;
+  min-height: 36px;
   margin-bottom: 24px;
   cursor: pointer;
-  color: white;
+  color: ${(props) => props.theme.highlight};
+  font-size: 12px;
+  font-weight: 700;
   transition: background-color 0.25s ease-in-out;
 
   &:hover {
-    background-color: #e73435;
+    background-color: rgba(122, 162, 247, 0.22);
   }
 `
 const ArgContainer = styled.div`
@@ -87,10 +96,12 @@ const ArgName = styled.div`
 const ArgInput = styled.input`
   padding: 10px 12px;
   outline: none;
-  border-radius: 4px;
+  border-radius: 7px;
   width: 90%;
-  border: none;
-  font-size: 16px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.background};
+  color: ${(props) => props.theme.foreground};
+  font-size: 13px;
 `
 
 // TODO: This item thing is getting complicated, move it out!
@@ -190,7 +201,7 @@ function CustomCommands() {
         actions={[
           {
             tip: "Search",
-            icon: MdSearch,
+            icon: MdOutlineSearch,
             onClick: () => {
               setSearchOpen(!isSearchOpen)
             },
@@ -206,7 +217,7 @@ function CustomCommands() {
       </Header>
       <CommandsContainer>
         {customCommands.length === 0 ? (
-          <EmptyState icon={FaMagic} title="No Custom Commands">
+          <EmptyState icon={MdOutlineAutoFixHigh} title="No Custom Commands">
             When your app registers a custom command it will show here!
           </EmptyState>
         ) : (

@@ -101,7 +101,7 @@ const ResetButton = styled.button`
   padding: 4px 10px;
   cursor: pointer;
   &:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: ${(props) => props.theme.backgroundHighlight};
     border-color: ${(props) => props.theme.foreground};
   }
 `

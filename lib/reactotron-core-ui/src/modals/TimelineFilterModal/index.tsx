@@ -42,14 +42,14 @@ const BulkActionContainer = styled.div`
 `
 const BulkAction = styled.span`
   cursor: pointer;
-  color: ${(props) => props.theme.tag};
+  color: ${(props) => props.theme.highlight};
 `
 
 const GroupName = styled.div`
   font-size: 18px;
   margin: 10px 0;
   padding-bottom: 2px;
-  border-bottom: 1px solid ${(props) => props.theme.highlight};
+  border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   color: ${(props) => props.theme.foregroundLight};
 `
 

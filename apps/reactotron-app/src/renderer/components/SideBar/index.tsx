@@ -5,10 +5,17 @@ import StandaloneContext from "../../contexts/Standalone"
 import SidebarStateless from "./Sidebar"
 
 function SideBar() {
-  const { isSideBarOpen } = useContext(LayoutContext)
-  const { serverStatus } = useContext(StandaloneContext)
+  const { sideBarMode, toggleSideBar } = useContext(LayoutContext)
+  const { restartServer, serverStatus } = useContext(StandaloneContext)
 
-  return <SidebarStateless isOpen={isSideBarOpen} serverStatus={serverStatus} />
+  return (
+    <SidebarStateless
+      mode={sideBarMode}
+      onToggleCompact={toggleSideBar}
+      onRestartServer={restartServer}
+      serverStatus={serverStatus}
+    />
+  )
 }
 
 export default SideBar

@@ -5,14 +5,20 @@ const Button = styled.button.attrs<{ selected: boolean }>((props) => ({
   selected: props.selected ? props.selected : false,
 }))`
   height: 30px;
-  padding: "0 15px";
+  padding: 0 12px;
   font-size: 13px;
   margin-right: 4px;
-  background-color: ${(props) => props.theme.subtleLine};
-  border-radius: 2px;
-  border: 1px solid ${(props) => props.theme.backgroundSubtleDark};
+  background-color: ${(props) =>
+    props.selected ? "rgba(122, 162, 247, 0.18)" : props.theme.backgroundSubtleLight};
+  border-radius: 7px;
+  border: 1px solid ${(props) => (props.selected ? props.theme.highlight : props.theme.chromeLine)};
   cursor: pointer;
-  color: ${(props) => (props.selected ? props.theme.bold : props.theme.foregroundDark)};
+  color: ${(props) => (props.selected ? props.theme.highlight : props.theme.foregroundDark)};
+
+  &:hover {
+    color: ${(props) => props.theme.foreground};
+    background-color: ${(props) => props.theme.backgroundLighter};
+  }
 `
 
 interface OverlayButtonProps {

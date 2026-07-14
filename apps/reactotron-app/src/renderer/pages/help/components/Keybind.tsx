@@ -25,12 +25,12 @@ const KeystrokeContainer = styled.div.attrs(() => ({}))<KeystrokeContainerProps>
 `
 const Keystroke = styled.span`
   font-weight: bold;
-  padding: 4px 12px;
+  padding: 3px 9px;
   margin: 0 2px;
-  background-color: ${(props) => props.theme.foreground};
-  color: ${(props) => props.theme.background};
-  border-radius: 4px;
-  border-bottom: 2px solid ${(props) => props.theme.highlight};
+  background-color: ${(props) => props.theme.backgroundLighter};
+  color: ${(props) => props.theme.foregroundLight};
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 6px;
 `
 const Plus = styled.span`
   margin: 0 2px;

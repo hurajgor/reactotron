@@ -1,8 +1,14 @@
 import React from "react"
 import styled from "styled-components"
-import { MdSwapVert as ExpandIcon, MdSettings as SettingsIcon, MdShield as ShieldIcon } from "react-icons/md"
+import {
+  MdOutlineReplay as ReloadIcon,
+  MdOutlineRefresh as RefreshIcon,
+  MdOutlineSecurity as ShieldIcon,
+  MdOutlineSettings as SettingsIcon,
+  MdOutlineSwapVert as ExpandIcon,
+} from "react-icons/md"
 
-import config from "../../config"
+import { getConfiguredServerPort } from "../../config"
 import {
   getPlatformName,
   getPlatformDetails,
@@ -22,58 +28,135 @@ const Container = styled.div`
 const ConnectionContainer = styled.div`
   display: flex;
   flex: 1;
+  min-width: 0;
   overflow-x: auto;
   height: 85px;
+  align-items: center;
 `
 
 interface ContentContainerProps {
   $isOpen: boolean
 }
 const ContentContainer = styled.div.attrs(() => ({}))<ContentContainerProps>`
+  position: relative;
   display: flex;
   flex-direction: row;
   background-color: ${(props) => props.theme.subtleLine};
-  padding: 0 10px;
+  padding: 0 350px 0 12px;
   justify-content: space-between;
   align-items: center;
   cursor: ${(props) => (props.$isOpen ? "auto" : "pointer")};
-  height: ${(props) => (props.$isOpen ? "85px" : "25px")};
+  height: ${(props) => (props.$isOpen ? "88px" : "28px")};
+  box-sizing: border-box;
+`
+
+const CollapsedSummary = styled.div`
+  display: grid;
+  grid-template-columns: minmax(155px, 1fr) minmax(0, 1.4fr) minmax(155px, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 `
 
 const ConnectionInfo = styled.div`
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const StatusInfo = styled(ConnectionInfo)`
+  text-align: left;
+  color: ${(props) => props.theme.foreground};
+`
+
+const PrimaryConnectionInfo = styled(ConnectionInfo)`
+  color: ${(props) => props.theme.foregroundLight};
+  font-weight: 600;
+`
+
+const ReloadButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  background-color: ${(props) => props.theme.backgroundLighter};
+  color: ${(props) => props.theme.foregroundDark};
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${(props) => props.theme.foreground};
+    background-color: ${(props) => `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
+  }
 `
 
 const ExpandContainer = styled.div`
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 22px;
+  border-radius: 4px;
   cursor: pointer;
+
+  &:hover {
+    background-color: ${(props) => `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
+  }
 `
 
 interface McpButtonProps {
   $active: boolean
 }
 
-const McpGroup = styled.div`
+const FooterControls = styled.div`
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
 `
 
 const McpButton = styled.div.attrs(() => ({}))<McpButtonProps>`
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 8px;
-  border-radius: 3px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
+  line-height: 1;
   user-select: none;
-  background-color: ${(props) => props.$active ? "rgba(80, 200, 120, 0.15)" : "transparent"};
-  border: 1px solid ${(props) => props.$active ? "rgba(80, 200, 120, 0.4)" : props.theme.chromeLine};
-  color: ${(props) => props.$active ? "#50c878" : props.theme.foregroundDark};
+  box-sizing: border-box;
+  background-color: ${(props) =>
+    props.$active
+      ? `color-mix(in srgb, ${props.theme.highlight} 14%, transparent)`
+      : "transparent"};
+  border: 1px solid
+    ${(props) =>
+      props.$active
+        ? `color-mix(in srgb, ${props.theme.highlight} 40%, transparent)`
+        : props.theme.chromeLine};
+  color: ${(props) => (props.$active ? props.theme.highlight : props.theme.foregroundDark)};
   &:hover {
-    background-color: ${(props) => props.$active ? "rgba(80, 200, 120, 0.25)" : "rgba(255,255,255,0.05)"};
+    background-color: ${(props) =>
+      props.$active
+        ? `color-mix(in srgb, ${props.theme.highlight} 22%, transparent)`
+        : `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
   }
 `
 
@@ -81,26 +164,29 @@ const McpDot = styled.div<McpButtonProps>`
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: ${(props) => props.$active ? "#50c878" : props.theme.foregroundDark};
+  background-color: ${(props) =>
+    props.$active ? props.theme.support : props.theme.foregroundDark};
 `
 
 const McpSettingsButton = styled.div`
   display: flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   color: ${(props) => props.theme.foregroundDark};
   &:hover {
     color: ${(props) => props.theme.foreground};
-    background-color: rgba(255,255,255,0.05);
+    background-color: ${(props) => `color-mix(in srgb, ${props.theme.highlight} 8%, transparent)`};
   }
 `
 
 const RedactionBadge = styled.span<{ $warning?: boolean }>`
   display: flex;
   align-items: center;
-  color: ${(props) => props.$warning ? "#e8a838" : "inherit"};
+  color: ${(props) => (props.$warning ? props.theme.warning : "inherit")};
 `
 
 function renderExpanded(
@@ -111,14 +197,16 @@ function renderExpanded(
 ) {
   return (
     <ConnectionContainer>
-      {connections.map((c) => (
-        <ConnectionSelector
-          key={c.id}
-          selectedConnection={selectedConnection}
-          connection={c}
-          onClick={() => onChangeConnection(c.clientId)}
-        />
-      ))}
+      {connections
+        .filter((connection) => connection.connected)
+        .map((c) => (
+          <ConnectionSelector
+            key={c.id}
+            selectedConnection={selectedConnection}
+            connection={c}
+            onClick={() => onChangeConnection(c.clientId)}
+          />
+        ))}
     </ConnectionContainer>
   )
 }
@@ -136,19 +224,22 @@ function renderCollapsed(
   connections: Connection[],
   selectedConnection: Connection | null
 ) {
+  const connectionText =
+    serverStatus === "started"
+      ? renderConnectionInfo(selectedConnection)
+      : serverStatus === "portUnavailable"
+        ? `Port ${getConfiguredServerPort()} unavailable.`
+        : "Waiting for server to start"
+
   return (
-    <>
-      <ConnectionInfo>
-        port {config.get("serverPort")} | {connections.length} connections
-      </ConnectionInfo>
-      {serverStatus === "portUnavailable" && (
-        <ConnectionInfo>Port 9090 unavailable.</ConnectionInfo>
-      )}
-      {serverStatus === "started" && (
-        <ConnectionInfo>{renderConnectionInfo(selectedConnection)}</ConnectionInfo>
-      )}
-      {serverStatus === "stopped" && <ConnectionInfo>Waiting for server to start</ConnectionInfo>}
-    </>
+    <CollapsedSummary>
+      <StatusInfo>
+        port {getConfiguredServerPort()} |{" "}
+        {connections.filter((connection) => connection.connected).length} connections
+      </StatusInfo>
+      <PrimaryConnectionInfo>{connectionText}</PrimaryConnectionInfo>
+      <div />
+    </CollapsedSummary>
   )
 }
 
@@ -159,11 +250,13 @@ interface Props {
   isOpen: boolean
   setIsOpen: (isOpen: boolean) => void
   onChangeConnection: (clientId: string | null) => void
+  onRefreshConnections: () => void
   mcpStatus: McpStatus
   mcpPort: number | null
   onToggleMcp: () => void
   mcpRedactionEnforced: boolean
   onOpenMcpSettings: () => void
+  onReloadMetro: () => void
 }
 
 function Header({
@@ -173,41 +266,80 @@ function Header({
   isOpen,
   setIsOpen,
   onChangeConnection,
+  onRefreshConnections,
   mcpStatus,
   mcpPort,
   onToggleMcp,
   mcpRedactionEnforced,
   onOpenMcpSettings,
+  onReloadMetro,
 }: Props) {
-  const renderMethod = isOpen ? renderExpanded : renderCollapsed
-
   return (
     <Container>
       <ContentContainer onClick={() => !isOpen && setIsOpen(true)} $isOpen={isOpen}>
-        {renderMethod(serverStatus, connections, selectedConnection, onChangeConnection)}
-        <McpGroup>
+        {isOpen
+          ? renderExpanded(serverStatus, connections, selectedConnection, onChangeConnection)
+          : renderCollapsed(serverStatus, connections, selectedConnection)}
+        <FooterControls>
+          {serverStatus === "started" && (
+            <ReloadButton
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRefreshConnections()
+              }}
+              title="Refresh connected devices"
+            >
+              <RefreshIcon size={12} />
+              Refresh devices
+            </ReloadButton>
+          )}
+          {serverStatus === "started" && (
+            <ReloadButton
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onReloadMetro()
+              }}
+              title="Reload React Native apps connected to Metro"
+            >
+              <ReloadIcon size={12} />
+              Reload Metro
+            </ReloadButton>
+          )}
           <McpButton
             $active={mcpStatus === "started"}
-            onClick={(e) => { e.stopPropagation(); onToggleMcp() }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleMcp()
+            }}
             title={mcpStatus === "started" ? `MCP running on port ${mcpPort}` : "Start MCP server"}
           >
             <McpDot $active={mcpStatus === "started"} />
             {mcpStatus === "started" ? `MCP :${mcpPort}` : "MCP"}
-            {mcpStatus === "started" && (
-              mcpRedactionEnforced
-                ? <RedactionBadge title="Sensitive data is redacted"><ShieldIcon size={10} /></RedactionBadge>
-                : <RedactionBadge $warning title="Redaction disabled — sensitive data exposed"><ShieldIcon size={10} /></RedactionBadge>
-            )}
+            {mcpStatus === "started" &&
+              (mcpRedactionEnforced ? (
+                <RedactionBadge title="Sensitive data is redacted">
+                  <ShieldIcon size={10} />
+                </RedactionBadge>
+              ) : (
+                <RedactionBadge $warning title="Redaction disabled — sensitive data exposed">
+                  <ShieldIcon size={10} />
+                </RedactionBadge>
+              ))}
           </McpButton>
           {mcpStatus === "started" && (
             <McpSettingsButton
-              onClick={(e) => { e.stopPropagation(); onOpenMcpSettings() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenMcpSettings()
+              }}
               title="MCP redaction settings"
             >
               <SettingsIcon size={14} />
             </McpSettingsButton>
           )}
-        </McpGroup>
+        </FooterControls>
         <ExpandContainer onClick={() => setIsOpen(!isOpen)}>
           <ExpandIcon size={18} />
         </ExpandContainer>

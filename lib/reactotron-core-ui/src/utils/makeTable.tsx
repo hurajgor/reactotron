@@ -25,7 +25,7 @@ export const ValueContainer = styled.div.attrs(() => ({}))<ValueContainerProps>`
   user-select: text;
   cursor: text;
   color: ${(props) => {
-    if (props.$value === null || props.$value === undefined) return props.theme.tag
+    if (props.$value === null || props.$value === undefined) return props.theme.keyword
     switch (typeof props.$value) {
       case "boolean":
       case "number":

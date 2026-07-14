@@ -25,7 +25,7 @@ test("the 4 functions send the right data", () => {
   expect(results[1].type).toBe("log")
   expect(results[2].type).toBe("log")
   expect(results[3].type).toBe("log")
-  expect(results[0].payload.level).toBe("debug")
+  expect(results[0].payload.level).toBe("info")
   expect(results[1].payload.level).toBe("debug")
   expect(results[2].payload.level).toBe("warn")
   expect(results[3].payload.level).toBe("error")

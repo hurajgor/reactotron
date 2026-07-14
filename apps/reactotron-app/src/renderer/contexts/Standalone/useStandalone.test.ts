@@ -3,6 +3,26 @@ import { act, renderHook } from "@testing-library/react"
 import useStandalone from "./useStandalone"
 
 describe("contexts/Standalone/useStandalone", () => {
+  describe("Server Handling", () => {
+    it("should clear port unavailable when the server starts again", () => {
+      const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation()
+      const { result } = renderHook(() => useStandalone())
+
+      act(() => {
+        result.current.portUnavailable()
+      })
+
+      expect(result.current.serverStatus).toEqual("portUnavailable")
+
+      act(() => {
+        result.current.serverStarted()
+      })
+
+      expect(result.current.serverStatus).toEqual("started")
+      consoleErrorSpy.mockRestore()
+    })
+  })
+
   describe("Connection Handling", () => {
     it("should handle new connections and add them to our list", () => {
       const { result } = renderHook(() => useStandalone())
@@ -133,6 +153,27 @@ describe("contexts/Standalone/useStandalone", () => {
       })
 
       expect(result.current.connections[0].connected).toBeFalsy()
+    })
+
+    it("should reconcile stale connections with the server's live connections", () => {
+      const { result } = renderHook(() => useStandalone())
+
+      act(() => {
+        result.current.connectionEstablished({ clientId: "stale", id: 0, platform: "ios" })
+        result.current.connectionEstablished({ clientId: "live", id: 1, platform: "android" })
+        result.current.selectConnection("stale")
+      })
+
+      act(() => {
+        result.current.syncConnections([
+          { clientId: "live", id: 1, platform: "android", name: "Connected device" },
+        ])
+      })
+
+      expect(result.current.connections).toEqual([
+        expect.objectContaining({ clientId: "live", connected: true, name: "Connected device" }),
+      ])
+      expect(result.current.selectedClientId).toEqual("live")
     })
 
     it("should not change the selected connection id if this was not the selected connection", () => {

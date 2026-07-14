@@ -1,9 +1,9 @@
 import React from "react"
 import styled from "styled-components"
 import {
-  MdLabel as TagIcon,
-  MdExpandLess as IconOpen,
-  MdExpandMore as IconClosed,
+  MdOutlineExpandLess as IconOpen,
+  MdOutlineExpandMore as IconClosed,
+  MdOutlineLabel as TagIcon,
 } from "react-icons/md"
 
 import ActionButton from "../ActionButton"
@@ -18,6 +18,11 @@ const Container = styled.div.attrs(() => ({}))<ContainerProps>`
   border-bottom: ${(props) => `1px solid ${props.theme.line}`};
   background-color: ${(props) =>
     props.$isOpen ? props.theme.backgroundSubtleLight : props.theme.background};
+
+  &:hover {
+    background-color: ${(props) =>
+      props.$isOpen ? props.theme.backgroundSubtleLight : props.theme.backgroundLighter};
+  }
 `
 
 const TopBarContainer = styled.div`
@@ -25,7 +30,7 @@ const TopBarContainer = styled.div`
   justify-content: space-between;
   align-items: flex-start;
   cursor: pointer;
-  padding: 15px 20px;
+  padding: 12px 18px;
 `
 
 const TimestampContainer = styled.div`
@@ -47,15 +52,17 @@ interface TitleTextProps {
 }
 const TitleText = styled.div.attrs(() => ({}))<TitleTextProps>`
   display: flex;
-  color: ${(props) => (props.$isImportant ? props.theme.tagComplement : props.theme.tag)};
-  background-color: ${(props) => (props.$isImportant ? props.theme.tag : "transparent")};
-  border-radius: 4px;
-  padding: 4px 8px;
+  color: ${(props) => (props.$isImportant ? props.theme.background : props.theme.support)};
+  background-color: ${(props) => (props.$isImportant ? props.theme.keyword : "transparent")};
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 700;
 `
 
 const PreviewContainer = styled.div`
   flex: 1;
-  color: ${(props) => props.theme.highlight};
+  color: ${(props) => props.theme.foreground};
   text-align: left;
   overflow: hidden;
   word-break: break-all;
@@ -72,7 +79,7 @@ const Spacer = styled.div`
 `
 
 const ExpandIconContainer = styled.div`
-  color: ${(props) => props.theme.backgroundHighlight};
+  color: ${(props) => props.theme.foregroundDark};
 `
 
 const ChildrenContainer = styled.div`
