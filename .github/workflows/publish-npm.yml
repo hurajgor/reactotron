@@ -1,0 +1,37 @@
+name: Publish scoped npm packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: Comma-separated scoped workspace names to publish
+        required: true
+        default: "@hurajgor/reactotron-core-contract,@hurajgor/reactotron-core-client,@hurajgor/reactotron-react-native"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: corepack enable
+      - run: corepack yarn install --immutable
+      - run: corepack yarn build
+      - run: corepack yarn package:validate
+      - name: Publish selected packages
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          IFS=',' read -ra packages <<< "$PACKAGES"
+          for package in "${packages[@]}"; do
+            corepack yarn workspace "$package" npm publish --access public
+          done
