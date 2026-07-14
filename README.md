@@ -22,6 +22,10 @@ Use Reactotron to:
 - hot swap your app's state using Redux or mobx-state-tree
 - show image overlay in React Native
 - track your Async Storage in React Native
+- inspect, search, and filter network requests alongside application logs
+- inspect React Native runtime nodes and run supported actions from the Agent screen
+- control connected iOS Simulators directly from the desktop app on macOS
+- connect coding agents through MCP for runtime and simulator workflows
 
 You plug it into your app as a dev dependency so it adds nothing to your production builds.
 
@@ -30,6 +34,32 @@ You plug it into your app as a dev dependency so it adds nothing to your product
 Reactotron on the left, demo React Native app on the right.
 
 ![Desktop](./docs/plugins/images/readme/reactotron-demo-app.gif)
+
+### Desktop tools
+
+#### Network and logs
+
+The Network screen brings API traffic and Reactotron logs into one workspace. Search requests and logs, filter traffic by method, status, duration, content type, host, endpoint, time window, or duplicates, and inspect request, response, headers, and raw payloads without losing your place in the event list.
+
+#### Agent and MCP
+
+The Agent screen can request a runtime snapshot from a connected React Native app, search nodes by `testID`, label, text, role, or placeholder, then run supported press and fill actions. Reactotron's MCP server exposes the same runtime capabilities to coding agents, along with desktop-host controls when the desktop app is available. See the [MCP guide](./docs/mcp.md) for setup and available tools.
+
+#### Embedded iOS Simulator (macOS)
+
+Open the simulator panel from the desktop app to work with a booted iOS Simulator without switching to Simulator.app. Reactotron can discover available simulators, create an iPhone simulator from an installed runtime, boot and stream it locally, and provide device controls in the panel.
+
+Requirements: macOS with Xcode Command Line Tools and at least one installed iOS Simulator runtime.
+
+The embedded surface supports Home, reload, reconnect, shutdown, rotation, screenshots, screen recording, pointer gestures, keyboard input, and paste. Screenshot capture offers **Save to File** or **Copy to Clipboard**. Recording starts immediately, shows a red **REC** state, and asks for a destination only after you stop it.
+
+| Shortcut      | Action                                                            |
+| ------------- | ----------------------------------------------------------------- |
+| `Cmd+S`       | Capture a screenshot and choose Save to File or Copy to Clipboard |
+| `Cmd+R`       | Start recording; press again to stop and choose where to save     |
+| `Cmd+Shift+A` | Toggle the simulator appearance between light and dark            |
+
+Keyboard input uses the US-ASCII keyboard mapping supported by the local simulator stream.
 
 ## Installation
 
