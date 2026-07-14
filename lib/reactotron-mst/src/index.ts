@@ -1,1 +1,1 @@
-export * from "./@hurajgor/reactotron-mst"
+export * from "./reactotron-mst"

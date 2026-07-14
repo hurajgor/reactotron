@@ -1,5 +1,5 @@
 import type { ApiResponsePayload } from "@hurajgor/reactotron-core-contract"
-import type { ReactotronCore, Plugin } from "../@hurajgor/reactotron-core-client"
+import type { ReactotronCore, Plugin } from "../reactotron-core-client"
 
 /**
  * Sends API request/response information.

@@ -1,4 +1,4 @@
-import type { ReactotronCore, Plugin, InferFeatures } from "../@hurajgor/reactotron-core-client"
+import type { ReactotronCore, Plugin, InferFeatures } from "../reactotron-core-client"
 
 /**
  * Provides 4 features for logging.

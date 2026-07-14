@@ -274,6 +274,6 @@ export default (config = {}) =>
 
 ## Learn More
 
-- [Reactotron Core Client](../@hurajgor/reactotron-core-client/README.md) - How to use the client
+- [Reactotron Core Client](../reactotron-core-client/README.md) - How to use the client
 - [Creating Plugins](../../docs/plugins/index.md) - Guide to creating plugins
 - [Custom Commands](../../docs/custom-commands.md) - Working with custom commands
