@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ipcRenderer } from "electron"
 import {
   MdAdd,
+  MdFiberManualRecord,
   MdHome,
   MdOutlineLink,
   MdOutlinePowerSettingsNew,
@@ -27,7 +28,10 @@ type SimulatorCreationOption = {
 
 type Surface = Simulator & {
   previewUrl: string
+  streamUrl: string
+  wsUrl: string
   orientation: "portrait" | "landscape_left"
+  recording?: boolean
 }
 
 type IPCResponse = {
@@ -50,12 +54,13 @@ const Panel = styled.aside<{ $isOpen: boolean; $isResizing: boolean; $width: num
 
 const ResizeHandle = styled.div`
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   top: 0;
   bottom: 0;
-  left: -3px;
-  width: 6px;
+  left: -6px;
+  width: 12px;
   cursor: col-resize;
+  touch-action: none;
 
   &:hover,
   &:active {
@@ -83,6 +88,16 @@ const IconButton = styled.button`
   &:disabled {
     cursor: wait;
     opacity: 0.55;
+  }
+`
+
+const RecordingButton = styled(IconButton)<{ $recording: boolean }>`
+  color: ${(props) => (props.$recording ? "#ef5c62" : props.theme.foregroundDark)};
+
+  &:hover:not(:disabled) {
+    background: ${(props) =>
+      props.$recording ? "rgb(239 92 98 / 0.16)" : props.theme.backgroundLighter};
+    color: ${(props) => (props.$recording ? "#ff7479" : props.theme.foreground)};
   }
 `
 
@@ -159,12 +174,11 @@ const Actions = styled.div`
   gap: 3px;
 `
 
-const Preview = styled.iframe`
+const Preview = styled.img`
   width: 100%;
-  min-height: 0;
-  flex: 1;
-  border: 0;
-  background: #111217;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
 `
 
 const PreviewContainer = styled.div`
@@ -172,17 +186,44 @@ const PreviewContainer = styled.div`
   display: flex;
   min-height: 0;
   flex: 1;
-  background: #000;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 20px;
+  background: radial-gradient(ellipse at 50% 42%, rgb(72 83 103 / 0.35), transparent 62%),
+    linear-gradient(145deg, #252a34 0%, #171b23 55%, #101319 100%);
+
+  &::before {
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px);
+    background-size: 100% 4px;
+    content: "";
+    opacity: 0.35;
+    pointer-events: none;
+  }
 `
 
-const DevicePickerMask = styled.div`
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  left: 0;
-  width: 248px;
-  height: 72px;
+const DeviceFrame = styled.div`
+  position: relative;
+  height: min(100%, 760px);
+  max-width: min(100%, 390px);
+  aspect-ratio: 9 / 19.5;
+  overflow: hidden;
+  border: 8px solid #0a0a0a;
+  border-radius: 48px;
   background: #000;
+  box-shadow:
+    0 28px 56px rgb(0 0 0 / 0.58),
+    0 0 0 1px rgb(255 255 255 / 0.16),
+    0 0 36px rgb(78 103 146 / 0.16);
+  outline: none;
+  touch-action: none;
+
+  &:focus-visible {
+    box-shadow:
+      0 28px 56px rgb(0 0 0 / 0.58),
+      0 0 0 3px ${(props) => props.theme.highlight};
+  }
 `
 
 const EmptyState = styled.div`
@@ -282,7 +323,109 @@ const Status = styled.p<{ $error: boolean }>`
   line-height: 1.4;
 `
 
+const ConnectionStatus = styled.span<{ $connected: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  color: ${(props) => (props.$connected ? props.theme.foregroundDark : props.theme.warning)};
+  font-size: 11px;
+  font-weight: 500;
+
+  &::before {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: ${(props) => (props.$connected ? "#63b76c" : props.theme.warning)};
+    content: "";
+  }
+`
+
+const RecordingStatus = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  color: #ef5c62;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+
+  &::before {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px rgb(239 92 98 / 0.16);
+    content: "";
+  }
+`
+
+type KeyboardFrame = { type: "down" | "up"; usage: number }
+
+const keyboardUsages: Record<string, { usage: number; shift?: boolean }> = (() => {
+  const usages: Record<string, { usage: number; shift?: boolean }> = {
+    Enter: { usage: 40 },
+    Tab: { usage: 43 },
+    " ": { usage: 44 },
+    Backspace: { usage: 42 },
+    Escape: { usage: 41 },
+    ArrowRight: { usage: 79 },
+    ArrowLeft: { usage: 80 },
+    ArrowDown: { usage: 81 },
+    ArrowUp: { usage: 82 },
+  }
+  for (let index = 0; index < 26; index += 1) {
+    usages[String.fromCharCode(97 + index)] = { usage: 4 + index }
+    usages[String.fromCharCode(65 + index)] = { usage: 4 + index, shift: true }
+  }
+  const plain = "1234567890"
+  const shifted = "!@#$%^&*()"
+  for (let index = 0; index < plain.length; index += 1) {
+    usages[plain[index]] = { usage: 30 + index }
+    usages[shifted[index]] = { usage: 30 + index, shift: true }
+  }
+  for (const [normal, upper, usage] of [
+    ["-", "_", 45],
+    ["=", "+", 46],
+    ["[", "{", 47],
+    ["]", "}", 48],
+    ["\\", "|", 49],
+    [";", ":", 51],
+    ["'", '"', 52],
+    ["`", "~", 53],
+    [",", "<", 54],
+    [".", ">", 55],
+    ["/", "?", 56],
+  ] as Array<[string, string, number]>) {
+    usages[normal] = { usage }
+    usages[upper] = { usage, shift: true }
+  }
+  return usages
+})()
+
+function keyboardFrames(key: string, shift = false): KeyboardFrame[] | null {
+  const mapping = keyboardUsages[key]
+  if (!mapping) return null
+  const frames: KeyboardFrame[] = [
+    { type: "down", usage: mapping.usage },
+    { type: "up", usage: mapping.usage },
+  ]
+  return mapping.shift || shift
+    ? [{ type: "down", usage: 225 }, ...frames, { type: "up", usage: 225 }]
+    : frames
+}
+
+function encodeControlFrame(tag: number, payload: object) {
+  const json = new TextEncoder().encode(JSON.stringify(payload))
+  const frame = new Uint8Array(1 + json.length)
+  frame[0] = tag
+  frame.set(json, 1)
+  return frame
+}
+
 function DeviceSurface({ isOpen }: { isOpen: boolean }) {
+  const panelRef = useRef<HTMLElement>(null)
   const [isResizing, setIsResizing] = useState(false)
   const [panelWidth, setPanelWidth] = useState(400)
   const [simulators, setSimulators] = useState<Simulator[]>([])
@@ -295,11 +438,16 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const [isLoading, setIsLoading] = useState(false)
   const [status, setStatus] = useState("")
   const [isError, setIsError] = useState(false)
+  const [isControlConnected, setIsControlConnected] = useState(false)
+  const controlSocketRef = useRef<WebSocket | null>(null)
+  const keyboardTimersRef = useRef<number[]>([])
+  const touchRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
 
   const activeSurface = useMemo(
     () => surfaces.find((surface) => surface.udid === activeUdid) ?? null,
     [activeUdid, surfaces]
   )
+  const activeWsUrl = activeSurface?.wsUrl
 
   const loadSimulators = useCallback(async () => {
     setIsLoading(true)
@@ -367,10 +515,12 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       simulator.udid
     )) as IPCResponse & {
       previewUrl?: string
+      streamUrl?: string
+      wsUrl?: string
       simulator?: Simulator
     }
     setIsLoading(false)
-    if (!result.ok || !result.previewUrl) {
+    if (!result.ok || !result.previewUrl || !result.streamUrl || !result.wsUrl) {
       setStatus(result.message || "Could not start the simulator preview.")
       setIsError(true)
       return
@@ -380,6 +530,8 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       ...simulator,
       ...result.simulator,
       previewUrl: result.previewUrl,
+      streamUrl: result.streamUrl,
+      wsUrl: result.wsUrl,
       orientation: "portrait",
     }
     setSimulators((current) =>
@@ -402,9 +554,20 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     const result = (await ipcRenderer.invoke(
       "create-ios-simulator-surface",
       selectedDeviceType
-    )) as IPCResponse & { previewUrl?: string; simulator?: Simulator }
+    )) as IPCResponse & {
+      previewUrl?: string
+      streamUrl?: string
+      wsUrl?: string
+      simulator?: Simulator
+    }
     setIsLoading(false)
-    if (!result.ok || !result.previewUrl || !result.simulator) {
+    if (
+      !result.ok ||
+      !result.previewUrl ||
+      !result.streamUrl ||
+      !result.wsUrl ||
+      !result.simulator
+    ) {
       setStatus(result.message || "Could not create the iOS simulator.")
       setIsError(true)
       return
@@ -413,6 +576,8 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     const surface: Surface = {
       ...result.simulator,
       previewUrl: result.previewUrl,
+      streamUrl: result.streamUrl,
+      wsUrl: result.wsUrl,
       orientation: "portrait",
     }
     setSimulators((current) => [...current, result.simulator!])
@@ -458,8 +623,8 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     const result = (await ipcRenderer.invoke(
       "reconnect-ios-simulator-surface",
       activeSurface.udid
-    )) as IPCResponse & { previewUrl?: string }
-    if (!result.ok || !result.previewUrl) {
+    )) as IPCResponse & { previewUrl?: string; streamUrl?: string; wsUrl?: string }
+    if (!result.ok || !result.previewUrl || !result.streamUrl || !result.wsUrl) {
       setStatus(result.message || "Could not reconnect the simulator preview.")
       setIsError(true)
       return
@@ -468,7 +633,12 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setSurfaces((current) =>
       current.map((surface) =>
         surface.udid === activeSurface.udid
-          ? { ...surface, previewUrl: result.previewUrl! }
+          ? {
+              ...surface,
+              previewUrl: result.previewUrl!,
+              streamUrl: result.streamUrl!,
+              wsUrl: result.wsUrl!,
+            }
           : surface
       )
     )
@@ -501,19 +671,24 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setStatus("")
   }
 
-  const saveScreenshot = useCallback(async () => {
+  const takeScreenshot = useCallback(async () => {
     if (!activeSurface) return
     const result = (await ipcRenderer.invoke(
-      "save-ios-simulator-screenshot",
+      "ios-simulator-screenshot",
       activeSurface.udid
     )) as IPCResponse & {
+      action?: "copied" | "saved"
       canceled?: boolean
       filePath?: string
     }
     if (!result.canceled) {
       setStatus(
         result.message ||
-          (result.ok ? `Saved screenshot to ${result.filePath}` : "Could not save screenshot.")
+          (result.ok
+            ? result.action === "copied"
+              ? "Screenshot copied to clipboard."
+              : `Saved screenshot to ${result.filePath}`
+            : "Could not capture screenshot.")
       )
       setIsError(!result.ok)
     }
@@ -525,16 +700,25 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     const result = (await ipcRenderer.invoke(
       "toggle-ios-simulator-recording",
       activeSurface.udid
-    )) as IPCResponse & { canceled?: boolean; recording?: boolean }
+    )) as IPCResponse & { canceled?: boolean; filePath?: string; recording?: boolean }
     if (!result.ok) {
       setStatus(result.message || "Could not change simulator recording.")
       setIsError(true)
       return
     }
-    if (!result.canceled) {
-      setStatus(result.recording ? "Recording simulator video." : "Stopped simulator recording.")
-      setIsError(false)
-    }
+    setSurfaces((current) =>
+      current.map((surface) =>
+        surface.udid === activeSurface.udid ? { ...surface, recording: result.recording } : surface
+      )
+    )
+    setStatus(
+      result.recording
+        ? "Recording simulator video. Press Cmd+R or the red button to stop."
+        : result.canceled
+          ? "Recording discarded."
+          : `Saved recording to ${result.filePath}.`
+    )
+    setIsError(false)
   }, [activeSurface])
 
   const toggleAppearance = useCallback(async () => {
@@ -554,7 +738,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   useEffect(() => {
     const handleShortcut = (_event: unknown, shortcut: string) => {
       if (!activeSurface) return
-      if (shortcut === "screenshot") saveScreenshot().catch(() => undefined)
+      if (shortcut === "screenshot") takeScreenshot().catch(() => undefined)
       if (shortcut === "record") toggleRecording().catch(() => undefined)
       if (shortcut === "appearance") toggleAppearance().catch(() => undefined)
     }
@@ -563,30 +747,140 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     return () => {
       ipcRenderer.removeListener("ios-simulator-shortcut", handleShortcut)
     }
-  }, [activeSurface, saveScreenshot, toggleAppearance, toggleRecording])
+  }, [activeSurface, takeScreenshot, toggleAppearance, toggleRecording])
+
+  useEffect(() => {
+    keyboardTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+    keyboardTimersRef.current = []
+    const socket = activeWsUrl ? new WebSocket(activeWsUrl) : null
+    controlSocketRef.current = socket
+    setIsControlConnected(false)
+    if (!socket) return undefined
+
+    socket.onopen = () => setIsControlConnected(true)
+    socket.onerror = () => setIsControlConnected(false)
+    socket.onclose = () => setIsControlConnected(false)
+    return () => {
+      socket.close()
+      if (controlSocketRef.current === socket) controlSocketRef.current = null
+      setIsControlConnected(false)
+    }
+  }, [activeWsUrl])
+
+  const sendControl = useCallback((tag: number, payload: object) => {
+    const socket = controlSocketRef.current
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false
+    try {
+      socket.send(encodeControlFrame(tag, payload))
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  const sendKeyboardFrames = useCallback(
+    (frames: KeyboardFrame[]) => {
+      keyboardTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+      keyboardTimersRef.current = []
+      if (!frames.length || !sendControl(6, frames[0])) return false
+      frames.slice(1).forEach((frame, index) => {
+        const timer = window.setTimeout(
+          () => {
+            keyboardTimersRef.current = keyboardTimersRef.current.filter((id) => id !== timer)
+            sendControl(6, frame)
+          },
+          (index + 1) * 4
+        )
+        keyboardTimersRef.current.push(timer)
+      })
+      return true
+    },
+    [sendControl]
+  )
+
+  const screenPoint = (event: React.PointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+    }
+  }
+
+  const onScreenPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.currentTarget.focus({ preventScroll: true })
+    const point = screenPoint(event)
+    touchRef.current = { pointerId: event.pointerId, ...point }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    sendControl(3, { type: "begin", ...point })
+  }
+
+  const onScreenPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (touchRef.current?.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const point = screenPoint(event)
+    touchRef.current = { pointerId: event.pointerId, ...point }
+    sendControl(3, { type: "move", ...point })
+  }
+
+  const onScreenPointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (touchRef.current?.pointerId !== event.pointerId) return
+    event.preventDefault()
+    const point = screenPoint(event)
+    touchRef.current = null
+    sendControl(3, { type: "end", ...point })
+  }
+
+  const onScreenKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.nativeEvent.isComposing || event.metaKey || event.ctrlKey || event.altKey) return
+    const frames = keyboardFrames(event.key, event.shiftKey)
+    if (!frames || !sendKeyboardFrames(frames)) return
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const onScreenPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const text = event.clipboardData.getData("text")
+    if (!text) return
+    const characterFrames = Array.from(text).map((character) => keyboardFrames(character))
+    if (characterFrames.some((frames) => !frames)) return
+    const frames = characterFrames.flatMap((character) => character || [])
+    if (sendKeyboardFrames(frames)) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
     setIsResizing(true)
     const startX = event.clientX
-    const startWidth = panelWidth
-    const maxWidth = Math.max(340, window.innerWidth - 350)
+    const startWidth = panelRef.current?.clientWidth ?? panelWidth
+    const mainWidth = panelRef.current?.previousElementSibling?.getBoundingClientRect().width ?? 350
+    const maxWidth = Math.max(340, startWidth + mainWidth - 350)
 
     const resize = (moveEvent: PointerEvent) => {
       setPanelWidth(Math.min(maxWidth, Math.max(340, startWidth - (moveEvent.clientX - startX))))
     }
     const finishResize = () => {
       setIsResizing(false)
-      window.removeEventListener("pointermove", resize)
-      window.removeEventListener("pointerup", finishResize)
+      document.removeEventListener("pointermove", resize)
+      document.removeEventListener("pointerup", finishResize)
+      document.removeEventListener("pointercancel", finishResize)
+      window.removeEventListener("blur", finishResize)
     }
 
-    window.addEventListener("pointermove", resize)
-    window.addEventListener("pointerup", finishResize)
+    document.addEventListener("pointermove", resize)
+    document.addEventListener("pointerup", finishResize)
+    document.addEventListener("pointercancel", finishResize)
+    window.addEventListener("blur", finishResize)
   }
 
   return (
     <Panel
+      ref={panelRef}
       $isOpen={isOpen}
       $isResizing={isResizing}
       $width={panelWidth}
@@ -631,6 +925,10 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
               <ToolBar>
                 <DeviceName title={`${activeSurface.name} ${activeSurface.runtime}`}>
                   {activeSurface.name}
+                  <ConnectionStatus $connected={isControlConnected}>
+                    {isControlConnected ? "Connected" : "Connecting"}
+                  </ConnectionStatus>
+                  {activeSurface.recording && <RecordingStatus>REC</RecordingStatus>}
                 </DeviceName>
                 <Actions>
                   <IconButton
@@ -674,20 +972,44 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                   </IconButton>
                   <IconButton
                     type="button"
-                    title="Save screenshot"
-                    onClick={() => saveScreenshot().catch(() => undefined)}
+                    title="Screenshot: copy or save (Cmd+S)"
+                    onClick={() => takeScreenshot().catch(() => undefined)}
                   >
                     <MdScreenshot size={18} />
                   </IconButton>
+                  <RecordingButton
+                    $recording={Boolean(activeSurface.recording)}
+                    type="button"
+                    title={
+                      activeSurface.recording
+                        ? "Stop recording and choose where to save (Cmd+R)"
+                        : "Start screen recording (Cmd+R)"
+                    }
+                    onClick={() => toggleRecording().catch(() => undefined)}
+                  >
+                    <MdFiberManualRecord size={19} />
+                  </RecordingButton>
                 </Actions>
               </ToolBar>
               <PreviewContainer>
-                <Preview
-                  key={activeSurface.previewUrl}
-                  src={activeSurface.previewUrl}
-                  title={`${activeSurface.name} preview`}
-                />
-                <DevicePickerMask aria-hidden="true" />
+                <DeviceFrame
+                  aria-label={`${activeSurface.name} simulator screen`}
+                  onKeyDown={onScreenKeyDown}
+                  onPaste={onScreenPaste}
+                  onPointerCancel={onScreenPointerEnd}
+                  onPointerDown={onScreenPointerDown}
+                  onPointerMove={onScreenPointerMove}
+                  onPointerUp={onScreenPointerEnd}
+                  role="application"
+                  tabIndex={0}
+                >
+                  <Preview
+                    key={activeSurface.streamUrl}
+                    draggable={false}
+                    src={activeSurface.streamUrl}
+                    alt={`${activeSurface.name} simulator screen`}
+                  />
+                </DeviceFrame>
               </PreviewContainer>
               {status && <Status $error={isError}>{status}</Status>}
             </>

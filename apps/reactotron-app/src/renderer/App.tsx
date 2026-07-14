@@ -45,7 +45,7 @@ const MainContainer = styled.div`
   display: flex;
   flex-direction: row;
   flex: 1;
-  min-width: 0;
+  min-width: 350px;
 `
 
 const PanelToggle = styled.button<{ $isOpen: boolean }>`

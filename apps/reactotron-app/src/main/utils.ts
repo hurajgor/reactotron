@@ -7,8 +7,10 @@ import {
   app,
   type BrowserWindow,
   BrowserWindow as ElectronBrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
+  nativeImage,
 } from "electron"
 
 type IOSSimulator = {
@@ -29,7 +31,10 @@ const serveSimProcesses = new Map<
   string,
   { process: childProcess.ChildProcess; previewUrl: string }
 >()
-const simulatorRecordings = new Map<string, childProcess.ChildProcess>()
+const simulatorRecordings = new Map<
+  string,
+  { filePath: string; process: childProcess.ChildProcess }
+>()
 const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
 
 function runCommand(command: string, args: string[]): Promise<string> {
@@ -169,10 +174,17 @@ async function getIOSSimulatorCreationOptions(): Promise<IOSSimulatorCreationOpt
     }))
 }
 
-async function startServeSim(udid: string): Promise<{ previewUrl: string }> {
+async function startServeSim(
+  udid: string
+): Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }> {
   const existingSurface = serveSimProcesses.get(udid)
   if (existingSurface && existingSurface.process.exitCode === null) {
-    return { previewUrl: existingSurface.previewUrl }
+    const previewUrl = existingSurface.previewUrl
+    return {
+      previewUrl,
+      streamUrl: `${previewUrl.replace(/\?.*$/, "")}/helper/${udid}/stream.mjpeg`,
+      wsUrl: `ws://127.0.0.1:${new URL(previewUrl).port}/helper/${udid}/ws`,
+    }
   }
 
   const port = await getAvailablePort()
@@ -199,7 +211,11 @@ async function startServeSim(udid: string): Promise<{ previewUrl: string }> {
         reject(error)
       } else {
         serveSimProcesses.set(udid, { process: serveSimProcess, previewUrl })
-        resolve({ previewUrl })
+        resolve({
+          previewUrl,
+          streamUrl: `http://127.0.0.1:${port}/helper/${udid}/stream.mjpeg`,
+          wsUrl: `ws://127.0.0.1:${port}/helper/${udid}/ws`,
+        })
       }
     }
 
@@ -415,6 +431,39 @@ export const setupSimulatorIPCCommands = () => {
     }
   })
 
+  ipcMain.handle("ios-simulator-screenshot", async (event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const choice = await dialog.showMessageBox(window ?? undefined, {
+        title: "Simulator Screenshot",
+        message: "What would you like to do with this screenshot?",
+        buttons: ["Save to File", "Copy to Clipboard", "Cancel"],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      })
+      if (choice.response === 2) return { ok: true, canceled: true }
+
+      const temporaryScreenshot = await captureIOSSimulatorScreenshot(udid)
+      if (choice.response === 1) {
+        clipboard.writeImage(nativeImage.createFromPath(temporaryScreenshot))
+        return { ok: true, action: "copied" }
+      }
+
+      const save = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Simulator Screenshot",
+        defaultPath: "simulator-screenshot.png",
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      })
+      if (save.canceled || !save.filePath) return { ok: true, canceled: true }
+      await fs.promises.copyFile(temporaryScreenshot, save.filePath)
+      return { ok: true, action: "saved", filePath: save.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
   ipcMain.handle("capture-ios-simulator-screenshot", async (_event, udid: unknown) => {
     try {
       assertIOSSimulatorUdid(udid)
@@ -431,30 +480,46 @@ export const setupSimulatorIPCCommands = () => {
       assertIOSSimulatorUdid(udid)
       const activeRecording = simulatorRecordings.get(udid)
       if (activeRecording) {
-        activeRecording.kill("SIGINT")
+        const finished = new Promise<void>((resolve) =>
+          activeRecording.process.once("close", resolve)
+        )
+        activeRecording.process.kill("SIGINT")
+        await finished
         simulatorRecordings.delete(udid)
-        return { ok: true, recording: false }
+        const window = ElectronBrowserWindow.fromWebContents(event.sender)
+        const save = await dialog.showSaveDialog(window ?? undefined, {
+          title: "Save Simulator Recording",
+          defaultPath: "simulator-recording.mov",
+          filters: [{ name: "QuickTime movie", extensions: ["mov"] }],
+        })
+        if (save.canceled || !save.filePath) {
+          await fs.promises.rm(activeRecording.filePath, { force: true })
+          return { ok: true, canceled: true, recording: false }
+        }
+        await fs.promises.copyFile(activeRecording.filePath, save.filePath)
+        await fs.promises.rm(activeRecording.filePath, { force: true })
+        return { ok: true, recording: false, filePath: save.filePath }
       }
 
-      const window = ElectronBrowserWindow.fromWebContents(event.sender)
-      const result = await dialog.showSaveDialog(window ?? undefined, {
-        title: "Save Simulator Recording",
-        defaultPath: "simulator-recording.mov",
-        filters: [{ name: "QuickTime movie", extensions: ["mov"] }],
-      })
-      if (result.canceled || !result.filePath) return { ok: true, canceled: true, recording: false }
+      const directory = path.join(app.getPath("temp"), "reactotron", "simulator-recordings")
+      await fs.promises.mkdir(directory, { recursive: true })
+      const filePath = path.join(directory, `simulator-recording-${udid}-${Date.now()}.mov`)
 
       const recordingProcess = childProcess.spawn(
         "xcrun",
-        ["simctl", "io", udid, "recordVideo", result.filePath],
+        ["simctl", "io", udid, "recordVideo", filePath],
         { shell: false }
       )
-      simulatorRecordings.set(udid, recordingProcess)
+      simulatorRecordings.set(udid, { process: recordingProcess, filePath })
       recordingProcess.on("close", () => {
-        if (simulatorRecordings.get(udid) === recordingProcess) simulatorRecordings.delete(udid)
+        if (simulatorRecordings.get(udid)?.process === recordingProcess) {
+          simulatorRecordings.delete(udid)
+        }
       })
       recordingProcess.on("error", () => {
-        if (simulatorRecordings.get(udid) === recordingProcess) simulatorRecordings.delete(udid)
+        if (simulatorRecordings.get(udid)?.process === recordingProcess) {
+          simulatorRecordings.delete(udid)
+        }
       })
       return { ok: true, recording: true }
     } catch (error) {
@@ -497,7 +562,7 @@ export const setupSimulatorIPCCommands = () => {
 export const stopIOSSimulatorSurfaces = () => {
   serveSimProcesses.forEach(({ process }) => process.kill())
   serveSimProcesses.clear()
-  simulatorRecordings.forEach((process) => process.kill("SIGINT"))
+  simulatorRecordings.forEach(({ process }) => process.kill("SIGINT"))
   simulatorRecordings.clear()
 }
 
