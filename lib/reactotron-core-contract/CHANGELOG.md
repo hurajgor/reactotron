@@ -2,6 +2,13 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [0.5.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.4.0...reactotron-core-contract@0.5.0) (2026-07-14)
+
+### Features
+
+* Add shared command contracts for agent UI snapshots and actions.
+* Add support for informational log payloads.
+
 ## [0.4.0](https://github.com/infinitered/reactotron/compare/reactotron-core-contract@0.3.2...reactotron-core-contract@0.4.0) (2026-05-28)
 
 

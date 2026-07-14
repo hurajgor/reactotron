@@ -2,6 +2,13 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [2.11.0](https://github.com/infinitered/reactotron/compare/reactotron-core-client@2.10.0...reactotron-core-client@2.11.0) (2026-07-14)
+
+### Features
+
+* Add configurable automatic reconnection after an unexpected WebSocket disconnect.
+* Preserve multi-argument log messages sent by connected applications.
+
 ## [2.10.0](https://github.com/infinitered/reactotron/compare/reactotron-core-client@2.9.9...reactotron-core-client@2.10.0) (2026-05-28)
 
 

@@ -2,6 +2,12 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [2.8.0](https://github.com/infinitered/reactotron/compare/reactotron-core-ui@2.7.0...reactotron-core-ui@2.8.0) (2026-07-14)
+
+### Features
+
+* Add theme options and updated shared UI components for the desktop app.
+
 ## [2.7.0](https://github.com/infinitered/reactotron/compare/reactotron-core-ui@2.6.3...reactotron-core-ui@2.7.0) (2026-04-06)
 
 

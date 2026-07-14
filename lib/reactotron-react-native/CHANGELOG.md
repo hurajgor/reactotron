@@ -2,6 +2,13 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [5.3.0](https://github.com/infinitered/reactotron/compare/reactotron-react-native@5.2.0...reactotron-react-native@5.3.0) (2026-07-14)
+
+### Features
+
+* Add the agent runtime plugin for inspecting and controlling React Native UI from Reactotron.
+* Improve React Native logging and automatic connection recovery.
+
 ## [5.2.0](https://github.com/infinitered/reactotron/compare/reactotron-react-native@5.1.18...reactotron-react-native@5.2.0) (2026-05-28)
 
 
