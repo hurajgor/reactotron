@@ -12,7 +12,7 @@ import type { McpRedactionConfig } from "reactotron-core-contract"
 import ReactotronBrain from "../../ReactotronBrain"
 import config, { getConfiguredMcpPort, getConfiguredServerPort } from "../../config"
 
-import useStandalone, { Connection, ServerStatus } from "./useStandalone"
+import useStandalone, { Connection, ReactotronConnection, ServerStatus } from "./useStandalone"
 
 export type McpStatus = "stopped" | "started" | "error"
 
@@ -57,6 +57,7 @@ interface Context {
   connections: Connection[]
   selectedConnection: Connection
   selectConnection: (clientId: string) => void
+  refreshConnections: () => void
   restartServer: () => void
   mcpStatus: McpStatus
   mcpPort: number | null
@@ -74,6 +75,7 @@ const StandaloneContext = React.createContext<Context>({
   connections: [],
   selectedConnection: null,
   selectConnection: null,
+  refreshConnections: () => {},
   restartServer: () => {},
   mcpStatus: "stopped",
   mcpPort: null,
@@ -103,40 +105,54 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     connectionEstablished,
     commandReceived,
     connectionDisconnected,
+    syncConnections,
     addCommandListener,
     portUnavailable,
   } = useStandalone()
 
-  const attachServerEventHandlers = useCallback((server: Server) => {
-    server.on("start", () => {
-      console.log(`[Reactotron Desktop] Server started on port ${getConfiguredServerPort()}.`)
-      serverStarted()
-    })
-    server.on("stop", () => {
-      console.log("[Reactotron Desktop] Server stopped.")
-      serverStopped()
-    })
-    server.on("connectionEstablished", (connection) => {
-      console.log("[Reactotron Desktop] Connection established.", connection)
-      connectionEstablished(connection)
-    })
-    server.on("command", commandReceived)
-    server.on("disconnect", (connection) => {
-      console.log("[Reactotron Desktop] Connection disconnected.", connection)
-      connectionDisconnected(connection)
-    })
-    server.on("portUnavailable", (port) => {
-      console.warn(`[Reactotron Desktop] Port ${port} unavailable.`)
-      portUnavailable()
-    })
-  }, [
-    serverStarted,
-    serverStopped,
-    connectionEstablished,
-    commandReceived,
-    connectionDisconnected,
-    portUnavailable,
-  ])
+  const refreshConnections = useCallback(() => {
+    if (!reactotronServer.current) return
+
+    syncConnections(
+      (reactotronServer.current.connections as ReactotronConnection[]).map((connection) => ({
+        ...connection,
+      }))
+    )
+  }, [syncConnections])
+
+  const attachServerEventHandlers = useCallback(
+    (server: Server) => {
+      server.on("start", () => {
+        console.log(`[Reactotron Desktop] Server started on port ${getConfiguredServerPort()}.`)
+        serverStarted()
+      })
+      server.on("stop", () => {
+        console.log("[Reactotron Desktop] Server stopped.")
+        serverStopped()
+      })
+      server.on("connectionEstablished", (connection) => {
+        console.log("[Reactotron Desktop] Connection established.", connection)
+        connectionEstablished(connection)
+      })
+      server.on("command", commandReceived)
+      server.on("disconnect", (connection) => {
+        console.log("[Reactotron Desktop] Connection disconnected.", connection)
+        connectionDisconnected(connection)
+      })
+      server.on("portUnavailable", (port) => {
+        console.warn(`[Reactotron Desktop] Port ${port} unavailable.`)
+        portUnavailable()
+      })
+    },
+    [
+      serverStarted,
+      serverStopped,
+      connectionEstablished,
+      commandReceived,
+      connectionDisconnected,
+      portUnavailable,
+    ]
+  )
 
   const startReactotronServer = useCallback(() => {
     const globalServer = (globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__
@@ -158,6 +174,11 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
     return server
   }, [attachServerEventHandlers])
+
+  useEffect(() => {
+    const timer = setInterval(refreshConnections, 5000)
+    return () => clearInterval(timer)
+  }, [refreshConnections])
 
   const restartServer = useCallback(() => {
     if (restartTimer.current) {
@@ -194,7 +215,9 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       } catch (error) {
         console.warn("Unable to stop Reactotron server during cleanup", error)
       }
-      if ((globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__ === reactotronServer.current) {
+      if (
+        (globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__ === reactotronServer.current
+      ) {
         delete (globalThis as ReactotronGlobal).__REACTOTRON_DESKTOP_SERVER__
       }
       reactotronServer.current = null
@@ -236,7 +259,8 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mcpStatus, setMcpStatus] = useState<McpStatus>("stopped")
   const [mcpPort, setMcpPort] = useState<number | null>(null)
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false)
-  const [mcpRedactionConfig, setMcpRedactionConfig] = useState<McpRedactionServerConfig>(readRedactionConfig)
+  const [mcpRedactionConfig, setMcpRedactionConfig] =
+    useState<McpRedactionServerConfig>(readRedactionConfig)
 
   // True unless a connected client has actually opted out via a permission
   // the server is honoring. Toggling permissions alone doesn't flip this.
@@ -250,7 +274,11 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (allowClientRemoveRules && cfg.removeRules) return true
       return false
     })
-  }, [connections, mcpRedactionConfig.allowClientDisable, mcpRedactionConfig.allowClientRemoveRules])
+  }, [
+    connections,
+    mcpRedactionConfig.allowClientDisable,
+    mcpRedactionConfig.allowClientRemoveRules,
+  ])
 
   const openMcpSettings = useCallback(() => setMcpSettingsOpen(true), [])
   const closeMcpSettings = useCallback(() => setMcpSettingsOpen(false), [])
@@ -299,14 +327,17 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     } else {
       const port = getConfiguredMcpPort()
       const mcp = createMcpServer(reactotronServer.current, mcpRedactionConfig, desktopMcpHost)
-      mcp.start(port).then(() => {
-        mcpServerRef.current = mcp
-        setMcpStatus("started")
-        setMcpPort(port)
-      }).catch(() => {
-        setMcpStatus("error")
-        setMcpPort(null)
-      })
+      mcp
+        .start(port)
+        .then(() => {
+          mcpServerRef.current = mcp
+          setMcpStatus("started")
+          setMcpPort(port)
+        })
+        .catch(() => {
+          setMcpStatus("error")
+          setMcpPort(null)
+        })
     }
   }, [mcpStatus, mcpRedactionConfig])
 
@@ -327,6 +358,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         connections,
         selectedConnection,
         selectConnection,
+        refreshConnections,
         restartServer,
         mcpStatus,
         mcpPort,

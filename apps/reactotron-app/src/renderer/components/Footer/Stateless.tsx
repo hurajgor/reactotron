@@ -2,6 +2,7 @@ import React from "react"
 import styled from "styled-components"
 import {
   MdOutlineReplay as ReloadIcon,
+  MdOutlineRefresh as RefreshIcon,
   MdOutlineSecurity as ShieldIcon,
   MdOutlineSettings as SettingsIcon,
   MdOutlineSwapVert as ExpandIcon,
@@ -41,7 +42,7 @@ const ContentContainer = styled.div.attrs(() => ({}))<ContentContainerProps>`
   display: flex;
   flex-direction: row;
   background-color: ${(props) => props.theme.subtleLine};
-  padding: 0 240px 0 12px;
+  padding: 0 350px 0 12px;
   justify-content: space-between;
   align-items: center;
   cursor: ${(props) => (props.$isOpen ? "auto" : "pointer")};
@@ -145,11 +146,12 @@ const McpButton = styled.div.attrs(() => ({}))<McpButtonProps>`
     props.$active
       ? `color-mix(in srgb, ${props.theme.highlight} 14%, transparent)`
       : "transparent"};
-  border: 1px solid ${(props) =>
-    props.$active
-      ? `color-mix(in srgb, ${props.theme.highlight} 40%, transparent)`
-      : props.theme.chromeLine};
-  color: ${(props) => props.$active ? props.theme.highlight : props.theme.foregroundDark};
+  border: 1px solid
+    ${(props) =>
+      props.$active
+        ? `color-mix(in srgb, ${props.theme.highlight} 40%, transparent)`
+        : props.theme.chromeLine};
+  color: ${(props) => (props.$active ? props.theme.highlight : props.theme.foregroundDark)};
   &:hover {
     background-color: ${(props) =>
       props.$active
@@ -162,7 +164,8 @@ const McpDot = styled.div<McpButtonProps>`
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: ${(props) => props.$active ? props.theme.support : props.theme.foregroundDark};
+  background-color: ${(props) =>
+    props.$active ? props.theme.support : props.theme.foregroundDark};
 `
 
 const McpSettingsButton = styled.div`
@@ -183,7 +186,7 @@ const McpSettingsButton = styled.div`
 const RedactionBadge = styled.span<{ $warning?: boolean }>`
   display: flex;
   align-items: center;
-  color: ${(props) => props.$warning ? props.theme.warning : "inherit"};
+  color: ${(props) => (props.$warning ? props.theme.warning : "inherit")};
 `
 
 function renderExpanded(
@@ -194,14 +197,16 @@ function renderExpanded(
 ) {
   return (
     <ConnectionContainer>
-      {connections.map((c) => (
-        <ConnectionSelector
-          key={c.id}
-          selectedConnection={selectedConnection}
-          connection={c}
-          onClick={() => onChangeConnection(c.clientId)}
-        />
-      ))}
+      {connections
+        .filter((connection) => connection.connected)
+        .map((c) => (
+          <ConnectionSelector
+            key={c.id}
+            selectedConnection={selectedConnection}
+            connection={c}
+            onClick={() => onChangeConnection(c.clientId)}
+          />
+        ))}
     </ConnectionContainer>
   )
 }
@@ -229,7 +234,8 @@ function renderCollapsed(
   return (
     <CollapsedSummary>
       <StatusInfo>
-        port {getConfiguredServerPort()} | {connections.length} connections
+        port {getConfiguredServerPort()} |{" "}
+        {connections.filter((connection) => connection.connected).length} connections
       </StatusInfo>
       <PrimaryConnectionInfo>{connectionText}</PrimaryConnectionInfo>
       <div />
@@ -244,6 +250,7 @@ interface Props {
   isOpen: boolean
   setIsOpen: (isOpen: boolean) => void
   onChangeConnection: (clientId: string | null) => void
+  onRefreshConnections: () => void
   mcpStatus: McpStatus
   mcpPort: number | null
   onToggleMcp: () => void
@@ -259,6 +266,7 @@ function Header({
   isOpen,
   setIsOpen,
   onChangeConnection,
+  onRefreshConnections,
   mcpStatus,
   mcpPort,
   onToggleMcp,
@@ -271,16 +279,28 @@ function Header({
       <ContentContainer onClick={() => !isOpen && setIsOpen(true)} $isOpen={isOpen}>
         {isOpen
           ? renderExpanded(serverStatus, connections, selectedConnection, onChangeConnection)
-          : renderCollapsed(
-            serverStatus,
-            connections,
-            selectedConnection
-          )}
+          : renderCollapsed(serverStatus, connections, selectedConnection)}
         <FooterControls>
           {serverStatus === "started" && (
             <ReloadButton
               type="button"
-              onClick={(e) => { e.stopPropagation(); onReloadMetro() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onRefreshConnections()
+              }}
+              title="Refresh connected devices"
+            >
+              <RefreshIcon size={12} />
+              Refresh devices
+            </ReloadButton>
+          )}
+          {serverStatus === "started" && (
+            <ReloadButton
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onReloadMetro()
+              }}
               title="Reload React Native apps connected to Metro"
             >
               <ReloadIcon size={12} />
@@ -289,20 +309,31 @@ function Header({
           )}
           <McpButton
             $active={mcpStatus === "started"}
-            onClick={(e) => { e.stopPropagation(); onToggleMcp() }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleMcp()
+            }}
             title={mcpStatus === "started" ? `MCP running on port ${mcpPort}` : "Start MCP server"}
           >
             <McpDot $active={mcpStatus === "started"} />
             {mcpStatus === "started" ? `MCP :${mcpPort}` : "MCP"}
-            {mcpStatus === "started" && (
-              mcpRedactionEnforced
-                ? <RedactionBadge title="Sensitive data is redacted"><ShieldIcon size={10} /></RedactionBadge>
-                : <RedactionBadge $warning title="Redaction disabled — sensitive data exposed"><ShieldIcon size={10} /></RedactionBadge>
-            )}
+            {mcpStatus === "started" &&
+              (mcpRedactionEnforced ? (
+                <RedactionBadge title="Sensitive data is redacted">
+                  <ShieldIcon size={10} />
+                </RedactionBadge>
+              ) : (
+                <RedactionBadge $warning title="Redaction disabled — sensitive data exposed">
+                  <ShieldIcon size={10} />
+                </RedactionBadge>
+              ))}
           </McpButton>
           {mcpStatus === "started" && (
             <McpSettingsButton
-              onClick={(e) => { e.stopPropagation(); onOpenMcpSettings() }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenMcpSettings()
+              }}
               title="MCP redaction settings"
             >
               <SettingsIcon size={14} />

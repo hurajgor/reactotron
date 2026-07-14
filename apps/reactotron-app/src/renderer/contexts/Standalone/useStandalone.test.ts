@@ -155,6 +155,27 @@ describe("contexts/Standalone/useStandalone", () => {
       expect(result.current.connections[0].connected).toBeFalsy()
     })
 
+    it("should reconcile stale connections with the server's live connections", () => {
+      const { result } = renderHook(() => useStandalone())
+
+      act(() => {
+        result.current.connectionEstablished({ clientId: "stale", id: 0, platform: "ios" })
+        result.current.connectionEstablished({ clientId: "live", id: 1, platform: "android" })
+        result.current.selectConnection("stale")
+      })
+
+      act(() => {
+        result.current.syncConnections([
+          { clientId: "live", id: 1, platform: "android", name: "Connected device" },
+        ])
+      })
+
+      expect(result.current.connections).toEqual([
+        expect.objectContaining({ clientId: "live", connected: true, name: "Connected device" }),
+      ])
+      expect(result.current.selectedClientId).toEqual("live")
+    })
+
     it("should not change the selected connection id if this was not the selected connection", () => {
       const { result } = renderHook(() => useStandalone())
 

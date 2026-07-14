@@ -6,6 +6,7 @@ export enum ActionTypes {
   ServerStopped = "SERVER_STOPPED",
   AddConnection = "ADD_CONNECTION",
   RemoveConnection = "REMOVE_CONNECTION",
+  SyncConnections = "SYNC_CONNECTIONS",
   ClearConnectionCommands = "CLEAR_CONNECTION_COMMANDS",
   CommandReceived = "COMMAND_RECEIVED",
   ChangeSelectedClientId = "CHANGE_SELECTED_CLIENT_ID",
@@ -47,6 +48,7 @@ type Action =
       type: ActionTypes.AddConnection | ActionTypes.RemoveConnection
       payload: ReactotronConnection
     }
+  | { type: ActionTypes.SyncConnections; payload: ReactotronConnection[] }
   | { type: ActionTypes.ChangeSelectedClientId; payload: string }
   | { type: ActionTypes.CommandReceived; payload: any } // TODO: Type this better!
   | { type: ActionTypes.ClearConnectionCommands }
@@ -123,6 +125,33 @@ export function reducer(state: State, action: Action) {
           } else {
             draftState.selectedClientId = null
           }
+        }
+      })
+    case ActionTypes.SyncConnections:
+      return produce(state, (draftState) => {
+        const liveConnections = new Map(
+          action.payload.map((connection) => [connection.clientId, connection])
+        )
+
+        draftState.connections = draftState.connections.filter((connection) =>
+          liveConnections.has(connection.clientId)
+        )
+
+        action.payload.forEach((connection) => {
+          const existingConnection = draftState.connections.find(
+            (candidate) => candidate.clientId === connection.clientId
+          )
+
+          if (existingConnection) {
+            Object.assign(existingConnection, connection, { connected: true })
+            return
+          }
+
+          draftState.connections.push({ ...connection, commands: [], connected: true })
+        })
+
+        if (!liveConnections.has(draftState.selectedClientId)) {
+          draftState.selectedClientId = action.payload[0]?.clientId ?? null
         }
       })
     case ActionTypes.CommandReceived:
@@ -214,6 +243,10 @@ function useStandalone() {
     dispatch({ type: ActionTypes.RemoveConnection, payload: connection })
   }, [])
 
+  const syncConnections = useCallback((connections: ReactotronConnection[]) => {
+    dispatch({ type: ActionTypes.SyncConnections, payload: connections })
+  }, [])
+
   const clearSelectedConnectionCommands = useCallback(() => {
     dispatch({ type: ActionTypes.ClearConnectionCommands })
   }, [])
@@ -238,6 +271,7 @@ function useStandalone() {
     serverStopped,
     connectionEstablished,
     connectionDisconnected,
+    syncConnections,
     commandReceived,
     clearSelectedConnectionCommands,
     addCommandListener,

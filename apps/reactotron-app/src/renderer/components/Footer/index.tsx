@@ -12,17 +12,23 @@ type ReloadResponse = {
 
 export default function ConnectedFooter() {
   const {
-    serverStatus, connections, selectedConnection, selectConnection,
-    mcpStatus, mcpPort, toggleMcp, mcpRedactionEnforced, openMcpSettings,
+    serverStatus,
+    connections,
+    selectedConnection,
+    selectConnection,
+    refreshConnections,
+    mcpStatus,
+    mcpPort,
+    toggleMcp,
+    mcpRedactionEnforced,
+    openMcpSettings,
   } = useContext(StandaloneContext)
   const [isOpen, setIsOpen] = useState(false)
 
   const reloadMetro = async () => {
-    const result = await ipcRenderer.invoke("reload-ios-simulator") as ReloadResponse
+    const result = (await ipcRenderer.invoke("reload-ios-simulator")) as ReloadResponse
     console.log(
-      `[Reactotron Desktop] Metro reload ${result.ok ? "succeeded" : "failed"}: ${
-        result.message
-      }`
+      `[Reactotron Desktop] Metro reload ${result.ok ? "succeeded" : "failed"}: ${result.message}`
     )
   }
 
@@ -32,6 +38,7 @@ export default function ConnectedFooter() {
       connections={connections}
       selectedConnection={selectedConnection}
       onChangeConnection={selectConnection}
+      onRefreshConnections={refreshConnections}
       isOpen={isOpen}
       setIsOpen={setIsOpen}
       mcpStatus={mcpStatus}

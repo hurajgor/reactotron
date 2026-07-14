@@ -91,10 +91,12 @@ function Connections() {
     <Container>
       <Header title="Connections" isDraggable />
       <ContentContainer>
-        {connections.length > 0 ? (
-          connections.map((connection) => (
-            <ConnectionCell key={connection.clientId} connection={connection} />
-          ))
+        {connections.some((connection) => connection.connected) ? (
+          connections
+            .filter((connection) => connection.connected)
+            .map((connection) => (
+              <ConnectionCell key={connection.clientId} connection={connection} />
+            ))
         ) : (
           <Welcome />
         )}

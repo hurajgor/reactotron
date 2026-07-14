@@ -55,6 +55,7 @@ const testConnections: Connection[] = [
 ]
 
 const reloadHandlers = {
+  onRefreshConnections: () => {},
   onReloadMetro: () => {},
 }
 
