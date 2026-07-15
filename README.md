@@ -86,14 +86,14 @@ Use the scoped `@hurajgor/*` integrations as well, for example `@hurajgor/reacto
 
 ## Plugins and integrations
 
-Reactotron includes integrations for [global errors](https://docs.infinite.red/reactotron/plugins/track-global-errors/), [global logs](./docs/plugins/track-global-logs.md), [networking](https://docs.infinite.red/reactotron/plugins/networking/), [Async Storage](https://docs.infinite.red/reactotron/plugins/async-storage/), [React Native MMKV](https://docs.infinite.red/reactotron/plugins/react-native-mmkv/), [benchmarks](https://docs.infinite.red/reactotron/plugins/benchmark/), [apisauce](https://docs.infinite.red/reactotron/plugins/apisauce/), [overlays](https://docs.infinite.red/reactotron/plugins/overlay/), [MST](https://docs.infinite.red/reactotron/plugins/mst/), [Redux](https://docs.infinite.red/reactotron/plugins/redux/), [Open in Editor](https://docs.infinite.red/reactotron/plugins/open-in-editor/), [Storybook](https://docs.infinite.red/reactotron/plugins/storybook/), and [custom commands](./docs/custom-commands.md).
+Reactotron includes integrations for [global errors](./docs/plugins/track-global-errors.md), [global logs](./docs/plugins/track-global-logs.md), [networking](./docs/plugins/networking.md), [Async Storage](./docs/plugins/async-storage.md), [React Native MMKV](./docs/plugins/react-native-mmkv.md), [benchmarks](./docs/plugins/benchmark.md), [apisauce](./docs/plugins/apisauce.md), [overlays](./docs/plugins/overlay.md), [MST](./docs/plugins/mst.md), [Redux](./docs/plugins/redux.md), [Open in Editor](./docs/plugins/open-in-editor.md), [Storybook](./docs/plugins/storybook.md), and [custom commands](./docs/custom-commands.md).
 
 ## Contributing
 
-- [Contributing guide](https://docs.infinite.red/reactotron/contributing/)
-- [Architecture](https://docs.infinite.red/reactotron/contributing/architecture/)
-- [Monorepo guide](https://docs.infinite.red/reactotron/contributing/monorepo/)
-- [Release process](https://docs.infinite.red/reactotron/contributing/releasing/)
+- [Contributing guide](./docs/contributing/index.md)
+- [Architecture](./docs/contributing/architecture.md)
+- [Monorepo guide](./docs/contributing/monorepo.md)
+- [Release process](./docs/contributing/releasing.md)
 
 The desktop development app identifies itself as **Reactotron Dev** and uses ports `9091` (server) and `4568` (MCP) by default, so it can run alongside a release installation. Override either with `REACTOTRON_SERVER_PORT` or `REACTOTRON_MCP_PORT` when needed.
 
