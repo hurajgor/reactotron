@@ -37,9 +37,13 @@ const simulatorRecordings = new Map<
 >()
 const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
 
-function runCommand(command: string, args: string[]): Promise<string> {
+function runCommand(
+  command: string,
+  args: string[],
+  options?: { env?: NodeJS.ProcessEnv }
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const process = childProcess.spawn(command, args, { shell: false })
+    const process = childProcess.spawn(command, args, { shell: false, env: options?.env })
     let output = ""
     let errorOutput = ""
 
@@ -85,6 +89,35 @@ function getServeSimCliPath(): string {
   }
 
   return pathToCli
+}
+
+/**
+ * Resolve the Node runtime used to launch the bundled serve-sim CLI.
+ *
+ * When Reactotron is opened from Finder/Dock the process inherits a minimal
+ * PATH that usually does not include a user-installed Node (nvm, Homebrew),
+ * so spawning a bare "node" fails with ENOENT. Electron ships its own Node,
+ * so by default we re-invoke our own executable with ELECTRON_RUN_AS_NODE=1
+ * and no external Node is required. REACTOTRON_NODE_PATH still overrides this
+ * for anyone who needs a specific runtime.
+ */
+function getServeSimRunner(args: string[]): {
+  command: string
+  args: string[]
+  env: NodeJS.ProcessEnv
+} {
+  const cliPath = getServeSimCliPath()
+  const overridePath = process.env.REACTOTRON_NODE_PATH
+
+  if (overridePath) {
+    return { command: overridePath, args: [cliPath, ...args], env: process.env }
+  }
+
+  return {
+    command: process.execPath,
+    args: [cliPath, ...args],
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+  }
 }
 
 function getAvailablePort(startingPort = 3200): Promise<number> {
@@ -189,11 +222,11 @@ async function startServeSim(
 
   const port = await getAvailablePort()
   const previewUrl = `http://127.0.0.1:${port}?device=${udid}&session=${Date.now()}`
-  const serveSimProcess = childProcess.spawn(
-    process.env.REACTOTRON_NODE_PATH || "node",
-    [getServeSimCliPath(), "--port", String(port), "--codec", "auto", udid],
-    { shell: false }
-  )
+  const runner = getServeSimRunner(["--port", String(port), "--codec", "auto", udid])
+  const serveSimProcess = childProcess.spawn(runner.command, runner.args, {
+    shell: false,
+    env: runner.env,
+  })
 
   return new Promise((resolve, reject) => {
     let output = ""
@@ -243,7 +276,8 @@ function assertIOSSimulatorUdid(udid: unknown): asserts udid is string {
 }
 
 async function runServeSimCommand(args: string[]) {
-  return runCommand(process.env.REACTOTRON_NODE_PATH || "node", [getServeSimCliPath(), ...args])
+  const runner = getServeSimRunner(args)
+  return runCommand(runner.command, runner.args, { env: runner.env })
 }
 
 const reloadReactNativeViaMetro = (metroPort: number) =>
