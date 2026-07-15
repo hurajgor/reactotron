@@ -143,10 +143,12 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "entitlements.mac.plist",
-      "entitlementsInherit": "entitlements.mac.plist",
-      "notarize": {
-        "teamId": "L7YNDPLSEB"
-      }
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "hurajgor",
+      "repo": "reactotron"
     },
     "asarUnpack": [
       "node_modules/serve-sim/**"

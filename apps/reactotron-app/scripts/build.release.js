@@ -23,11 +23,21 @@ if (isCi) {
     console.log(`MacOS Code Signing Certificate found at: '${CSC_LINK}'`)
   }
 } else {
-  console.log("Not running in CI, skipping code signing")
-  console.log(
-    "For production builds: electron-builder needs a MacOS Developer Certificate in the MacOS Keychain or linked at CNC_LINK variable. See: https://www.electron.build/code-signing.html"
-  )
-  skipSigning = true
+  // Local builds can sign with a keychain identity when one is provided via
+  // MAC_SIGN_IDENTITY (or electron-builder's native CSC_NAME). This lets
+  // electron-builder sign the whole bundle in the correct order during the
+  // build, so no manual post-build re-signing is required. Without an
+  // identity we fall back to an unsigned build.
+  const localIdentity = process.env.MAC_SIGN_IDENTITY || process.env.CSC_NAME
+  if (BUILD_TARGET === "macos" && localIdentity) {
+    console.log(`Signing local build with identity: '${localIdentity}'`)
+  } else {
+    console.log("Not running in CI and no signing identity provided, skipping code signing")
+    console.log(
+      "To sign locally, set MAC_SIGN_IDENTITY to a keychain identity (e.g. 'Apple Development: You (TEAMID)'). See: https://www.electron.build/code-signing.html"
+    )
+    skipSigning = true
+  }
 }
 // #endregion
 
@@ -37,6 +47,8 @@ let flags = `${targetFlags[BUILD_TARGET]} --publish never`
 
 if (skipSigning) {
   flags += " -c.mac.identity=null"
+} else if (!isCi && (process.env.MAC_SIGN_IDENTITY || process.env.CSC_NAME)) {
+  flags += ` -c.mac.identity=${JSON.stringify(process.env.MAC_SIGN_IDENTITY || process.env.CSC_NAME)}`
 }
 
 /**
