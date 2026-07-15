@@ -32,7 +32,7 @@ These workspaces are used to build the Electron app that runs Reactotron.
 
 Clients are based around a plugin architecture. This allows us to add new features without having to modify the core of Reactotron.
 
-See [@hurajgor/reactotron-core-client](https://github.com/infinitered/reactotron/tree/main/lib/reactotron-core-client) for more information about plugins are implemented. In short, plugins are a way to listen to all the commands published by the server and then can do certain actions or publish new commands.
+See [@hurajgor/reactotron-core-client](https://github.com/hurajgor/reactotron/tree/main/lib/reactotron-core-client) for more information about plugins are implemented. In short, plugins are a way to listen to all the commands published by the server and then can do certain actions or publish new commands.
 
 These workspaces are used to build the client that we are debugging.
 

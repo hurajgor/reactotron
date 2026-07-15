@@ -158,7 +158,7 @@ function buildHelpMenu() {
       {
         label: "Visit on GitHub",
         click: () => {
-          shell.openExternal("https://github.com/infinitered/reactotron")
+          shell.openExternal("https://github.com/hurajgor/reactotron")
         },
       },
     ],

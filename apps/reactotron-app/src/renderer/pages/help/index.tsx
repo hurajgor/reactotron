@@ -48,15 +48,15 @@ const ConnectContainer = styled.div`
 `
 
 function openRepo() {
-  shell.openExternal("https://github.com/infinitered/reactotron")
+  shell.openExternal("https://github.com/hurajgor/reactotron")
 }
 
 function openFeedback() {
-  shell.openExternal("https://github.com/infinitered/reactotron/issues/new")
+  shell.openExternal("https://github.com/hurajgor/reactotron/issues/new")
 }
 
 function openUpdates() {
-  shell.openExternal("https://github.com/infinitered/reactotron/releases")
+  shell.openExternal("https://github.com/hurajgor/reactotron/releases")
 }
 
 function openTwitter() {

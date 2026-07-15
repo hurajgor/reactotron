@@ -88,23 +88,23 @@ for (const workspacePath of workspacePaths) {
     errors.push(`Invalid license field: "${packageJson.license}" (expected "MIT")`)
   }
 
-  // assert "bugs.url" field is "https://github.com/infinitered/reactotron/issues"
-  if (packageJson.bugs?.url !== "https://github.com/infinitered/reactotron/issues") {
+  // assert "bugs.url" field is "https://github.com/hurajgor/reactotron/issues"
+  if (packageJson.bugs?.url !== "https://github.com/hurajgor/reactotron/issues") {
     errors.push(
-      `Invalid bugs.url field: "${packageJson.bugs?.url}" (expected "https://github.com/infinitered/reactotron/issues")`
+      `Invalid bugs.url field: "${packageJson.bugs?.url}" (expected "https://github.com/hurajgor/reactotron/issues")`
     )
   }
 
-  // assert "homepage" field is `https://github.com/infinitered/reactotron/tree/master/lib/${workspaceName}`
-  const expectedHomepage = `https://github.com/infinitered/reactotron/tree/master/lib/${workspaceName}`
+  // assert "homepage" field is `https://github.com/hurajgor/reactotron/tree/master/lib/${workspaceName}`
+  const expectedHomepage = `https://github.com/hurajgor/reactotron/tree/master/lib/${workspaceName}`
   if (packageJson.homepage !== expectedHomepage) {
     errors.push(
       `Invalid homepage field: "${packageJson.homepage}" (expected "${expectedHomepage}")`
     )
   }
 
-  // assert "repository" field is `https://github.com/infinitered/reactotron/tree/master/lib/${workspaceName}`
-  const expectedRepository = `https://github.com/infinitered/reactotron/tree/master/lib/${workspaceName}`
+  // assert "repository" field is `https://github.com/hurajgor/reactotron/tree/master/lib/${workspaceName}`
+  const expectedRepository = `https://github.com/hurajgor/reactotron/tree/master/lib/${workspaceName}`
   if (packageJson.repository !== expectedRepository) {
     errors.push(
       `Invalid repository field: "${packageJson.repository}" (expected "${expectedRepository}")`

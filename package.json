@@ -10,18 +10,24 @@
   "author": {
     "name": "Infinite Red",
     "email": "hello@infinite.red",
-    "url": "https://github.com/infinitered/reactotron"
+    "url": "https://infinite.red"
   },
+  "contributors": [
+    {
+      "name": "Harsh Rajgor",
+      "url": "https://github.com/hurajgor"
+    }
+  ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/infinitered/reactotron/issues"
+    "url": "https://github.com/hurajgor/reactotron/issues"
   },
-  "repository": "https://github.com/infinitered/reactotron",
+  "repository": "https://github.com/hurajgor/reactotron",
   "keywords": [
     "react",
     "react native"
   ],
-  "homepage": "https://github.com/infinitered/reactotron#readme",
+  "homepage": "https://github.com/hurajgor/reactotron#readme",
   "engines": {
     "node": ">=18.0.0"
   },

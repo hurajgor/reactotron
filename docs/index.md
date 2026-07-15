@@ -26,4 +26,4 @@ You plug it into your app as a development dependency so it adds nothing to your
 
 > Reactotron is completely open source and free to use, making it an invaluable tool for developers at all levels of experience.
 
-[GitHub](https://github.com/infinitered/reactotron)
+[GitHub](https://github.com/hurajgor/reactotron)

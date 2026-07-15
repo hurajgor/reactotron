@@ -140,7 +140,7 @@ function getChangelogEntry(version) {
         }
 
         if (previousVersion) {
-          return `This release includes all changes accumulated since version ${previousVersion}.\n\nSee the [CHANGELOG](https://github.com/infinitered/reactotron/blob/master/apps/reactotron-app/CHANGELOG.md) for more details.`
+          return `This release includes all changes accumulated since version ${previousVersion}.\n\nSee the [CHANGELOG](https://github.com/hurajgor/reactotron/blob/master/apps/reactotron-app/CHANGELOG.md) for more details.`
         }
       }
 
@@ -163,7 +163,7 @@ console.log(`Got release notes (${releaseNotes.length} characters)`)
 const { Octokit } = require("@octokit/rest")
 const octokit = new Octokit({ auth: githubToken })
 
-const owner = "infinitered"
+const owner = "hurajgor"
 const repo = "reactotron"
 
 ;(async () => {

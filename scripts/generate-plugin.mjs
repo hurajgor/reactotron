@@ -157,8 +157,8 @@ function getPackageJson({ pluginName }) {
   )
 
   templatePackageJson.name = pluginName
-  ;(templatePackageJson.homepage = `https://github.com/infinitered/reactotron/tree/master/lib/${pluginName}`),
-    (templatePackageJson.repository = `https://github.com/infinitered/reactotron/tree/master/lib/${pluginName}`)
+  ;(templatePackageJson.homepage = `https://github.com/hurajgor/reactotron/tree/master/lib/${pluginName}`),
+    (templatePackageJson.repository = `https://github.com/hurajgor/reactotron/tree/master/lib/${pluginName}`)
 
   return templatePackageJson
 }

@@ -226,7 +226,7 @@ function getChangelogEntry(version, workspacePath) {
         }
 
         if (previousVersion) {
-          return `This release includes all changes accumulated since version ${previousVersion}.\n\nSee the [CHANGELOG](https://github.com/infinitered/reactotron/blob/${npmWorkspace}/CHANGELOG.md) for more details.`
+          return `This release includes all changes accumulated since version ${previousVersion}.\n\nSee the [CHANGELOG](https://github.com/hurajgor/reactotron/blob/${npmWorkspace}/CHANGELOG.md) for more details.`
         }
       }
 
@@ -267,7 +267,7 @@ const octokit = new Octokit({
 
 try {
   const res = await octokit.repos.createRelease({
-    owner: "infinitered",
+    owner: "hurajgor",
     repo: "reactotron",
     tag_name: gitTag,
     name: gitTag,
