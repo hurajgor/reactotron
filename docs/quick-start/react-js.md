@@ -6,7 +6,7 @@ title: react
 
 ## Installing Reactotron.app
 
-Let’s [download the desktop app](https://github.com/infinitered/reactotron/releases?q=reactotron-app&expanded=true) to start. Expand `reactotron-app` release to download the latest version for Linux, Windows, and Mac.
+Let’s [download the desktop app](https://github.com/hurajgor/reactotron/releases) to start.
 
 Unzip & run.
 
@@ -37,6 +37,12 @@ Let's install Reactotron as a dev dependency.
 
 ```
 npm i --save-dev @hurajgor/reactotron-react-js
+```
+
+Or with Yarn:
+
+```
+yarn add -D @hurajgor/reactotron-react-js
 ```
 
 I like a separate file for initializing. Create `src/ReactotronConfig.js` in your editor of choice and paste this:

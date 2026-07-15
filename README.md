@@ -64,12 +64,22 @@ The embedded device supports Home, reload, reconnect, shutdown, rotation, light/
 
 Download the desktop app from the [Releases](https://github.com/hurajgor/reactotron/releases) page for macOS, Linux, or Windows.
 
-Add the Reactotron client to your application as a development dependency so it does not affect production builds.
+This fork publishes its client packages under the `@hurajgor` scope. Add the client that matches your application as a development dependency so it does not affect production builds:
+
+```sh
+# React Native
+npm install --save-dev @hurajgor/reactotron-react-native
+
+# React
+npm install --save-dev @hurajgor/reactotron-react-js
+```
+
+Use the scoped `@hurajgor/*` integrations as well, for example `@hurajgor/reactotron-redux`, `@hurajgor/reactotron-mst`, and `@hurajgor/reactotron-apisauce`. Do not mix these with the unscoped upstream Reactotron packages.
 
 ## Get started
 
-- [React Native quick start](https://docs.infinite.red/reactotron/quick-start/react-native/)
-- [React quick start](https://docs.infinite.red/reactotron/quick-start/react-js/)
+- [React Native quick start](./docs/quick-start/react-native.md)
+- [React quick start](./docs/quick-start/react-js.md)
 - [MCP setup and tools](./docs/mcp.md)
 - [Tips and tricks](./docs/tips.md)
 - [Troubleshooting](./docs/troubleshooting.md)
