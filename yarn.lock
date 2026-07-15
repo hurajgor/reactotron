@@ -4864,6 +4864,42 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@hurajgor/reactotron-react-native-mmkv@workspace:lib/reactotron-react-native-mmkv":
+  version: 0.0.0-use.local
+  resolution: "@hurajgor/reactotron-react-native-mmkv@workspace:lib/reactotron-react-native-mmkv"
+  dependencies:
+    "@babel/core": "npm:^7.23.2"
+    "@babel/preset-env": "npm:^7.23.2"
+    "@babel/preset-typescript": "npm:^7.23.2"
+    "@hurajgor/reactotron-core-client": "workspace:*"
+    "@types/jest": "npm:^29.5.7"
+    "@types/node": "npm:^18.18.8"
+    "@typescript-eslint/eslint-plugin": "npm:^6.7.5"
+    "@typescript-eslint/parser": "npm:^6.7.5"
+    babel-eslint: "npm:^10.1.0"
+    babel-jest: "npm:^29.7.0"
+    eslint: "npm:^8.53.0"
+    eslint-config-prettier: "npm:^9.0.0"
+    eslint-config-standard: "npm:^17.1.0"
+    eslint-plugin-import: "npm:^2.29.0"
+    eslint-plugin-n: "npm:^16.2.0"
+    eslint-plugin-promise: "npm:^6.1.1"
+    eslint-plugin-react: "npm:^7.33.2"
+    eslint-plugin-react-hooks: "npm:^4.6.0"
+    eslint-plugin-standard: "npm:^5.0.0"
+    jest: "npm:^29.7.0"
+    prettier: "npm:^3.0.3"
+    react-native-builder-bob: "npm:^0.40.13"
+    react-native-mmkv: "npm:^2.10.2"
+    testdouble: "npm:^3.20.0"
+    ts-jest: "npm:^29.1.1"
+    typescript: "npm:^4.9.5"
+  peerDependencies:
+    "@hurajgor/reactotron-core-client": "*"
+    react-native-mmkv: "*"
+  languageName: unknown
+  linkType: soft
+
 "@hurajgor/reactotron-react-native@workspace:*, @hurajgor/reactotron-react-native@workspace:lib/reactotron-react-native":
   version: 0.0.0-use.local
   resolution: "@hurajgor/reactotron-react-native@workspace:lib/reactotron-react-native"
@@ -27119,42 +27155,6 @@ __metadata:
   peerDependencies:
     "@hurajgor/reactotron-core-contract": "workspace:*"
     reactotron-core-server: "workspace:*"
-  languageName: unknown
-  linkType: soft
-
-"reactotron-react-native-mmkv-23f90d@workspace:lib/reactotron-react-native-mmkv":
-  version: 0.0.0-use.local
-  resolution: "reactotron-react-native-mmkv-23f90d@workspace:lib/reactotron-react-native-mmkv"
-  dependencies:
-    "@babel/core": "npm:^7.23.2"
-    "@babel/preset-env": "npm:^7.23.2"
-    "@babel/preset-typescript": "npm:^7.23.2"
-    "@hurajgor/reactotron-core-client": "workspace:*"
-    "@types/jest": "npm:^29.5.7"
-    "@types/node": "npm:^18.18.8"
-    "@typescript-eslint/eslint-plugin": "npm:^6.7.5"
-    "@typescript-eslint/parser": "npm:^6.7.5"
-    babel-eslint: "npm:^10.1.0"
-    babel-jest: "npm:^29.7.0"
-    eslint: "npm:^8.53.0"
-    eslint-config-prettier: "npm:^9.0.0"
-    eslint-config-standard: "npm:^17.1.0"
-    eslint-plugin-import: "npm:^2.29.0"
-    eslint-plugin-n: "npm:^16.2.0"
-    eslint-plugin-promise: "npm:^6.1.1"
-    eslint-plugin-react: "npm:^7.33.2"
-    eslint-plugin-react-hooks: "npm:^4.6.0"
-    eslint-plugin-standard: "npm:^5.0.0"
-    jest: "npm:^29.7.0"
-    prettier: "npm:^3.0.3"
-    react-native-builder-bob: "npm:^0.40.13"
-    react-native-mmkv: "npm:^2.10.2"
-    testdouble: "npm:^3.20.0"
-    ts-jest: "npm:^29.1.1"
-    typescript: "npm:^4.9.5"
-  peerDependencies:
-    "@hurajgor/reactotron-core-client": "*"
-    react-native-mmkv: "*"
   languageName: unknown
   linkType: soft
 
