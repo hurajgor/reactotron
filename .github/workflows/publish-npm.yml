@@ -30,6 +30,7 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           PACKAGES: ${{ inputs.packages }}
+          YARN_NPM_PUBLISH_REGISTRY: https://registry.npmjs.org
         run: |
           IFS=',' read -ra packages <<< "$PACKAGES"
           for package in "${packages[@]}"; do
