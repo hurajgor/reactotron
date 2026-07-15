@@ -1,4 +1,5 @@
 {
+  "name": "@hurajgor/reactotron-react-native-mmkv",
   "version": "0.2.9",
   "description": "A Reactotron plugin for react-native-mmkv.",
   "author": "Infinite Red",
