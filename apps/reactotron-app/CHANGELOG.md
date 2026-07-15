@@ -2,6 +2,12 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [3.12.2](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.12.1...reactotron-app@3.12.2) (2026-07-14)
+
+### Bug Fixes
+
+* Sign macOS builds with the personal Apple Development certificate for internal distribution.
+
 ## [3.12.1](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.12.0...reactotron-app@3.12.1) (2026-07-14)
 
 ### Bug Fixes
