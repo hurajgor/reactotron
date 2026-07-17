@@ -15,6 +15,13 @@ const newTimelineStorageKey = "reactotron.enableNewTimeline"
 const startWithCompactSidebarStorageKey = "reactotron.startWithCompactSidebar"
 const themeModeChangeEvent = "reactotron-theme-mode-changed"
 
+const legacyThemeMigrations: Record<string, { themeStyle: ThemeStyle; themeAppearance: ThemeAppearance }> = {
+  tokyoNight: { themeStyle: "kanagawa", themeAppearance: "dark" },
+  githubDark: { themeStyle: "one", themeAppearance: "dark" },
+  rosePine: { themeStyle: "kanagawa", themeAppearance: "dark" },
+  ayuMirage: { themeStyle: "everforest", themeAppearance: "dark" },
+}
+
 interface Context {
   themeMode: ThemeName
   themeStyle: ThemeStyle
@@ -41,6 +48,9 @@ function readLegacyThemePreference(): {
 
   const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
   if (!savedThemeMode) return null
+
+  const migratedTheme = legacyThemeMigrations[savedThemeMode]
+  if (migratedTheme) return migratedTheme
 
   const match = themeStyles.find((style) => {
     const variants = themeVariants[style]
