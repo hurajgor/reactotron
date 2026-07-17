@@ -1,5 +1,5 @@
 // Styles
-import { themes } from "./themes"
+import { themes, themeStyles, themeVariants } from "./themes"
 
 // Components
 import ActionButton from "./components/ActionButton"
@@ -59,6 +59,8 @@ export {
   StateProvider,
   SubscriptionAddModal,
   themes,
+  themeStyles,
+  themeVariants,
   TimelineCommand,
   timelineCommandResolver,
   TimelineCommandTabButton,
@@ -73,4 +75,4 @@ export {
 
 export type { CustomCommand } from "./contexts/CustomCommands/useCustomCommands"
 export type { Snapshot } from "./contexts/State/useSnapshots"
-export type { ThemeName } from "./themes"
+export type { ThemeName, ThemeStyle } from "./themes"

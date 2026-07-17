@@ -1,8 +1,8 @@
 import React, { useContext } from "react"
-import { Header } from "@hurajgor/reactotron-core-ui"
+import { Header, type ThemeStyle } from "@hurajgor/reactotron-core-ui"
 import styled from "styled-components"
 
-import AppPreferencesContext, { ThemeMode } from "../../contexts/AppPreferences"
+import AppPreferencesContext, { ThemeAppearance } from "../../contexts/AppPreferences"
 
 const Container = styled.div`
   display: flex;
@@ -104,6 +104,40 @@ const ThemeSelect = styled.select`
   }
 `
 
+const ThemeControls = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const AppearanceOptions = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 8px;
+  background-color: ${(props) => props.theme.backgroundLighter};
+`
+
+const AppearanceOption = styled.label<{ $isActive: boolean }>`
+  display: grid;
+  min-height: 28px;
+  place-items: center;
+  border-radius: 5px;
+  background-color: ${(props) => (props.$isActive ? props.theme.background : "transparent")};
+  color: ${(props) => (props.$isActive ? props.theme.foreground : props.theme.foregroundDark)};
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: ${(props) => (props.$isActive ? 600 : 400)};
+
+  input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+`
+
 const PreferenceRow = styled.label`
   display: flex;
   align-items: center;
@@ -154,22 +188,29 @@ const ToggleThumb = styled.span<{ $isEnabled: boolean }>`
     transform 0.12s ease-out;
 `
 
-const themeOptions: Array<{ label: string; value: ThemeMode }> = [
-  { label: "Tokyo Night", value: "tokyoNight" },
+const themeOptions: Array<{ label: string; value: ThemeStyle }> = [
+  { label: "Solarized", value: "solarized" },
+  { label: "Kanagawa", value: "kanagawa" },
+  { label: "Everforest", value: "everforest" },
+  { label: "Gruvbox", value: "gruvbox" },
+  { label: "Catppuccin", value: "catppuccin" },
   { label: "T3 Code", value: "t3Code" },
-  { label: "Catppuccin", value: "catppuccinMocha" },
-  { label: "GitHub Dark", value: "githubDark" },
-  { label: "One Dark Pro", value: "oneDarkPro" },
+  { label: "One", value: "one" },
   { label: "Nord", value: "nord" },
-  { label: "Rose Pine", value: "rosePine" },
-  { label: "Gruvbox Dark", value: "gruvboxDark" },
-  { label: "Ayu Mirage", value: "ayuMirage" },
+]
+
+const appearanceOptions: Array<{ label: string; value: ThemeAppearance }> = [
+  { label: "System", value: "system" },
+  { label: "Dark", value: "dark" },
+  { label: "Light", value: "light" },
 ]
 
 function Settings() {
   const {
-    themeMode,
-    setThemeMode,
+    themeStyle,
+    setThemeStyle,
+    themeAppearance,
+    setThemeAppearance,
     enableNewTimeline,
     setEnableNewTimeline,
     startWithCompactSidebar,
@@ -184,20 +225,36 @@ function Settings() {
           <Section>
             <div>
               <SectionTitle>Theme</SectionTitle>
-              <SectionDescription>Choose the Reactotron color theme.</SectionDescription>
+              <SectionDescription>Choose a palette and appearance.</SectionDescription>
             </div>
-            <SelectWrap>
-              <ThemeSelect
-                value={themeMode}
-                onChange={(event) => setThemeMode(event.target.value as ThemeMode)}
-              >
-                {themeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+            <ThemeControls>
+              <SelectWrap>
+                <ThemeSelect
+                  value={themeStyle}
+                  onChange={(event) => setThemeStyle(event.target.value as ThemeStyle)}
+                >
+                  {themeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </ThemeSelect>
+              </SelectWrap>
+              <AppearanceOptions>
+                {appearanceOptions.map((option) => (
+                  <AppearanceOption key={option.value} $isActive={themeAppearance === option.value}>
+                    <input
+                      type="radio"
+                      name="theme-appearance"
+                      value={option.value}
+                      checked={themeAppearance === option.value}
+                      onChange={() => setThemeAppearance(option.value)}
+                    />
                     {option.label}
-                  </option>
+                  </AppearanceOption>
                 ))}
-              </ThemeSelect>
-            </SelectWrap>
+              </AppearanceOptions>
+            </ThemeControls>
           </Section>
 
           <Section>

@@ -15,10 +15,10 @@ describe("useColorScheme", () => {
   })
 
   it("should return stored theme preference when one is set", () => {
-    window.localStorage.setItem(themeModeStorageKey, "t3Code")
+    window.localStorage.setItem(themeModeStorageKey, "tokyoDay")
 
     const { result } = renderHook(() => useColorScheme())
-    expect(result.current).toBe("t3Code")
+    expect(result.current).toBe("tokyoDay")
   })
 
   it("should update when theme preference changes", () => {
@@ -26,11 +26,13 @@ describe("useColorScheme", () => {
     expect(result.current).toBe("tokyoNight")
 
     act(() => {
-      window.localStorage.setItem(themeModeStorageKey, "t3Code")
-      window.dispatchEvent(new CustomEvent("reactotron-theme-mode-changed", { detail: "t3Code" }))
+      window.localStorage.setItem(themeModeStorageKey, "catppuccinLatte")
+      window.dispatchEvent(
+        new CustomEvent("reactotron-theme-mode-changed", { detail: "catppuccinLatte" })
+      )
     })
 
-    expect(result.current).toBe("t3Code")
+    expect(result.current).toBe("catppuccinLatte")
   })
 
   it("should clean up event listener on unmount", () => {
