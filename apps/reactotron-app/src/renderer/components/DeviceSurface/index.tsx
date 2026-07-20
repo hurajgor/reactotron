@@ -254,7 +254,10 @@ const PreviewPane = styled.div`
   overflow: hidden;
 `
 
-const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
+const DeviceFrame = styled.div<{
+  $layout: DeviceFrameLayout | null
+  $platform: "android" | "ios"
+}>`
   position: relative;
   width: ${(props) => (props.$layout ? `${props.$layout.width}px` : "min(100%, 390px)")};
   height: ${(props) => (props.$layout ? `${props.$layout.height}px` : "auto")};
@@ -262,7 +265,8 @@ const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
   aspect-ratio: ${(props) => (props.$layout ? "auto" : "9 / 19.5")};
   overflow: hidden;
   border: ${(props) => `${props.$layout?.bezel ?? 8}px`} solid #0a0a0a;
-  border-radius: ${(props) => `${props.$layout?.outerRadius ?? 48}px`};
+  border-radius: ${(props) =>
+    `${Math.min(props.$layout?.outerRadius ?? 48, props.$platform === "android" ? 36 : 48)}px`};
   background: #000;
   box-shadow:
     0 8px 16px rgb(0 0 0 / 0.28),
@@ -274,6 +278,22 @@ const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
     box-shadow:
       0 28px 56px rgb(0 0 0 / 0.58),
       0 0 0 3px ${(props) => props.theme.highlight};
+  }
+
+  &::after {
+    position: absolute;
+    z-index: 1;
+    top: ${(props) => `${(props.$layout?.bezel ?? 8) + 7}px`};
+    left: 50%;
+    display: ${(props) => (props.$platform === "android" ? "block" : "none")};
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #090909;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
+    content: "";
+    pointer-events: none;
+    transform: translateX(-50%);
   }
 `
 
@@ -309,15 +329,19 @@ const EmptyCopy = styled.p`
 const ActionStack = styled.div`
   display: flex;
   width: 100%;
-  max-width: 300px;
+  max-width: 340px;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 `
 
 const ActionSection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 8px;
+  background: ${(props) => props.theme.backgroundLighter};
 `
 
 const ActionLabel = styled.span`
@@ -328,8 +352,7 @@ const ActionLabel = styled.span`
 `
 
 const ActionDivider = styled.div`
-  height: 1px;
-  background: ${(props) => props.theme.chromeLine};
+  display: none;
 `
 
 const DeviceSelect = styled.select`
@@ -1258,6 +1281,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                 <PreviewPane ref={setPreviewPane}>
                   <DeviceFrame
                     $layout={deviceFrameLayout}
+                    $platform="ios"
                     aria-label={`${activeSurface.name} simulator screen`}
                     onKeyDown={onScreenKeyDown}
                     onPaste={onScreenPaste}
@@ -1334,13 +1358,23 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                 <PreviewPane ref={setPreviewPane}>
                   <DeviceFrame
                     $layout={deviceFrameLayout}
+                    $platform="android"
                     aria-label={`${activeAndroidDevice.model} Android screen`}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return
                       const bounds = event.currentTarget.getBoundingClientRect()
+                      const bezel = deviceFrameLayout?.bezel ?? 0
+                      const screenWidth = Math.max(1, bounds.width - bezel * 2)
+                      const screenHeight = Math.max(1, bounds.height - bezel * 2)
                       runAndroidCommand("tap", {
-                        x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
-                        y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+                        x: Math.min(
+                          1,
+                          Math.max(0, (event.clientX - bounds.left - bezel) / screenWidth)
+                        ),
+                        y: Math.min(
+                          1,
+                          Math.max(0, (event.clientY - bounds.top - bezel) / screenHeight)
+                        ),
                       }).catch(() => undefined)
                     }}
                     role="application"
