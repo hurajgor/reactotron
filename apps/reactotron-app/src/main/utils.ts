@@ -97,9 +97,11 @@ function getServeSimCliPath(): string {
  * When Reactotron is opened from Finder/Dock the process inherits a minimal
  * PATH that usually does not include a user-installed Node (nvm, Homebrew),
  * so spawning a bare "node" fails with ENOENT. Electron ships its own Node,
- * so by default we re-invoke our own executable with ELECTRON_RUN_AS_NODE=1
- * and no external Node is required. REACTOTRON_NODE_PATH still overrides this
- * for anyone who needs a specific runtime.
+ * so by default we re-invoke our own executable with ELECTRON_RUN_AS_NODE=1.
+ * Electron's Node 18 runtime does not expose the WebSocket global that
+ * serve-sim's control commands require, so the bootstrap supplies it from the
+ * bundled `ws` dependency. REACTOTRON_NODE_PATH still overrides this for
+ * anyone who needs a specific runtime.
  */
 function getServeSimRunner(args: string[]): {
   command: string
@@ -115,7 +117,12 @@ function getServeSimRunner(args: string[]): {
 
   return {
     command: process.execPath,
-    args: [cliPath, ...args],
+    args: [
+      "-e",
+      "globalThis.WebSocket ??= require('ws').WebSocket; import(require('node:url').pathToFileURL(process.argv[1]).href)",
+      cliPath,
+      ...args,
+    ],
     env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
   }
 }
@@ -275,9 +282,51 @@ function assertIOSSimulatorUdid(udid: unknown): asserts udid is string {
   }
 }
 
-async function runServeSimCommand(args: string[]) {
-  const runner = getServeSimRunner(args)
-  return runCommand(runner.command, runner.args, { env: runner.env })
+function sendServeSimControl(
+  udid: string,
+  opcode: number,
+  message: Record<string, string>,
+  requestedWsUrl?: unknown
+): Promise<void> {
+  const surface = serveSimProcesses.get(udid)
+  const wsUrl = typeof requestedWsUrl === "string" ? requestedWsUrl : undefined
+  if (!wsUrl && (!surface || surface.process.exitCode !== null)) {
+    return Promise.reject(new Error("No simulator preview is running for this device."))
+  }
+
+  const controlUrl =
+    wsUrl ?? `ws://127.0.0.1:${new URL(surface!.previewUrl).port}/helper/${udid}/ws`
+  const url = new URL(controlUrl)
+  if (
+    url.protocol !== "ws:" ||
+    !["127.0.0.1", "localhost"].includes(url.hostname) ||
+    url.pathname !== `/helper/${udid}/ws`
+  ) {
+    return Promise.reject(new Error("Invalid simulator preview control address."))
+  }
+  // serve-sim already provides this dependency; use its control protocol
+  // directly so the command and preview always share the same server.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const WebSocket = require("ws") as typeof import("ws")
+
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(controlUrl)
+    let finished = false
+    const finish = (error?: Error) => {
+      if (finished) return
+      finished = true
+      socket.close()
+      if (error) reject(error)
+      else resolve()
+    }
+
+    socket.on("open", () => {
+      const payload = Buffer.from(JSON.stringify(message))
+      socket.send(Buffer.concat([Buffer.from([opcode]), payload]))
+      setTimeout(() => finish(), 50)
+    })
+    socket.on("error", (error) => finish(error))
+  })
 }
 
 const reloadReactNativeViaMetro = (metroPort: number) =>
@@ -429,18 +478,19 @@ export const setupSimulatorIPCCommands = () => {
 
   ipcMain.handle(
     "ios-simulator-surface-command",
-    async (_event, udid: unknown, command: unknown) => {
+    async (_event, udid: unknown, command: unknown, wsUrl: unknown) => {
       try {
         assertIOSSimulatorUdid(udid)
         if (command === "home") {
-          await runServeSimCommand(["button", "home", "--device", udid])
+          await sendServeSimControl(udid, 4, { button: "home" }, wsUrl)
         } else if (command === "landscape_left" || command === "portrait") {
-          await runServeSimCommand(["rotate", command, "--device", udid])
+          await sendServeSimControl(udid, 7, { orientation: command }, wsUrl)
         } else {
           throw new Error("Unsupported iOS simulator command.")
         }
         return { ok: true }
       } catch (error) {
+        console.error("iOS simulator surface command failed", error)
         return { ok: false, message: error instanceof Error ? error.message : String(error) }
       }
     }

@@ -1,27 +1,33 @@
 import React, { useCallback, useMemo, useState } from "react"
+import {
+  themeStyles,
+  themeVariants,
+  type ThemeName,
+  type ThemeStyle,
+} from "@hurajgor/reactotron-core-ui"
 
-const themeModes = [
-  "tokyoNight",
-  "t3Code",
-  "catppuccinMocha",
-  "githubDark",
-  "oneDarkPro",
-  "nord",
-  "rosePine",
-  "gruvboxDark",
-  "ayuMirage",
-] as const
-
-export type ThemeMode = (typeof themeModes)[number]
+export type ThemeAppearance = "system" | "dark" | "light"
 
 const themeModeStorageKey = "reactotron.themeMode"
+const themeStyleStorageKey = "reactotron.themeStyle"
+const themeAppearanceStorageKey = "reactotron.themeAppearance"
 const newTimelineStorageKey = "reactotron.enableNewTimeline"
 const startWithCompactSidebarStorageKey = "reactotron.startWithCompactSidebar"
 const themeModeChangeEvent = "reactotron-theme-mode-changed"
 
+const legacyThemeMigrations: Record<string, { themeStyle: ThemeStyle; themeAppearance: ThemeAppearance }> = {
+  tokyoNight: { themeStyle: "kanagawa", themeAppearance: "dark" },
+  githubDark: { themeStyle: "one", themeAppearance: "dark" },
+  rosePine: { themeStyle: "kanagawa", themeAppearance: "dark" },
+  ayuMirage: { themeStyle: "everforest", themeAppearance: "dark" },
+}
+
 interface Context {
-  themeMode: ThemeMode
-  setThemeMode: (themeMode: ThemeMode) => void
+  themeMode: ThemeName
+  themeStyle: ThemeStyle
+  setThemeStyle: (themeStyle: ThemeStyle) => void
+  themeAppearance: ThemeAppearance
+  setThemeAppearance: (themeAppearance: ThemeAppearance) => void
   enableNewTimeline: boolean
   setEnableNewTimeline: (isEnabled: boolean) => void
   startWithCompactSidebar: boolean
@@ -34,13 +40,57 @@ const noop = (): void => {
   )
 }
 
-function readThemeMode(): ThemeMode {
-  if (typeof window === "undefined") return "tokyoNight"
+function readLegacyThemePreference(): {
+  themeStyle: ThemeStyle
+  themeAppearance: ThemeAppearance
+} | null {
+  if (typeof window === "undefined") return null
 
   const savedThemeMode = window.localStorage.getItem(themeModeStorageKey)
-  if (themeModes.includes(savedThemeMode as ThemeMode)) return savedThemeMode as ThemeMode
+  if (!savedThemeMode) return null
 
-  return "tokyoNight"
+  const migratedTheme = legacyThemeMigrations[savedThemeMode]
+  if (migratedTheme) return migratedTheme
+
+  const match = themeStyles.find((style) => {
+    const variants = themeVariants[style]
+    return variants.dark === savedThemeMode || variants.light === savedThemeMode
+  })
+  if (!match) return null
+
+  return {
+    themeStyle: match,
+    themeAppearance: themeVariants[match].dark === savedThemeMode ? "dark" : "light",
+  }
+}
+
+function readThemeStyle(): ThemeStyle {
+  if (typeof window === "undefined") return "solarized"
+
+  const savedThemeStyle = window.localStorage.getItem(themeStyleStorageKey)
+  if (themeStyles.includes(savedThemeStyle as ThemeStyle)) return savedThemeStyle as ThemeStyle
+
+  return readLegacyThemePreference()?.themeStyle ?? "solarized"
+}
+
+function readThemeAppearance(): ThemeAppearance {
+  if (typeof window === "undefined") return "system"
+
+  const savedThemeAppearance = window.localStorage.getItem(themeAppearanceStorageKey)
+  if (
+    savedThemeAppearance === "system" ||
+    savedThemeAppearance === "dark" ||
+    savedThemeAppearance === "light"
+  ) {
+    return savedThemeAppearance
+  }
+
+  return readLegacyThemePreference()?.themeAppearance ?? "system"
+}
+
+function getSystemAppearance(): "dark" | "light" {
+  if (typeof window === "undefined") return "dark"
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
 }
 
 function readEnableNewTimeline(): boolean {
@@ -64,8 +114,11 @@ function readStartWithCompactSidebar(): boolean {
 }
 
 const AppPreferencesContext = React.createContext<Context>({
-  themeMode: "tokyoNight",
-  setThemeMode: noop,
+  themeMode: "solarizedDark",
+  themeStyle: "solarized",
+  setThemeStyle: noop,
+  themeAppearance: "system",
+  setThemeAppearance: noop,
   enableNewTimeline: true,
   setEnableNewTimeline: noop,
   startWithCompactSidebar: true,
@@ -73,18 +126,44 @@ const AppPreferencesContext = React.createContext<Context>({
 })
 
 const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [themeMode, setThemeModeState] = useState<ThemeMode>(readThemeMode)
+  const [themeStyle, setThemeStyleState] = useState<ThemeStyle>(readThemeStyle)
+  const [themeAppearance, setThemeAppearanceState] = useState<ThemeAppearance>(readThemeAppearance)
+  const [systemAppearance, setSystemAppearance] = useState<"dark" | "light">(getSystemAppearance)
   const [enableNewTimeline, setEnableNewTimelineState] = useState(readEnableNewTimeline)
   const [startWithCompactSidebar, setStartWithCompactSidebarState] = useState(
     readStartWithCompactSidebar
   )
 
-  const setThemeMode = useCallback((nextThemeMode: ThemeMode) => {
-    setThemeModeState(nextThemeMode)
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    const handleChange = () => setSystemAppearance(getSystemAppearance())
+
+    mediaQuery.addEventListener("change", handleChange)
+    return () => mediaQuery.removeEventListener("change", handleChange)
+  }, [])
+
+  const resolvedAppearance = themeAppearance === "system" ? systemAppearance : themeAppearance
+  const themeMode = themeVariants[themeStyle][resolvedAppearance]
+
+  React.useEffect(() => {
     if (typeof window === "undefined") return
 
-    window.localStorage.setItem(themeModeStorageKey, nextThemeMode)
-    window.dispatchEvent(new CustomEvent(themeModeChangeEvent, { detail: nextThemeMode }))
+    window.localStorage.setItem(themeModeStorageKey, themeMode)
+    window.dispatchEvent(new CustomEvent(themeModeChangeEvent, { detail: themeMode }))
+  }, [themeMode])
+
+  const setThemeStyle = useCallback((nextThemeStyle: ThemeStyle) => {
+    setThemeStyleState(nextThemeStyle)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(themeStyleStorageKey, nextThemeStyle)
+    }
+  }, [])
+
+  const setThemeAppearance = useCallback((nextThemeAppearance: ThemeAppearance) => {
+    setThemeAppearanceState(nextThemeAppearance)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(themeAppearanceStorageKey, nextThemeAppearance)
+    }
   }, [])
 
   const setEnableNewTimeline = useCallback((isEnabled: boolean) => {
@@ -104,7 +183,10 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const value = useMemo(
     () => ({
       themeMode,
-      setThemeMode,
+      themeStyle,
+      setThemeStyle,
+      themeAppearance,
+      setThemeAppearance,
       enableNewTimeline,
       setEnableNewTimeline,
       startWithCompactSidebar,
@@ -114,15 +196,24 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       enableNewTimeline,
       setEnableNewTimeline,
       setStartWithCompactSidebar,
-      setThemeMode,
+      setThemeAppearance,
+      setThemeStyle,
       startWithCompactSidebar,
+      themeAppearance,
       themeMode,
+      themeStyle,
     ]
   )
 
   return <AppPreferencesContext.Provider value={value}>{children}</AppPreferencesContext.Provider>
 }
 
-export { startWithCompactSidebarStorageKey, themeModeChangeEvent, themeModeStorageKey }
+export {
+  startWithCompactSidebarStorageKey,
+  themeAppearanceStorageKey,
+  themeModeChangeEvent,
+  themeModeStorageKey,
+  themeStyleStorageKey,
+}
 export default AppPreferencesContext
 export const AppPreferencesProvider = Provider

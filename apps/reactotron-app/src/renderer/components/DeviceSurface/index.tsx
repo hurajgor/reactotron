@@ -13,6 +13,16 @@ import {
 } from "react-icons/md"
 import styled from "styled-components"
 
+import {
+  fitDeviceFrameToPane,
+  mapPointToStream,
+  parseSimulatorScreenConfigFrame,
+  resolveDeviceFrameKind,
+  resolveStreamRotation,
+  resolveVisualScreenAspectRatio,
+  type DeviceFrameLayout,
+} from "./layout"
+
 type Simulator = {
   name: string
   runtime: string
@@ -32,6 +42,7 @@ type Surface = Simulator & {
   wsUrl: string
   orientation: "portrait" | "landscape_left"
   recording?: boolean
+  screenSize?: { width: number; height: number }
 }
 
 type IPCResponse = {
@@ -174,10 +185,18 @@ const Actions = styled.div`
   gap: 3px;
 `
 
-const Preview = styled.img`
-  width: 100%;
-  height: 100%;
+const Preview = styled.img<{
+  $rotation: -90 | 0 | 90
+  $screenWidth: number
+  $screenHeight: number
+}>`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: ${(props) => (props.$rotation === 0 ? "100%" : `${props.$screenHeight}px`)};
+  height: ${(props) => (props.$rotation === 0 ? "100%" : `${props.$screenWidth}px`)};
   object-fit: contain;
+  transform: translate(-50%, -50%) rotate(${(props) => props.$rotation}deg);
   user-select: none;
 `
 
@@ -186,16 +205,25 @@ const PreviewContainer = styled.div`
   display: flex;
   min-height: 0;
   flex: 1;
-  align-items: center;
-  justify-content: center;
-  padding: 28px 20px;
-  background: radial-gradient(ellipse at 50% 42%, rgb(72 83 103 / 0.35), transparent 62%),
-    linear-gradient(145deg, #252a34 0%, #171b23 55%, #101319 100%);
+  background: radial-gradient(
+      ellipse at 50% 42%,
+      color-mix(in srgb, ${(props) => props.theme.highlight} 24%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      145deg,
+      ${(props) => props.theme.backgroundLighter} 0%,
+      ${(props) => props.theme.background} 55%,
+      ${(props) => props.theme.backgroundDarker} 100%
+    );
 
   &::before {
     position: absolute;
     inset: 0;
-    background-image: linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px);
+    background-image: linear-gradient(
+      color-mix(in srgb, ${(props) => props.theme.foreground} 6%, transparent) 1px,
+      transparent 1px
+    );
     background-size: 100% 4px;
     content: "";
     opacity: 0.35;
@@ -203,19 +231,31 @@ const PreviewContainer = styled.div`
   }
 `
 
-const DeviceFrame = styled.div`
-  position: relative;
-  height: min(100%, 760px);
-  max-width: min(100%, 390px);
-  aspect-ratio: 9 / 19.5;
+const PreviewPane = styled.div`
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  margin: 28px 20px;
   overflow: hidden;
-  border: 8px solid #0a0a0a;
-  border-radius: 48px;
+`
+
+const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
+  position: relative;
+  width: ${(props) => (props.$layout ? `${props.$layout.width}px` : "min(100%, 390px)")};
+  height: ${(props) => (props.$layout ? `${props.$layout.height}px` : "auto")};
+  box-sizing: border-box;
+  aspect-ratio: ${(props) => (props.$layout ? "auto" : "9 / 19.5")};
+  overflow: hidden;
+  border: ${(props) => `${props.$layout?.bezel ?? 8}px`} solid #0a0a0a;
+  border-radius: ${(props) => `${props.$layout?.outerRadius ?? 48}px`};
   background: #000;
   box-shadow:
-    0 28px 56px rgb(0 0 0 / 0.58),
-    0 0 0 1px rgb(255 255 255 / 0.16),
-    0 0 36px rgb(78 103 146 / 0.16);
+    0 8px 16px rgb(0 0 0 / 0.28),
+    0 0 0 1px rgb(255 255 255 / 0.12);
   outline: none;
   touch-action: none;
 
@@ -426,8 +466,10 @@ function encodeControlFrame(tag: number, payload: object) {
 
 function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const panelRef = useRef<HTMLElement>(null)
+  const [previewPane, setPreviewPane] = useState<HTMLDivElement | null>(null)
   const [isResizing, setIsResizing] = useState(false)
   const [panelWidth, setPanelWidth] = useState(400)
+  const [deviceFrameLayout, setDeviceFrameLayout] = useState<DeviceFrameLayout | null>(null)
   const [simulators, setSimulators] = useState<Simulator[]>([])
   const [creationOptions, setCreationOptions] = useState<SimulatorCreationOption[]>([])
   const [surfaces, setSurfaces] = useState<Surface[]>([])
@@ -439,6 +481,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const [status, setStatus] = useState("")
   const [isError, setIsError] = useState(false)
   const [isControlConnected, setIsControlConnected] = useState(false)
+  const autoOpenAttemptedRef = useRef(false)
   const controlSocketRef = useRef<WebSocket | null>(null)
   const keyboardTimersRef = useRef<number[]>([])
   const touchRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
@@ -448,6 +491,72 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     [activeUdid, surfaces]
   )
   const activeWsUrl = activeSurface?.wsUrl
+  const activeScreenAspectRatio = resolveVisualScreenAspectRatio(
+    activeSurface?.screenSize,
+    activeSurface?.orientation ?? "portrait"
+  )
+  const activeFrameKind = resolveDeviceFrameKind(activeSurface?.name, activeScreenAspectRatio)
+  const activeStreamRotation = resolveStreamRotation(
+    activeSurface?.screenSize,
+    activeSurface?.orientation ?? "portrait"
+  )
+  const activeScreenWidth = Math.max(
+    0,
+    (deviceFrameLayout?.width ?? 0) - (deviceFrameLayout?.bezel ?? 0) * 2
+  )
+  const activeScreenHeight = Math.max(
+    0,
+    (deviceFrameLayout?.height ?? 0) - (deviceFrameLayout?.bezel ?? 0) * 2
+  )
+
+  useEffect(() => {
+    if (!previewPane) return undefined
+    let frameId: number | null = null
+
+    const updateLayout = () => {
+      const { width, height } = previewPane.getBoundingClientRect()
+      const nextLayout = fitDeviceFrameToPane(
+        { width: Math.floor(width), height: Math.floor(height) },
+        activeScreenAspectRatio,
+        activeFrameKind
+      )
+      setDeviceFrameLayout((current) =>
+        current?.width === nextLayout?.width &&
+        current?.height === nextLayout?.height &&
+        current?.bezel === nextLayout?.bezel
+          ? current
+          : nextLayout
+      )
+    }
+    const scheduleUpdate = () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
+      frameId = requestAnimationFrame(() => {
+        frameId = null
+        updateLayout()
+      })
+    }
+    updateLayout()
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", scheduleUpdate)
+      return () => {
+        if (frameId !== null) {
+          cancelAnimationFrame(frameId)
+        }
+        window.removeEventListener("resize", scheduleUpdate)
+      }
+    }
+    const observer = new ResizeObserver(scheduleUpdate)
+    observer.observe(previewPane)
+
+    return () => {
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
+      observer.disconnect()
+    }
+  }, [activeFrameKind, activeScreenAspectRatio, previewPane])
 
   const loadSimulators = useCallback(async () => {
     setIsLoading(true)
@@ -496,54 +605,66 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     loadCreationOptions().catch(() => undefined)
   }, [loadCreationOptions, loadSimulators])
 
-  const openSurface = async () => {
-    const simulator = simulators.find((item) => item.udid === selectedUdid)
-    if (!simulator) return
+  const openSurface = useCallback(
+    async (udid = selectedUdid) => {
+      const simulator = simulators.find((item) => item.udid === udid)
+      if (!simulator) return
 
-    const existingSurface = surfaces.find((surface) => surface.udid === simulator.udid)
-    if (existingSurface) {
-      setActiveUdid(existingSurface.udid)
-      setIsChoosing(false)
-      return
-    }
+      const existingSurface = surfaces.find((surface) => surface.udid === simulator.udid)
+      if (existingSurface) {
+        setActiveUdid(existingSurface.udid)
+        setIsChoosing(false)
+        return
+      }
 
-    setIsLoading(true)
-    setStatus("Starting secure local simulator preview...")
-    setIsError(false)
-    const result = (await ipcRenderer.invoke(
-      "start-ios-simulator-surface",
-      simulator.udid
-    )) as IPCResponse & {
-      previewUrl?: string
-      streamUrl?: string
-      wsUrl?: string
-      simulator?: Simulator
-    }
-    setIsLoading(false)
-    if (!result.ok || !result.previewUrl || !result.streamUrl || !result.wsUrl) {
-      setStatus(result.message || "Could not start the simulator preview.")
-      setIsError(true)
-      return
-    }
+      setIsLoading(true)
+      setStatus("Starting secure local simulator preview...")
+      setIsError(false)
+      const result = (await ipcRenderer.invoke(
+        "start-ios-simulator-surface",
+        simulator.udid
+      )) as IPCResponse & {
+        previewUrl?: string
+        streamUrl?: string
+        wsUrl?: string
+        simulator?: Simulator
+      }
+      setIsLoading(false)
+      if (!result.ok || !result.previewUrl || !result.streamUrl || !result.wsUrl) {
+        setStatus(result.message || "Could not start the simulator preview.")
+        setIsError(true)
+        return
+      }
 
-    const surface: Surface = {
-      ...simulator,
-      ...result.simulator,
-      previewUrl: result.previewUrl,
-      streamUrl: result.streamUrl,
-      wsUrl: result.wsUrl,
-      orientation: "portrait",
-    }
-    setSimulators((current) =>
-      current.map((item) =>
-        item.udid === simulator.udid ? { ...item, ...result.simulator } : item
+      const surface: Surface = {
+        ...simulator,
+        ...result.simulator,
+        previewUrl: result.previewUrl,
+        streamUrl: result.streamUrl,
+        wsUrl: result.wsUrl,
+        orientation: "portrait",
+      }
+      setSimulators((current) =>
+        current.map((item) =>
+          item.udid === simulator.udid ? { ...item, ...result.simulator } : item
+        )
       )
-    )
-    setSurfaces((current) => [...current, surface])
-    setActiveUdid(simulator.udid)
-    setIsChoosing(false)
-    setStatus("")
-  }
+      setSurfaces((current) => [...current, surface])
+      setActiveUdid(simulator.udid)
+      setIsChoosing(false)
+      setStatus("")
+    },
+    [selectedUdid, simulators, surfaces]
+  )
+
+  useEffect(() => {
+    if (!isOpen || autoOpenAttemptedRef.current || simulators.length === 0) return
+
+    const simulator = simulators.find((item) => item.state === "Booted") ?? simulators[0]
+    autoOpenAttemptedRef.current = true
+    setSelectedUdid(simulator.udid)
+    openSurface(simulator.udid).catch(() => undefined)
+  }, [isOpen, openSurface, simulators])
 
   const createSurface = async () => {
     if (!selectedDeviceType) return
@@ -592,7 +713,8 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     const result = (await ipcRenderer.invoke(
       "ios-simulator-surface-command",
       activeSurface.udid,
-      command
+      command,
+      activeSurface.wsUrl
     )) as IPCResponse
     if (!result.ok) {
       setStatus(result.message || "The simulator command failed.")
@@ -601,6 +723,8 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     }
 
     if (command !== "home") {
+      // This only records the next requested rotation. The frame itself follows
+      // the MJPEG dimensions, so an asynchronous stream can never be stretched.
       setSurfaces((current) =>
         current.map((surface) =>
           surface.udid === activeSurface.udid ? { ...surface, orientation: command } : surface
@@ -757,7 +881,24 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setIsControlConnected(false)
     if (!socket) return undefined
 
+    socket.binaryType = "arraybuffer"
     socket.onopen = () => setIsControlConnected(true)
+    socket.onmessage = (event) => {
+      const config = parseSimulatorScreenConfigFrame(event.data)
+      if (!config || !activeUdid) return
+
+      setSurfaces((current) =>
+        current.map((surface) =>
+          surface.udid === activeUdid
+            ? {
+                ...surface,
+                screenSize: config.screenSize,
+                orientation: config.orientation ?? surface.orientation,
+              }
+            : surface
+        )
+      )
+    }
     socket.onerror = () => setIsControlConnected(false)
     socket.onclose = () => setIsControlConnected(false)
     return () => {
@@ -765,7 +906,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       if (controlSocketRef.current === socket) controlSocketRef.current = null
       setIsControlConnected(false)
     }
-  }, [activeWsUrl])
+  }, [activeUdid, activeWsUrl])
 
   const sendControl = useCallback((tag: number, payload: object) => {
     const socket = controlSocketRef.current
@@ -800,10 +941,11 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
   const screenPoint = (event: React.PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect()
-    return {
+    const point = {
       x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
       y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
     }
+    return mapPointToStream(point, activeStreamRotation)
   }
 
   const onScreenPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -850,6 +992,20 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       event.preventDefault()
       event.stopPropagation()
     }
+  }
+
+  const onPreviewLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    if (!activeSurface) return
+    const { naturalHeight, naturalWidth } = event.currentTarget
+    if (naturalWidth === 0 || naturalHeight === 0) return
+    setSurfaces((current) =>
+      current.map((surface) =>
+        surface.udid === activeSurface.udid &&
+        (surface.screenSize?.width !== naturalWidth || surface.screenSize?.height !== naturalHeight)
+          ? { ...surface, screenSize: { width: naturalWidth, height: naturalHeight } }
+          : surface
+      )
+    )
   }
 
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -992,24 +1148,31 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                 </Actions>
               </ToolBar>
               <PreviewContainer>
-                <DeviceFrame
-                  aria-label={`${activeSurface.name} simulator screen`}
-                  onKeyDown={onScreenKeyDown}
-                  onPaste={onScreenPaste}
-                  onPointerCancel={onScreenPointerEnd}
-                  onPointerDown={onScreenPointerDown}
-                  onPointerMove={onScreenPointerMove}
-                  onPointerUp={onScreenPointerEnd}
-                  role="application"
-                  tabIndex={0}
-                >
-                  <Preview
-                    key={activeSurface.streamUrl}
-                    draggable={false}
-                    src={activeSurface.streamUrl}
-                    alt={`${activeSurface.name} simulator screen`}
-                  />
-                </DeviceFrame>
+                <PreviewPane ref={setPreviewPane}>
+                  <DeviceFrame
+                    $layout={deviceFrameLayout}
+                    aria-label={`${activeSurface.name} simulator screen`}
+                    onKeyDown={onScreenKeyDown}
+                    onPaste={onScreenPaste}
+                    onPointerCancel={onScreenPointerEnd}
+                    onPointerDown={onScreenPointerDown}
+                    onPointerMove={onScreenPointerMove}
+                    onPointerUp={onScreenPointerEnd}
+                    role="application"
+                    tabIndex={0}
+                  >
+                    <Preview
+                      key={activeSurface.streamUrl}
+                      $rotation={activeStreamRotation}
+                      $screenWidth={activeScreenWidth}
+                      $screenHeight={activeScreenHeight}
+                      draggable={false}
+                      onLoad={onPreviewLoad}
+                      src={activeSurface.streamUrl}
+                      alt={`${activeSurface.name} simulator screen`}
+                    />
+                  </DeviceFrame>
+                </PreviewPane>
               </PreviewContainer>
               {status && <Status $error={isError}>{status}</Status>}
             </>
