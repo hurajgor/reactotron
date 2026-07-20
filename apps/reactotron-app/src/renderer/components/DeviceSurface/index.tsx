@@ -524,6 +524,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const autoOpenAttemptedRef = useRef(false)
   const controlSocketRef = useRef<WebSocket | null>(null)
   const keyboardTimersRef = useRef<number[]>([])
+  const androidScreenshotInFlightRef = useRef(false)
   const touchRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const androidTouchRef = useRef<{
     pointerId: number
@@ -679,13 +680,18 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   }, [loadAndroidDevices, loadCreationOptions, loadSimulators])
 
   const refreshAndroidScreenshot = useCallback(async () => {
-    if (!activeAndroidDevice) return
-    const result = (await ipcRenderer.invoke(
-      "android-device-screenshot",
-      activeAndroidDevice.id
-    )) as IPCResponse & { imageBase64?: string }
-    if (!result.ok || !result.imageBase64) return
-    setAndroidScreenshot(`data:image/png;base64,${result.imageBase64}`)
+    if (!activeAndroidDevice || androidScreenshotInFlightRef.current) return
+    androidScreenshotInFlightRef.current = true
+    try {
+      const result = (await ipcRenderer.invoke(
+        "android-device-screenshot",
+        activeAndroidDevice.id
+      )) as IPCResponse & { imageBase64?: string }
+      if (!result.ok || !result.imageBase64) return
+      setAndroidScreenshot(`data:image/png;base64,${result.imageBase64}`)
+    } finally {
+      androidScreenshotInFlightRef.current = false
+    }
   }, [activeAndroidDevice])
 
   useEffect(() => {

@@ -118,7 +118,9 @@ async function captureAndroidDeviceScreenshot(deviceId: string) {
         reject(new Error(errorOutput || `adb screencap exited with code ${code}.`))
         return
       }
-      resolve(Buffer.concat(image).toString("base64"))
+      const screenshot = nativeImage.createFromBuffer(Buffer.concat(image))
+      const preview = screenshot.resize({ width: 480 }).toPNG()
+      resolve(preview.toString("base64"))
     })
   })
 }
