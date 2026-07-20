@@ -15,6 +15,7 @@ import styled from "styled-components"
 
 import {
   fitDeviceFrameToPane,
+  parseSimulatorScreenConfigFrame,
   resolveDeviceFrameKind,
   resolveStreamRotation,
   resolveVisualScreenAspectRatio,
@@ -879,7 +880,24 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setIsControlConnected(false)
     if (!socket) return undefined
 
+    socket.binaryType = "arraybuffer"
     socket.onopen = () => setIsControlConnected(true)
+    socket.onmessage = (event) => {
+      const config = parseSimulatorScreenConfigFrame(event.data)
+      if (!config || !activeUdid) return
+
+      setSurfaces((current) =>
+        current.map((surface) =>
+          surface.udid === activeUdid
+            ? {
+                ...surface,
+                screenSize: config.screenSize,
+                orientation: config.orientation ?? surface.orientation,
+              }
+            : surface
+        )
+      )
+    }
     socket.onerror = () => setIsControlConnected(false)
     socket.onclose = () => setIsControlConnected(false)
     return () => {
@@ -887,7 +905,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       if (controlSocketRef.current === socket) controlSocketRef.current = null
       setIsControlConnected(false)
     }
-  }, [activeWsUrl])
+  }, [activeUdid, activeWsUrl])
 
   const sendControl = useCallback((tag: number, payload: object) => {
     const socket = controlSocketRef.current

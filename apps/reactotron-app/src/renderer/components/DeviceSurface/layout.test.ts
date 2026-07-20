@@ -1,9 +1,15 @@
+import { TextDecoder, TextEncoder } from "util"
+
 import {
   fitDeviceFrameToPane,
+  parseSimulatorScreenConfigFrame,
   resolveDeviceFrameKind,
   resolveStreamRotation,
   resolveVisualScreenAspectRatio,
 } from "./layout"
+
+global.TextDecoder = TextDecoder as typeof global.TextDecoder
+global.TextEncoder = TextEncoder as typeof global.TextEncoder
 
 describe("fitDeviceFrameToPane", () => {
   it("keeps the complete phone frame inside a narrow pane", () => {
@@ -48,5 +54,19 @@ describe("fitDeviceFrameToPane", () => {
     ).toBeCloseTo(844 / 390)
     expect(resolveStreamRotation({ width: 390, height: 844 }, "landscape_left")).toBe(90)
     expect(resolveStreamRotation({ width: 844, height: 390 }, "landscape_left")).toBe(0)
+  })
+
+  it("reads simulator configuration sent after a rotation", () => {
+    const payload = new TextEncoder().encode(
+      JSON.stringify({ width: 844, height: 390, orientation: "landscape_left" })
+    )
+    const frame = new Uint8Array(payload.length + 1)
+    frame[0] = 130
+    frame.set(payload, 1)
+
+    expect(parseSimulatorScreenConfigFrame(frame)).toEqual({
+      screenSize: { width: 844, height: 390 },
+      orientation: "landscape_left",
+    })
   })
 })

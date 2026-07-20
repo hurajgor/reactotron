@@ -13,6 +13,11 @@ export type DeviceFrameLayout = {
   outerRadius: number
 }
 
+export type SimulatorScreenConfig = {
+  screenSize: PaneSize
+  orientation?: "portrait" | "landscape_left"
+}
+
 const fitMarginPx = 0.5
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -64,6 +69,41 @@ export function resolveStreamRotation(
   const visualIsLandscape = orientation === "landscape_left"
   if (streamIsLandscape === visualIsLandscape) return 0
   return visualIsLandscape ? 90 : -90
+}
+
+export function parseSimulatorScreenConfigFrame(
+  frame: ArrayBuffer | Uint8Array
+): SimulatorScreenConfig | null {
+  const bytes = frame instanceof Uint8Array ? frame : new Uint8Array(frame)
+  if (bytes[0] !== 130) return null
+
+  try {
+    const config = JSON.parse(new TextDecoder().decode(bytes.subarray(1))) as {
+      width?: unknown
+      height?: unknown
+      orientation?: unknown
+    }
+    if (
+      typeof config.width !== "number" ||
+      typeof config.height !== "number" ||
+      !Number.isFinite(config.width) ||
+      !Number.isFinite(config.height) ||
+      config.width <= 0 ||
+      config.height <= 0
+    ) {
+      return null
+    }
+
+    return {
+      screenSize: { width: config.width, height: config.height },
+      orientation:
+        config.orientation === "portrait" || config.orientation === "landscape_left"
+          ? config.orientation
+          : undefined,
+    }
+  } catch {
+    return null
+  }
 }
 
 function measureChrome(screenSize: PaneSize, kind: DeviceFrameKind) {
