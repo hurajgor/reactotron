@@ -578,7 +578,7 @@ export const setupSimulatorIPCCommands = () => {
       try {
         assertAndroidDeviceId(deviceId)
         if (
-          [
+          ![
             "home",
             "back",
             "recents",
