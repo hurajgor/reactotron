@@ -2,6 +2,7 @@ import { TextDecoder, TextEncoder } from "util"
 
 import {
   fitDeviceFrameToPane,
+  mapPointToStream,
   parseSimulatorScreenConfigFrame,
   resolveDeviceFrameKind,
   resolveStreamRotation,
@@ -68,5 +69,13 @@ describe("fitDeviceFrameToPane", () => {
       screenSize: { width: 844, height: 390 },
       orientation: "landscape_left",
     })
+  })
+
+  it("maps touch points into the rotated stream coordinate space", () => {
+    expect(mapPointToStream({ x: 0.2, y: 0.7 }, 90)).toEqual({ x: 0.7, y: 0.8 })
+    const counterClockwise = mapPointToStream({ x: 0.2, y: 0.7 }, -90)
+    expect(counterClockwise.x).toBeCloseTo(0.3)
+    expect(counterClockwise.y).toBeCloseTo(0.2)
+    expect(mapPointToStream({ x: 0.2, y: 0.7 }, 0)).toEqual({ x: 0.2, y: 0.7 })
   })
 })

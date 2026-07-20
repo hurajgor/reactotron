@@ -15,6 +15,7 @@ import styled from "styled-components"
 
 import {
   fitDeviceFrameToPane,
+  mapPointToStream,
   parseSimulatorScreenConfigFrame,
   resolveDeviceFrameKind,
   resolveStreamRotation,
@@ -940,10 +941,11 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
   const screenPoint = (event: React.PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect()
-    return {
+    const point = {
       x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
       y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
     }
+    return mapPointToStream(point, activeStreamRotation)
   }
 
   const onScreenPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {

@@ -71,6 +71,15 @@ export function resolveStreamRotation(
   return visualIsLandscape ? 90 : -90
 }
 
+export function mapPointToStream(
+  point: { x: number; y: number },
+  rotation: -90 | 0 | 90
+): { x: number; y: number } {
+  if (rotation === 90) return { x: point.y, y: 1 - point.x }
+  if (rotation === -90) return { x: 1 - point.y, y: point.x }
+  return point
+}
+
 export function parseSimulatorScreenConfigFrame(
   frame: ArrayBuffer | Uint8Array
 ): SimulatorScreenConfig | null {
