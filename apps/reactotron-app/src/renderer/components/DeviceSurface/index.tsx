@@ -525,6 +525,13 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const controlSocketRef = useRef<WebSocket | null>(null)
   const keyboardTimersRef = useRef<number[]>([])
   const touchRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
+  const androidTouchRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    x: number
+    y: number
+  } | null>(null)
 
   const activeSurface = useMemo(
     () => surfaces.find((surface) => surface.udid === activeUdid) ?? null,
@@ -702,8 +709,17 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   }
 
   const runAndroidCommand = async (
-    command: "home" | "back" | "recents" | "reload" | "reverse" | "tap",
-    options?: { x: number; y: number }
+    command:
+      | "home"
+      | "back"
+      | "recents"
+      | "reload"
+      | "reverse"
+      | "tap"
+      | "swipe"
+      | "rotate"
+      | "type",
+    options?: { x?: number; y?: number; endX?: number; endY?: number; text?: string }
   ) => {
     if (!activeAndroidDevice) return
     const result = (await ipcRenderer.invoke(
@@ -718,6 +734,45 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       return
     }
     refreshAndroidScreenshot().catch(() => undefined)
+  }
+
+  const androidScreenPoint = (event: React.PointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const bezel = deviceFrameLayout?.bezel ?? 0
+    const screenWidth = Math.max(1, bounds.width - bezel * 2)
+    const screenHeight = Math.max(1, bounds.height - bezel * 2)
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - bounds.left - bezel) / screenWidth)),
+      y: Math.min(1, Math.max(0, (event.clientY - bounds.top - bezel) / screenHeight)),
+    }
+  }
+
+  const completeAndroidGesture = (event: React.PointerEvent<HTMLDivElement>) => {
+    const touch = androidTouchRef.current
+    if (!touch || touch.pointerId !== event.pointerId) return
+    const end = androidScreenPoint(event)
+    androidTouchRef.current = null
+    const moved = Math.hypot(end.x - touch.startX, end.y - touch.startY) > 0.015
+    runAndroidCommand(
+      moved ? "swipe" : "tap",
+      moved
+        ? { x: touch.startX, y: touch.startY, endX: end.x, endY: end.y }
+        : { x: touch.startX, y: touch.startY }
+    ).catch(() => undefined)
+  }
+
+  const onAndroidKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return
+    if (event.key.length !== 1) return
+    event.preventDefault()
+    runAndroidCommand("type", { text: event.key }).catch(() => undefined)
+  }
+
+  const onAndroidPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const text = event.clipboardData.getData("text")
+    if (!text) return
+    event.preventDefault()
+    runAndroidCommand("type", { text }).catch(() => undefined)
   }
 
   const openSurface = useCallback(
@@ -1347,6 +1402,13 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                   </IconButton>
                   <IconButton
                     type="button"
+                    title="Rotate device"
+                    onClick={() => runAndroidCommand("rotate").catch(() => undefined)}
+                  >
+                    <MdRotateRight size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
                     title="Configure adb reverse for Reactotron"
                     onClick={() => runAndroidCommand("reverse").catch(() => undefined)}
                   >
@@ -1360,22 +1422,33 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                     $layout={deviceFrameLayout}
                     $platform="android"
                     aria-label={`${activeAndroidDevice.model} Android screen`}
+                    onKeyDown={onAndroidKeyDown}
+                    onPaste={onAndroidPaste}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return
-                      const bounds = event.currentTarget.getBoundingClientRect()
-                      const bezel = deviceFrameLayout?.bezel ?? 0
-                      const screenWidth = Math.max(1, bounds.width - bezel * 2)
-                      const screenHeight = Math.max(1, bounds.height - bezel * 2)
-                      runAndroidCommand("tap", {
-                        x: Math.min(
-                          1,
-                          Math.max(0, (event.clientX - bounds.left - bezel) / screenWidth)
-                        ),
-                        y: Math.min(
-                          1,
-                          Math.max(0, (event.clientY - bounds.top - bezel) / screenHeight)
-                        ),
-                      }).catch(() => undefined)
+                      event.preventDefault()
+                      const point = androidScreenPoint(event)
+                      androidTouchRef.current = {
+                        pointerId: event.pointerId,
+                        startX: point.x,
+                        startY: point.y,
+                        ...point,
+                      }
+                      event.currentTarget.setPointerCapture(event.pointerId)
+                    }}
+                    onPointerMove={(event) => {
+                      if (androidTouchRef.current?.pointerId !== event.pointerId) return
+                      event.preventDefault()
+                      androidTouchRef.current = {
+                        ...androidTouchRef.current,
+                        ...androidScreenPoint(event),
+                      }
+                    }}
+                    onPointerUp={completeAndroidGesture}
+                    onPointerCancel={(event) => {
+                      if (androidTouchRef.current?.pointerId === event.pointerId) {
+                        androidTouchRef.current = null
+                      }
                     }}
                     role="application"
                     tabIndex={0}

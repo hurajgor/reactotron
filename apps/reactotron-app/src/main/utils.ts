@@ -125,10 +125,13 @@ async function captureAndroidDeviceScreenshot(deviceId: string) {
 
 async function runAndroidDeviceCommand(
   deviceId: string,
-  command: "home" | "back" | "recents" | "reload" | "reverse" | "tap",
+  command: "home" | "back" | "recents" | "reload" | "reverse" | "tap" | "swipe" | "rotate" | "type",
   x?: number,
   y?: number,
-  reactotronPort?: number
+  reactotronPort?: number,
+  endX?: number,
+  endY?: number,
+  text?: string
 ) {
   assertAndroidDeviceId(deviceId)
   if (command === "home")
@@ -151,22 +154,91 @@ async function runAndroidDeviceCommand(
       `tcp:${reactotronPort}`,
     ])
   }
-  if (!Number.isFinite(x) || !Number.isFinite(y) || x! < 0 || x! > 1 || y! < 0 || y! > 1) {
-    throw new Error("Invalid Android tap coordinates.")
+  if (command === "rotate") {
+    const currentRotation = (
+      await runCommand("adb", [
+        "-s",
+        deviceId,
+        "shell",
+        "settings",
+        "get",
+        "system",
+        "user_rotation",
+      ])
+    ).trim()
+    await runCommand("adb", [
+      "-s",
+      deviceId,
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "accelerometer_rotation",
+      "0",
+    ])
+    return runCommand("adb", [
+      "-s",
+      deviceId,
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "user_rotation",
+      currentRotation === "0" ? "1" : "0",
+    ])
+  }
+  if (command === "type") {
+    if (typeof text !== "string" || !/^[\x20-\x7e]{1,1000}$/.test(text)) {
+      throw new Error("Android keyboard input must be printable ASCII text.")
+    }
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "text", text.replace(/ /g, "%s")])
+  }
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    x! < 0 ||
+    x! > 1 ||
+    y! < 0 ||
+    y! > 1 ||
+    (command === "swipe" &&
+      (!Number.isFinite(endX) ||
+        !Number.isFinite(endY) ||
+        endX! < 0 ||
+        endX! > 1 ||
+        endY! < 0 ||
+        endY! > 1))
+  ) {
+    throw new Error("Invalid Android gesture coordinates.")
   }
   const size = await runCommand("adb", ["-s", deviceId, "shell", "wm", "size"])
   const match = size.match(/(?:Physical size|Override size):\s*(\d+)x(\d+)/)
   if (!match) throw new Error("Could not determine Android device screen size.")
   const width = Number(match[1])
   const height = Number(match[2])
+  const startX = Math.round(x! * (width - 1))
+  const startY = Math.round(y! * (height - 1))
+  if (command === "swipe") {
+    return runCommand("adb", [
+      "-s",
+      deviceId,
+      "shell",
+      "input",
+      "swipe",
+      String(startX),
+      String(startY),
+      String(Math.round(endX! * (width - 1))),
+      String(Math.round(endY! * (height - 1))),
+      "250",
+    ])
+  }
   return runCommand("adb", [
     "-s",
     deviceId,
     "shell",
     "input",
     "tap",
-    String(Math.round(x! * (width - 1))),
-    String(Math.round(y! * (height - 1))),
+    String(startX),
+    String(startY),
   ])
 }
 
@@ -494,19 +566,50 @@ export const setupSimulatorIPCCommands = () => {
       _event,
       deviceId: unknown,
       command: unknown,
-      options?: { x?: unknown; y?: unknown; port?: unknown }
+      options?: {
+        x?: unknown
+        y?: unknown
+        endX?: unknown
+        endY?: unknown
+        port?: unknown
+        text?: unknown
+      }
     ) => {
       try {
         assertAndroidDeviceId(deviceId)
-        if (!["home", "back", "recents", "reload", "reverse", "tap"].includes(String(command))) {
+        if (
+          [
+            "home",
+            "back",
+            "recents",
+            "reload",
+            "reverse",
+            "tap",
+            "swipe",
+            "rotate",
+            "type",
+          ].includes(String(command))
+        ) {
           throw new Error("Unsupported Android device command.")
         }
         await runAndroidDeviceCommand(
           deviceId,
-          command as "home" | "back" | "recents" | "reload" | "reverse" | "tap",
+          command as
+            | "home"
+            | "back"
+            | "recents"
+            | "reload"
+            | "reverse"
+            | "tap"
+            | "swipe"
+            | "rotate"
+            | "type",
           Number(options?.x),
           Number(options?.y),
-          Number(options?.port)
+          Number(options?.port),
+          Number(options?.endX),
+          Number(options?.endY),
+          typeof options?.text === "string" ? options.text : undefined
         )
         return { ok: true }
       } catch (error) {
