@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ipcRenderer } from "electron"
 import {
   MdAdd,
+  MdApps,
+  MdArrowBack,
   MdFiberManualRecord,
   MdHome,
+  MdOutlineAndroid,
   MdOutlineLink,
   MdOutlinePowerSettingsNew,
   MdPhoneIphone,
@@ -23,6 +26,8 @@ import {
   type DeviceFrameLayout,
 } from "./layout"
 
+import { getConfiguredServerPort } from "../../config"
+
 type Simulator = {
   name: string
   runtime: string
@@ -34,6 +39,12 @@ type SimulatorCreationOption = {
   deviceTypeIdentifier: string
   name: string
   runtimeName: string
+}
+
+type AndroidDevice = {
+  id: string
+  model: string
+  type: "emulator" | "physical"
 }
 
 type Surface = Simulator & {
@@ -471,6 +482,12 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const [panelWidth, setPanelWidth] = useState(400)
   const [deviceFrameLayout, setDeviceFrameLayout] = useState<DeviceFrameLayout | null>(null)
   const [simulators, setSimulators] = useState<Simulator[]>([])
+  const [androidDevices, setAndroidDevices] = useState<AndroidDevice[]>([])
+  const [selectedAndroidDeviceId, setSelectedAndroidDeviceId] = useState("")
+  const [activeAndroidDevice, setActiveAndroidDevice] = useState<AndroidDevice | null>(null)
+  const [androidScreenshot, setAndroidScreenshot] = useState<string | null>(null)
+  const [androidScreenSize, setAndroidScreenSize] = useState({ width: 1080, height: 1920 })
+  const [isAndroidLoading, setIsAndroidLoading] = useState(false)
   const [creationOptions, setCreationOptions] = useState<SimulatorCreationOption[]>([])
   const [surfaces, setSurfaces] = useState<Surface[]>([])
   const [activeUdid, setActiveUdid] = useState<string | null>(null)
@@ -490,12 +507,18 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     () => surfaces.find((surface) => surface.udid === activeUdid) ?? null,
     [activeUdid, surfaces]
   )
+  const isAndroidSurfaceActive = activeAndroidDevice !== null && activeUdid === null
   const activeWsUrl = activeSurface?.wsUrl
-  const activeScreenAspectRatio = resolveVisualScreenAspectRatio(
-    activeSurface?.screenSize,
-    activeSurface?.orientation ?? "portrait"
+  const activeScreenAspectRatio = isAndroidSurfaceActive
+    ? androidScreenSize.width / androidScreenSize.height
+    : resolveVisualScreenAspectRatio(
+        activeSurface?.screenSize,
+        activeSurface?.orientation ?? "portrait"
+      )
+  const activeFrameKind = resolveDeviceFrameKind(
+    isAndroidSurfaceActive ? activeAndroidDevice?.model : activeSurface?.name,
+    activeScreenAspectRatio
   )
-  const activeFrameKind = resolveDeviceFrameKind(activeSurface?.name, activeScreenAspectRatio)
   const activeStreamRotation = resolveStreamRotation(
     activeSurface?.screenSize,
     activeSurface?.orientation ?? "portrait"
@@ -600,10 +623,79 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     )
   }, [])
 
+  const loadAndroidDevices = useCallback(async () => {
+    setIsAndroidLoading(true)
+    const result = (await ipcRenderer.invoke("list-android-devices")) as IPCResponse & {
+      devices: AndroidDevice[]
+    }
+    setIsAndroidLoading(false)
+    if (!result.ok) {
+      setStatus(result.message || "Could not read Android devices. Is adb installed?")
+      setIsError(true)
+      return
+    }
+
+    setAndroidDevices(result.devices)
+    setSelectedAndroidDeviceId((current) =>
+      result.devices.some((device) => device.id === current) ? current : result.devices[0]?.id || ""
+    )
+    setIsError(false)
+  }, [])
+
   useEffect(() => {
     loadSimulators().catch(() => undefined)
     loadCreationOptions().catch(() => undefined)
-  }, [loadCreationOptions, loadSimulators])
+    loadAndroidDevices().catch(() => undefined)
+  }, [loadAndroidDevices, loadCreationOptions, loadSimulators])
+
+  const refreshAndroidScreenshot = useCallback(async () => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "android-device-screenshot",
+      activeAndroidDevice.id
+    )) as IPCResponse & { imageBase64?: string }
+    if (!result.ok || !result.imageBase64) return
+    setAndroidScreenshot(`data:image/png;base64,${result.imageBase64}`)
+  }, [activeAndroidDevice])
+
+  useEffect(() => {
+    if (!activeAndroidDevice || isChoosing) return undefined
+    refreshAndroidScreenshot().catch(() => undefined)
+    const interval = window.setInterval(
+      () => refreshAndroidScreenshot().catch(() => undefined),
+      1000
+    )
+    return () => window.clearInterval(interval)
+  }, [activeAndroidDevice, isChoosing, refreshAndroidScreenshot])
+
+  const openAndroidDevice = () => {
+    const device = androidDevices.find((item) => item.id === selectedAndroidDeviceId)
+    if (!device) return
+    setActiveAndroidDevice(device)
+    setActiveUdid(null)
+    setAndroidScreenshot(null)
+    setAndroidScreenSize({ width: 1080, height: 1920 })
+    setIsChoosing(false)
+  }
+
+  const runAndroidCommand = async (
+    command: "home" | "back" | "recents" | "reload" | "reverse" | "tap",
+    options?: { x: number; y: number }
+  ) => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "android-device-command",
+      activeAndroidDevice.id,
+      command,
+      { ...options, port: getConfiguredServerPort() }
+    )) as IPCResponse
+    if (!result.ok) {
+      setStatus(result.message || "The Android device command failed.")
+      setIsError(true)
+      return
+    }
+    refreshAndroidScreenshot().catch(() => undefined)
+  }
 
   const openSurface = useCallback(
     async (udid = selectedUdid) => {
@@ -1040,7 +1132,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       $isOpen={isOpen}
       $isResizing={isResizing}
       $width={panelWidth}
-      aria-label="iOS simulator surface"
+      aria-label="mobile device surface"
     >
       {isOpen && (
         <ResizeHandle role="separator" aria-orientation="vertical" onPointerDown={startResize} />
@@ -1063,13 +1155,28 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                 <TabName>{surface.name}</TabName>
               </Tab>
             ))}
+            {activeAndroidDevice && (
+              <Tab
+                type="button"
+                $active={!isChoosing && activeUdid === null}
+                onClick={() => {
+                  setActiveUdid(null)
+                  setIsChoosing(false)
+                }}
+                title={activeAndroidDevice.model}
+              >
+                <MdOutlineAndroid size={15} />
+                <TabName>{activeAndroidDevice.model}</TabName>
+              </Tab>
+            )}
             <TabActions>
               <IconButton
                 type="button"
-                title="Add booted iOS simulator"
+                title="Add a mobile device"
                 onClick={() => {
                   setIsChoosing(true)
                   loadSimulators().catch(() => undefined)
+                  loadAndroidDevices().catch(() => undefined)
                 }}
               >
                 <MdAdd size={19} />
@@ -1176,6 +1283,92 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
               </PreviewContainer>
               {status && <Status $error={isError}>{status}</Status>}
             </>
+          ) : activeAndroidDevice && !isChoosing ? (
+            <>
+              <ToolBar>
+                <DeviceName title={activeAndroidDevice.id}>
+                  {activeAndroidDevice.model}
+                  <ConnectionStatus $connected>
+                    {activeAndroidDevice.type === "emulator" ? "Emulator" : "Physical device"}
+                  </ConnectionStatus>
+                </DeviceName>
+                <Actions>
+                  <IconButton
+                    type="button"
+                    title="Back"
+                    onClick={() => runAndroidCommand("back").catch(() => undefined)}
+                  >
+                    <MdArrowBack size={19} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Home"
+                    onClick={() => runAndroidCommand("home").catch(() => undefined)}
+                  >
+                    <MdHome size={19} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Recents"
+                    onClick={() => runAndroidCommand("recents").catch(() => undefined)}
+                  >
+                    <MdApps size={19} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Reload app"
+                    onClick={() => runAndroidCommand("reload").catch(() => undefined)}
+                  >
+                    <MdRefresh size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Configure adb reverse for Reactotron"
+                    onClick={() => runAndroidCommand("reverse").catch(() => undefined)}
+                  >
+                    <MdOutlineLink size={18} />
+                  </IconButton>
+                </Actions>
+              </ToolBar>
+              <PreviewContainer>
+                <PreviewPane ref={setPreviewPane}>
+                  <DeviceFrame
+                    $layout={deviceFrameLayout}
+                    aria-label={`${activeAndroidDevice.model} Android screen`}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return
+                      const bounds = event.currentTarget.getBoundingClientRect()
+                      runAndroidCommand("tap", {
+                        x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
+                        y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
+                      }).catch(() => undefined)
+                    }}
+                    role="application"
+                    tabIndex={0}
+                  >
+                    {androidScreenshot ? (
+                      <Preview
+                        $rotation={0}
+                        $screenWidth={activeScreenWidth}
+                        $screenHeight={activeScreenHeight}
+                        draggable={false}
+                        onLoad={(event) =>
+                          setAndroidScreenSize({
+                            width: event.currentTarget.naturalWidth,
+                            height: event.currentTarget.naturalHeight,
+                          })
+                        }
+                        src={androidScreenshot}
+                        alt={`${activeAndroidDevice.model} Android screen`}
+                      />
+                    ) : (
+                      <EmptyCopy>Capturing Android screen…</EmptyCopy>
+                    )}
+                  </DeviceFrame>
+                </PreviewPane>
+              </PreviewContainer>
+              {status && <Status $error={isError}>{status}</Status>}
+            </>
           ) : (
             <EmptyState>
               <EmptyIcon size={34} />
@@ -1235,13 +1428,43 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                     </ActionSection>
                   </>
                 )}
+                <ActionDivider />
+                <ActionSection>
+                  <ActionLabel>Android emulators and devices</ActionLabel>
+                  <DeviceSelect
+                    aria-label="Available Android devices"
+                    value={selectedAndroidDeviceId}
+                    disabled={isAndroidLoading || androidDevices.length === 0}
+                    onChange={(event) => setSelectedAndroidDeviceId(event.target.value)}
+                  >
+                    {androidDevices.map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.model} ({device.type})
+                      </option>
+                    ))}
+                  </DeviceSelect>
+                  <SecondaryButton
+                    type="button"
+                    disabled={isAndroidLoading || !selectedAndroidDeviceId}
+                    onClick={openAndroidDevice}
+                  >
+                    {isAndroidLoading ? "Finding Android devices..." : "Open Android device"}
+                  </SecondaryButton>
+                  <EmptyCopy>
+                    Connect an emulator, USB device, or Wi-Fi ADB device. Opening it configures a
+                    live preview and controls.
+                  </EmptyCopy>
+                </ActionSection>
               </ActionStack>
               <Status $error={isError}>{status}</Status>
               <IconButton
                 type="button"
-                title="Refresh booted simulators"
-                disabled={isLoading}
-                onClick={() => loadSimulators().catch(() => undefined)}
+                title="Refresh mobile devices"
+                disabled={isLoading || isAndroidLoading}
+                onClick={() => {
+                  loadSimulators().catch(() => undefined)
+                  loadAndroidDevices().catch(() => undefined)
+                }}
               >
                 <MdRefresh size={18} />
               </IconButton>

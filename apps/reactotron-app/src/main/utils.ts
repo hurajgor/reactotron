@@ -27,6 +27,12 @@ type IOSSimulatorCreationOption = {
   runtimeName: string
 }
 
+type AndroidDevice = {
+  id: string
+  model: string
+  type: "emulator" | "physical"
+}
+
 const serveSimProcesses = new Map<
   string,
   { process: childProcess.ChildProcess; previewUrl: string }
@@ -63,6 +69,105 @@ function runCommand(
       reject(new Error(errorOutput || output || `${command} exited with code ${code}.`))
     })
   })
+}
+
+function assertAndroidDeviceId(deviceId: unknown): asserts deviceId is string {
+  if (typeof deviceId !== "string" || !/^[A-Za-z0-9._:-]+$/.test(deviceId)) {
+    throw new Error("Invalid Android device identifier.")
+  }
+}
+
+async function getAndroidDevices(): Promise<AndroidDevice[]> {
+  const output = await runCommand("adb", ["devices", "-l"])
+  return output
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [id, state, ...details] = line.split(/\s+/)
+      const model = details
+        .find((detail) => detail.startsWith("model:"))
+        ?.replace("model:", "")
+        .replace(/_/g, " ")
+      return { id, state, model: model || id }
+    })
+    .filter((device) => device.state === "device")
+    .map(({ id, model }) => ({
+      id,
+      model,
+      type: id.startsWith("emulator-") ? "emulator" : "physical",
+    }))
+}
+
+async function captureAndroidDeviceScreenshot(deviceId: string) {
+  assertAndroidDeviceId(deviceId)
+  return new Promise<string>((resolve, reject) => {
+    const process = childProcess.spawn("adb", ["-s", deviceId, "exec-out", "screencap", "-p"], {
+      shell: false,
+    })
+    const image: Buffer[] = []
+    let errorOutput = ""
+    process.stdout.on("data", (chunk) => image.push(Buffer.from(chunk)))
+    process.stderr.on("data", (chunk) => {
+      errorOutput += chunk.toString()
+    })
+    process.on("error", reject)
+    process.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(errorOutput || `adb screencap exited with code ${code}.`))
+        return
+      }
+      resolve(Buffer.concat(image).toString("base64"))
+    })
+  })
+}
+
+async function runAndroidDeviceCommand(
+  deviceId: string,
+  command: "home" | "back" | "recents" | "reload" | "reverse" | "tap",
+  x?: number,
+  y?: number,
+  reactotronPort?: number
+) {
+  assertAndroidDeviceId(deviceId)
+  if (command === "home")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "3"])
+  if (command === "back")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "4"])
+  if (command === "recents")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "187"])
+  if (command === "reload")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "text", "RR"])
+  if (command === "reverse") {
+    if (!Number.isInteger(reactotronPort) || !reactotronPort || reactotronPort > 65535) {
+      throw new Error("Invalid Reactotron server port.")
+    }
+    return runCommand("adb", [
+      "-s",
+      deviceId,
+      "reverse",
+      `tcp:${reactotronPort}`,
+      `tcp:${reactotronPort}`,
+    ])
+  }
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x! < 0 || x! > 1 || y! < 0 || y! > 1) {
+    throw new Error("Invalid Android tap coordinates.")
+  }
+  const size = await runCommand("adb", ["-s", deviceId, "shell", "wm", "size"])
+  const match = size.match(/(?:Physical size|Override size):\s*(\d+)x(\d+)/)
+  if (!match) throw new Error("Could not determine Android device screen size.")
+  const width = Number(match[1])
+  const height = Number(match[2])
+  return runCommand("adb", [
+    "-s",
+    deviceId,
+    "shell",
+    "input",
+    "tap",
+    String(Math.round(x! * (width - 1))),
+    String(Math.round(y! * (height - 1))),
+  ])
 }
 
 function getServeSimCliPath(): string {
@@ -362,6 +467,54 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
   })
 
 export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("list-android-devices", async () => {
+    try {
+      return { ok: true, devices: await getAndroidDevices() }
+    } catch (error) {
+      return {
+        ok: false,
+        devices: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("android-device-screenshot", async (_event, deviceId: unknown) => {
+    try {
+      assertAndroidDeviceId(deviceId)
+      return { ok: true, imageBase64: await captureAndroidDeviceScreenshot(deviceId) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    "android-device-command",
+    async (
+      _event,
+      deviceId: unknown,
+      command: unknown,
+      options?: { x?: unknown; y?: unknown; port?: unknown }
+    ) => {
+      try {
+        assertAndroidDeviceId(deviceId)
+        if (!["home", "back", "recents", "reload", "reverse", "tap"].includes(String(command))) {
+          throw new Error("Unsupported Android device command.")
+        }
+        await runAndroidDeviceCommand(
+          deviceId,
+          command as "home" | "back" | "recents" | "reload" | "reverse" | "tap",
+          Number(options?.x),
+          Number(options?.y),
+          Number(options?.port)
+        )
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
   ipcMain.handle("list-booted-ios-simulators", async () => {
     try {
       return { ok: true, simulators: await getAvailableIOSSimulators() }
