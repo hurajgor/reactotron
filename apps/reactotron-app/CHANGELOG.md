@@ -2,6 +2,13 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [3.13.1](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.13.0...reactotron-app@3.13.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* resolve the bundled WebSocket module when launching serve-sim with Electron's Node runtime.
+
 ## [3.13.0](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.12.2...reactotron-app@3.13.0) (2026-07-22)
 
 

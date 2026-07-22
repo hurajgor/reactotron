@@ -307,7 +307,7 @@ function getServeSimRunner(args: string[]): {
     command: process.execPath,
     args: [
       "-e",
-      "globalThis.WebSocket ??= require('ws').WebSocket; import(require('node:url').pathToFileURL(process.argv[1]).href)",
+      "globalThis.WebSocket ??= require(require('node:path').join(require('node:path').dirname(process.argv[1]), '..', 'node_modules', 'ws')).WebSocket; import(require('node:url').pathToFileURL(process.argv[1]).href)",
       cliPath,
       ...args,
     ],
