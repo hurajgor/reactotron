@@ -2,6 +2,13 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [2.9.0](https://github.com/hurajgor/reactotron/compare/reactotron-core-ui@2.8.0...reactotron-core-ui@2.9.0) (2026-07-22)
+
+
+### Features
+
+* add selectable light and dark themes ([90c59a1](https://github.com/hurajgor/reactotron/commit/90c59a1134ee769d19212cfd9c29fcc07ef3e7ec))
+
 ## [2.8.0](https://github.com/infinitered/reactotron/compare/@hurajgor/reactotron-core-ui@2.7.0...@hurajgor/reactotron-core-ui@2.8.0) (2026-07-14)
 
 ### Features
