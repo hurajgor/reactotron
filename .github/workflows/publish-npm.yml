@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -19,20 +20,19 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.14.0
           registry-url: https://registry.npmjs.org
 
       - run: corepack enable
+      - run: npm install --global npm@11.5.1
       - run: corepack yarn install --immutable
       - run: corepack yarn build
       - run: corepack yarn package:validate
       - name: Publish selected packages
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           PACKAGES: ${{ inputs.packages }}
-          YARN_NPM_PUBLISH_REGISTRY: https://registry.npmjs.org
         run: |
           IFS=',' read -ra packages <<< "$PACKAGES"
           for package in "${packages[@]}"; do
-            corepack yarn workspace "$package" npm publish --access public
+            npm publish --workspace="$package" --access public
           done
