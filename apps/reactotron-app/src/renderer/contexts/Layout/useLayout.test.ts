@@ -3,6 +3,13 @@ import { act, renderHook } from "@testing-library/react"
 import { startWithCompactSidebarStorageKey } from "../AppPreferences"
 import useLayout from "./useLayout"
 
+jest.mock("@hurajgor/reactotron-core-ui", () => ({
+  themeStyles: ["kanagawa"],
+  themeVariants: {
+    kanagawa: { dark: "kanagawaWave", light: "kanagawaLotus" },
+  },
+}))
+
 describe("contexts/Layout/useLayout", () => {
   afterEach(() => {
     window.localStorage.removeItem(startWithCompactSidebarStorageKey)

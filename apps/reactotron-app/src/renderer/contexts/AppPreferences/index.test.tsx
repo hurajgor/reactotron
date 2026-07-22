@@ -1,6 +1,13 @@
 import React, { useContext } from "react"
 import { renderHook } from "@testing-library/react"
 
+import AppPreferencesContext, {
+  AppPreferencesProvider,
+  themeAppearanceStorageKey,
+  themeModeStorageKey,
+  themeStyleStorageKey,
+} from "."
+
 jest.mock("@hurajgor/reactotron-core-ui", () => ({
   themeStyles: ["kanagawa", "everforest", "one"],
   themeVariants: {
@@ -18,13 +25,6 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: jest.fn(),
   })),
 })
-
-import AppPreferencesContext, {
-  AppPreferencesProvider,
-  themeAppearanceStorageKey,
-  themeModeStorageKey,
-  themeStyleStorageKey,
-} from "."
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <AppPreferencesProvider>{children}</AppPreferencesProvider>
