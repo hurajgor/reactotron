@@ -2,13 +2,6 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
-## [3.13.1](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.13.0...reactotron-app@3.13.1) (2026-07-22)
-
-
-### Bug Fixes
-
-* resolve the bundled WebSocket module when launching serve-sim with Electron's Node runtime.
-
 ## [3.13.0](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.12.2...reactotron-app@3.13.0) (2026-07-22)
 
 
@@ -26,6 +19,7 @@ This file was generated using [@jscutlery/semver](https://github.com/jscutlery/s
 * align simulator touches after rotation ([a5bbeed](https://github.com/hurajgor/reactotron/commit/a5bbeed86a8c91c19018b4f9b52e4246537910b6))
 * allow supported Android device commands ([a62c987](https://github.com/hurajgor/reactotron/commit/a62c98730896a5cc2ad97f3a4a9eddc07bc20584))
 * **app:** run serve-sim CLI via Electron's bundled Node ([0a7d854](https://github.com/hurajgor/reactotron/commit/0a7d854d5c53778d6665292518db60a02cd3a6a2))
+* **app:** resolve the bundled WebSocket module when launching serve-sim with Electron's Node runtime.
 * migrate retired theme preferences ([47c6673](https://github.com/hurajgor/reactotron/commit/47c66730abea743f4020bbd0018da3c6c1934806))
 * sync simulator preview orientation ([ee8c5a2](https://github.com/hurajgor/reactotron/commit/ee8c5a2fce3ff85be64eacef62194b89aaec767c))
 
