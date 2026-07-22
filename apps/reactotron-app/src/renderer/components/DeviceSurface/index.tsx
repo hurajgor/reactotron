@@ -2,8 +2,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ipcRenderer } from "electron"
 import {
   MdAdd,
+  MdApps,
+  MdArrowBack,
+  MdClose,
   MdFiberManualRecord,
   MdHome,
+  MdOutlineAndroid,
   MdOutlineLink,
   MdOutlinePowerSettingsNew,
   MdPhoneIphone,
@@ -23,6 +27,8 @@ import {
   type DeviceFrameLayout,
 } from "./layout"
 
+import { getConfiguredServerPort } from "../../config"
+
 type Simulator = {
   name: string
   runtime: string
@@ -34,6 +40,12 @@ type SimulatorCreationOption = {
   deviceTypeIdentifier: string
   name: string
   runtimeName: string
+}
+
+type AndroidDevice = {
+  id: string
+  model: string
+  type: "emulator" | "physical"
 }
 
 type Surface = Simulator & {
@@ -121,34 +133,38 @@ const Content = styled.div`
 
 const TabBar = styled.div`
   display: flex;
+  height: 44px;
   min-height: 44px;
   align-items: stretch;
   gap: 3px;
-  padding: 7px 44px 7px 8px;
+  box-sizing: border-box;
+  padding: 6px 44px 6px 8px;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
 const TabActions = styled.div`
   display: flex;
+  align-self: center;
   flex-shrink: 0;
   gap: 3px;
   margin-left: auto;
 `
 
-const Tab = styled.button<{ $active: boolean }>`
+const TabGroup = styled.div<{ $active: boolean }>`
   display: flex;
-  min-width: 0;
-  max-width: 180px;
+  height: 30px;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-self: center;
   align-items: center;
   gap: 5px;
-  padding: 0 8px;
   border: 1px solid ${(props) => (props.$active ? props.theme.highlight : "transparent")};
   border-radius: 4px;
   background-color: ${(props) => (props.$active ? props.theme.backgroundLighter : "transparent")};
   color: ${(props) => (props.$active ? props.theme.foreground : props.theme.foregroundDark)};
-  cursor: pointer;
   font-size: 12px;
   white-space: nowrap;
 
@@ -157,9 +173,43 @@ const Tab = styled.button<{ $active: boolean }>`
   }
 `
 
+const Tab = styled.button`
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+`
+
 const TabName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
+`
+
+const TabClose = styled.button`
+  display: grid;
+  width: 28px;
+  height: 100%;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: ${(props) => props.theme.backgroundDarker};
+    color: ${(props) => props.theme.foreground};
+  }
 `
 
 const ToolBar = styled.div`
@@ -197,6 +247,15 @@ const Preview = styled.img<{
   height: ${(props) => (props.$rotation === 0 ? "100%" : `${props.$screenWidth}px`)};
   object-fit: contain;
   transform: translate(-50%, -50%) rotate(${(props) => props.$rotation}deg);
+  user-select: none;
+`
+
+const AndroidVideoPreview = styled.canvas`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   user-select: none;
 `
 
@@ -243,7 +302,10 @@ const PreviewPane = styled.div`
   overflow: hidden;
 `
 
-const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
+const DeviceFrame = styled.div<{
+  $layout: DeviceFrameLayout | null
+  $platform: "android" | "ios"
+}>`
   position: relative;
   width: ${(props) => (props.$layout ? `${props.$layout.width}px` : "min(100%, 390px)")};
   height: ${(props) => (props.$layout ? `${props.$layout.height}px` : "auto")};
@@ -251,11 +313,10 @@ const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
   aspect-ratio: ${(props) => (props.$layout ? "auto" : "9 / 19.5")};
   overflow: hidden;
   border: ${(props) => `${props.$layout?.bezel ?? 8}px`} solid #0a0a0a;
-  border-radius: ${(props) => `${props.$layout?.outerRadius ?? 48}px`};
+  border-radius: ${(props) =>
+    `${Math.min(props.$layout?.outerRadius ?? 48, props.$platform === "android" ? 36 : 48)}px`};
   background: #000;
-  box-shadow:
-    0 8px 16px rgb(0 0 0 / 0.28),
-    0 0 0 1px rgb(255 255 255 / 0.12);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
   outline: none;
   touch-action: none;
 
@@ -263,6 +324,22 @@ const DeviceFrame = styled.div<{ $layout: DeviceFrameLayout | null }>`
     box-shadow:
       0 28px 56px rgb(0 0 0 / 0.58),
       0 0 0 3px ${(props) => props.theme.highlight};
+  }
+
+  &::after {
+    position: absolute;
+    z-index: 1;
+    top: ${(props) => `${(props.$layout?.bezel ?? 8) + 7}px`};
+    left: 50%;
+    display: ${(props) => (props.$platform === "android" ? "block" : "none")};
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #090909;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
+    content: "";
+    pointer-events: none;
+    transform: translateX(-50%);
   }
 `
 
@@ -298,15 +375,19 @@ const EmptyCopy = styled.p`
 const ActionStack = styled.div`
   display: flex;
   width: 100%;
-  max-width: 300px;
+  max-width: 340px;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 `
 
 const ActionSection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 12px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 8px;
+  background: ${(props) => props.theme.backgroundLighter};
 `
 
 const ActionLabel = styled.span`
@@ -317,8 +398,7 @@ const ActionLabel = styled.span`
 `
 
 const ActionDivider = styled.div`
-  height: 1px;
-  background: ${(props) => props.theme.chromeLine};
+  display: none;
 `
 
 const DeviceSelect = styled.select`
@@ -464,6 +544,128 @@ function encodeControlFrame(tag: number, payload: object) {
   return frame
 }
 
+type AndroidVideoMeta = { streamId: string; deviceId: string; meta: { width: number; height: number } }
+type AndroidVideoFrame = {
+  streamId: string
+  deviceId: string
+  config: boolean
+  keyFrame: boolean
+  data: ArrayBuffer
+}
+
+function useAndroidVideoStream(deviceId: string | undefined, enabled: boolean, onSize: (size: { width: number; height: number }) => void) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const onSizeRef = useRef(onSize)
+  onSizeRef.current = onSize
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!deviceId || !enabled) return undefined
+    const VideoDecoderConstructor = (globalThis as any).VideoDecoder
+    const EncodedVideoChunkConstructor = (globalThis as any).EncodedVideoChunk
+    if (!VideoDecoderConstructor || !EncodedVideoChunkConstructor) {
+      setError("This build does not support H.264 Android preview.")
+      return undefined
+    }
+
+    const streamId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    let disposed = false
+    let configured = false
+    let timestamp = 0
+    let configData: Uint8Array | null = null
+    const stop = () => {
+      ipcRenderer.invoke("stop-android-video-stream", streamId).catch(() => undefined)
+    }
+    const fail = (message: string) => {
+      if (disposed) return
+      setError(message)
+      stop()
+    }
+    const decoder = new VideoDecoderConstructor({
+      output: (frame: any) => {
+        if (!disposed && canvas && context) {
+          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+            canvas.width = frame.displayWidth
+            canvas.height = frame.displayHeight
+            onSizeRef.current({ width: frame.displayWidth, height: frame.displayHeight })
+          }
+          context.drawImage(frame, 0, 0)
+        }
+        frame.close()
+      },
+      error: (videoError: Error) => fail(videoError.message),
+    })
+    const onMeta = (_event: unknown, message: AndroidVideoMeta) => {
+      if (!disposed && message.streamId === streamId && message.deviceId === deviceId) {
+        onSizeRef.current(message.meta)
+      }
+    }
+    const onFrame = (_event: unknown, message: AndroidVideoFrame) => {
+      if (disposed || message.streamId !== streamId || message.deviceId !== deviceId) return
+      const data = new Uint8Array(message.data)
+      if (message.config) {
+        try {
+          if (!configured) {
+            decoder.configure({ codec: "avc1.640028", optimizeForLatency: true })
+            configured = true
+          }
+          configData = data
+        } catch (videoError) {
+          fail(videoError instanceof Error ? videoError.message : "Could not configure Android video.")
+        }
+        return
+      }
+      if (!configured || decoder.state === "closed") return
+      let chunkData = data
+      if (message.keyFrame && configData) {
+        chunkData = new Uint8Array(configData.length + data.length)
+        chunkData.set(configData, 0)
+        chunkData.set(data, configData.length)
+      }
+      if (message.keyFrame) configData = null
+      try {
+        // Keep the decode queue bounded if the renderer is briefly busy; the
+        // next keyframe lets the preview catch up instead of accumulating lag.
+        if (decoder.decodeQueueSize > 3 && !message.keyFrame) return
+        decoder.decode(new EncodedVideoChunkConstructor({
+          type: message.keyFrame ? "key" : "delta",
+          timestamp: ++timestamp,
+          data: chunkData,
+        }))
+      } catch (videoError) {
+        fail(videoError instanceof Error ? videoError.message : "Could not decode Android video.")
+      }
+    }
+    const onStreamError = (_event: unknown, message: { streamId: string; deviceId: string; message: string }) => {
+      if (!disposed && message.streamId === streamId && message.deviceId === deviceId) fail(message.message)
+    }
+    ipcRenderer.on("android-video-stream-meta", onMeta)
+    ipcRenderer.on("android-video-stream-frame", onFrame)
+    ipcRenderer.on("android-video-stream-error", onStreamError)
+    setError(null)
+    ipcRenderer
+      .invoke("start-android-video-stream", deviceId, streamId)
+      .then((result: IPCResponse) => {
+        if (!result.ok) fail(result.message || "Could not start Android video stream.")
+      })
+      .catch((error: unknown) =>
+        fail(error instanceof Error ? error.message : "Could not start Android video stream.")
+      )
+    return () => {
+      disposed = true
+      ipcRenderer.removeListener("android-video-stream-meta", onMeta)
+      ipcRenderer.removeListener("android-video-stream-frame", onFrame)
+      ipcRenderer.removeListener("android-video-stream-error", onStreamError)
+      stop()
+      if (decoder.state !== "closed") decoder.close()
+    }
+  }, [deviceId, enabled])
+
+  return { canvasRef, error }
+}
+
 function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const panelRef = useRef<HTMLElement>(null)
   const [previewPane, setPreviewPane] = useState<HTMLDivElement | null>(null)
@@ -471,6 +673,12 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const [panelWidth, setPanelWidth] = useState(400)
   const [deviceFrameLayout, setDeviceFrameLayout] = useState<DeviceFrameLayout | null>(null)
   const [simulators, setSimulators] = useState<Simulator[]>([])
+  const [androidDevices, setAndroidDevices] = useState<AndroidDevice[]>([])
+  const [selectedAndroidDeviceId, setSelectedAndroidDeviceId] = useState("")
+  const [activeAndroidDevice, setActiveAndroidDevice] = useState<AndroidDevice | null>(null)
+  const [androidScreenSize, setAndroidScreenSize] = useState({ width: 1080, height: 1920 })
+  const [isAndroidRecording, setIsAndroidRecording] = useState(false)
+  const [isAndroidLoading, setIsAndroidLoading] = useState(false)
   const [creationOptions, setCreationOptions] = useState<SimulatorCreationOption[]>([])
   const [surfaces, setSurfaces] = useState<Surface[]>([])
   const [activeUdid, setActiveUdid] = useState<string | null>(null)
@@ -485,17 +693,30 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const controlSocketRef = useRef<WebSocket | null>(null)
   const keyboardTimersRef = useRef<number[]>([])
   const touchRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
+  const androidTouchRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    x: number
+    y: number
+  } | null>(null)
 
   const activeSurface = useMemo(
     () => surfaces.find((surface) => surface.udid === activeUdid) ?? null,
     [activeUdid, surfaces]
   )
+  const isAndroidSurfaceActive = activeAndroidDevice !== null && activeUdid === null
   const activeWsUrl = activeSurface?.wsUrl
-  const activeScreenAspectRatio = resolveVisualScreenAspectRatio(
-    activeSurface?.screenSize,
-    activeSurface?.orientation ?? "portrait"
+  const activeScreenAspectRatio = isAndroidSurfaceActive
+    ? androidScreenSize.width / androidScreenSize.height
+    : resolveVisualScreenAspectRatio(
+        activeSurface?.screenSize,
+        activeSurface?.orientation ?? "portrait"
+      )
+  const activeFrameKind = resolveDeviceFrameKind(
+    isAndroidSurfaceActive ? activeAndroidDevice?.model : activeSurface?.name,
+    activeScreenAspectRatio
   )
-  const activeFrameKind = resolveDeviceFrameKind(activeSurface?.name, activeScreenAspectRatio)
   const activeStreamRotation = resolveStreamRotation(
     activeSurface?.screenSize,
     activeSurface?.orientation ?? "portrait"
@@ -507,6 +728,11 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const activeScreenHeight = Math.max(
     0,
     (deviceFrameLayout?.height ?? 0) - (deviceFrameLayout?.bezel ?? 0) * 2
+  )
+  const { canvasRef: androidVideoCanvasRef, error: androidVideoError } = useAndroidVideoStream(
+    activeAndroidDevice?.id,
+    isAndroidSurfaceActive && !isChoosing,
+    setAndroidScreenSize
   )
 
   useEffect(() => {
@@ -600,10 +826,152 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     )
   }, [])
 
+  const loadAndroidDevices = useCallback(async () => {
+    setIsAndroidLoading(true)
+    const result = (await ipcRenderer.invoke("list-android-devices")) as IPCResponse & {
+      devices: AndroidDevice[]
+    }
+    setIsAndroidLoading(false)
+    if (!result.ok) {
+      setStatus(result.message || "Could not read Android devices. Is adb installed?")
+      setIsError(true)
+      return
+    }
+
+    setAndroidDevices(result.devices)
+    setSelectedAndroidDeviceId((current) =>
+      result.devices.some((device) => device.id === current) ? current : result.devices[0]?.id || ""
+    )
+    setIsError(false)
+  }, [])
+
   useEffect(() => {
     loadSimulators().catch(() => undefined)
     loadCreationOptions().catch(() => undefined)
-  }, [loadCreationOptions, loadSimulators])
+    loadAndroidDevices().catch(() => undefined)
+  }, [loadAndroidDevices, loadCreationOptions, loadSimulators])
+
+  useEffect(() => {
+    if (androidVideoError) {
+      setStatus(androidVideoError)
+      setIsError(true)
+    }
+  }, [androidVideoError])
+
+  const openAndroidDevice = () => {
+    const device = androidDevices.find((item) => item.id === selectedAndroidDeviceId)
+    if (!device) return
+    setActiveAndroidDevice(device)
+    setActiveUdid(null)
+    setAndroidScreenSize({ width: 1080, height: 1920 })
+    setIsChoosing(false)
+  }
+
+  const runAndroidCommand = async (
+    command:
+      | "home"
+      | "back"
+      | "recents"
+      | "reload"
+      | "reverse"
+      | "tap"
+      | "swipe"
+      | "rotate"
+      | "type",
+    options?: { x?: number; y?: number; endX?: number; endY?: number; text?: string }
+  ) => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "android-device-command",
+      activeAndroidDevice.id,
+      command,
+      { ...options, port: getConfiguredServerPort() }
+    )) as IPCResponse
+    if (!result.ok) {
+      setStatus(result.message || "The Android device command failed.")
+      setIsError(true)
+    }
+  }
+
+  const androidScreenPoint = (event: React.PointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const bezel = deviceFrameLayout?.bezel ?? 0
+    const screenWidth = Math.max(1, bounds.width - bezel * 2)
+    const screenHeight = Math.max(1, bounds.height - bezel * 2)
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - bounds.left - bezel) / screenWidth)),
+      y: Math.min(1, Math.max(0, (event.clientY - bounds.top - bezel) / screenHeight)),
+    }
+  }
+
+  const completeAndroidGesture = (event: React.PointerEvent<HTMLDivElement>) => {
+    const touch = androidTouchRef.current
+    if (!touch || touch.pointerId !== event.pointerId) return
+    const end = androidScreenPoint(event)
+    androidTouchRef.current = null
+    const moved = Math.hypot(end.x - touch.startX, end.y - touch.startY) > 0.015
+    runAndroidCommand(
+      moved ? "swipe" : "tap",
+      moved
+        ? { x: touch.startX, y: touch.startY, endX: end.x, endY: end.y }
+        : { x: touch.startX, y: touch.startY }
+    ).catch(() => undefined)
+  }
+
+  const onAndroidKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return
+    if (event.key.length !== 1) return
+    event.preventDefault()
+    runAndroidCommand("type", { text: event.key }).catch(() => undefined)
+  }
+
+  const onAndroidPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const text = event.clipboardData.getData("text")
+    if (!text) return
+    event.preventDefault()
+    runAndroidCommand("type", { text }).catch(() => undefined)
+  }
+
+  const takeAndroidScreenshot = useCallback(async () => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "android-device-screenshot-action",
+      activeAndroidDevice.id
+    )) as IPCResponse & { action?: "copied" | "saved"; canceled?: boolean; filePath?: string }
+    if (!result.canceled) {
+      setStatus(
+        result.message ||
+          (result.ok
+            ? result.action === "copied"
+              ? "Screenshot copied to clipboard."
+              : `Saved screenshot to ${result.filePath}`
+            : "Could not capture Android screenshot.")
+      )
+      setIsError(!result.ok)
+    }
+  }, [activeAndroidDevice])
+
+  const toggleAndroidRecording = useCallback(async () => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "toggle-android-device-recording",
+      activeAndroidDevice.id
+    )) as IPCResponse & { canceled?: boolean; filePath?: string; recording?: boolean }
+    if (!result.ok) {
+      setStatus(result.message || "Could not change Android recording.")
+      setIsError(true)
+      return
+    }
+    setIsAndroidRecording(Boolean(result.recording))
+    setStatus(
+      result.recording
+        ? "Recording Android video. Press Cmd+R or the red button to stop."
+        : result.canceled
+          ? "Recording discarded."
+          : `Saved recording to ${result.filePath}.`
+    )
+    setIsError(false)
+  }, [activeAndroidDevice])
 
   const openSurface = useCallback(
     async (udid = selectedUdid) => {
@@ -795,6 +1163,42 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setStatus("")
   }
 
+  const closeSurface = async (udid: string) => {
+    if (surfaces.find((surface) => surface.udid === udid)?.recording) {
+      setStatus("Stop the simulator recording before closing this tab.")
+      setIsError(true)
+      return
+    }
+    const result = (await ipcRenderer.invoke("close-ios-simulator-surface", udid)) as IPCResponse
+    if (!result.ok) {
+      setStatus(result.message || "Could not close the simulator tab.")
+      setIsError(true)
+      return
+    }
+    const activeIndex = surfaces.findIndex((surface) => surface.udid === udid)
+    const remainingSurfaces = surfaces.filter((surface) => surface.udid !== udid)
+    setSurfaces(remainingSurfaces)
+    if (activeUdid === udid) {
+      const nextSurface = remainingSurfaces[Math.max(0, activeIndex - 1)]
+      setActiveUdid(nextSurface?.udid || null)
+      setIsChoosing(!nextSurface && !activeAndroidDevice)
+    }
+    setStatus("")
+    setIsError(false)
+  }
+
+  const closeAndroidSurface = () => {
+    if (isAndroidRecording) {
+      setStatus("Stop the Android recording before closing this tab.")
+      setIsError(true)
+      return
+    }
+    setActiveAndroidDevice(null)
+    setIsChoosing(surfaces.length === 0)
+    setStatus("")
+    setIsError(false)
+  }
+
   const takeScreenshot = useCallback(async () => {
     if (!activeSurface) return
     const result = (await ipcRenderer.invoke(
@@ -861,17 +1265,30 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
   useEffect(() => {
     const handleShortcut = (_event: unknown, shortcut: string) => {
-      if (!activeSurface) return
-      if (shortcut === "screenshot") takeScreenshot().catch(() => undefined)
-      if (shortcut === "record") toggleRecording().catch(() => undefined)
-      if (shortcut === "appearance") toggleAppearance().catch(() => undefined)
+      if (activeSurface) {
+        if (shortcut === "screenshot") takeScreenshot().catch(() => undefined)
+        if (shortcut === "record") toggleRecording().catch(() => undefined)
+        if (shortcut === "appearance") toggleAppearance().catch(() => undefined)
+      }
+      if (activeAndroidDevice) {
+        if (shortcut === "screenshot") takeAndroidScreenshot().catch(() => undefined)
+        if (shortcut === "record") toggleAndroidRecording().catch(() => undefined)
+      }
     }
 
     ipcRenderer.on("ios-simulator-shortcut", handleShortcut)
     return () => {
       ipcRenderer.removeListener("ios-simulator-shortcut", handleShortcut)
     }
-  }, [activeSurface, takeScreenshot, toggleAppearance, toggleRecording])
+  }, [
+    activeAndroidDevice,
+    activeSurface,
+    takeAndroidScreenshot,
+    takeScreenshot,
+    toggleAndroidRecording,
+    toggleAppearance,
+    toggleRecording,
+  ])
 
   useEffect(() => {
     keyboardTimersRef.current.forEach((timer) => window.clearTimeout(timer))
@@ -1040,7 +1457,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       $isOpen={isOpen}
       $isResizing={isResizing}
       $width={panelWidth}
-      aria-label="iOS simulator surface"
+      aria-label="mobile device surface"
     >
       {isOpen && (
         <ResizeHandle role="separator" aria-orientation="vertical" onPointerDown={startResize} />
@@ -1049,27 +1466,68 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
         <Content>
           <TabBar>
             {surfaces.map((surface) => (
-              <Tab
+              <TabGroup
                 key={surface.udid}
-                type="button"
                 $active={surface.udid === activeUdid && !isChoosing}
-                onClick={() => {
-                  setActiveUdid(surface.udid)
-                  setIsChoosing(false)
-                }}
-                title={surface.name}
               >
-                <MdPhoneIphone size={15} />
-                <TabName>{surface.name}</TabName>
-              </Tab>
+                <Tab
+                  type="button"
+                  onClick={() => {
+                    setActiveUdid(surface.udid)
+                    setIsChoosing(false)
+                  }}
+                  title={surface.name}
+                >
+                  <MdPhoneIphone size={15} />
+                  <TabName>{surface.name}</TabName>
+                </Tab>
+                <TabClose
+                  aria-label={`Close ${surface.name} tab`}
+                  title={`Close ${surface.name} tab`}
+                  type="button"
+                  onClick={() => {
+                    closeSurface(surface.udid).catch(() => undefined)
+                  }}
+                >
+                  <MdClose size={14} />
+                </TabClose>
+              </TabGroup>
             ))}
+            {activeAndroidDevice && (
+              <TabGroup
+                $active={!isChoosing && activeUdid === null}
+              >
+                <Tab
+                  type="button"
+                  onClick={() => {
+                    setActiveUdid(null)
+                    setIsChoosing(false)
+                  }}
+                  title={activeAndroidDevice.model}
+                >
+                  <MdOutlineAndroid size={15} />
+                  <TabName>{activeAndroidDevice.model}</TabName>
+                </Tab>
+                <TabClose
+                  aria-label={`Close ${activeAndroidDevice.model} tab`}
+                  title={`Close ${activeAndroidDevice.model} tab`}
+                  type="button"
+                  onClick={() => {
+                    closeAndroidSurface()
+                  }}
+                >
+                  <MdClose size={14} />
+                </TabClose>
+              </TabGroup>
+            )}
             <TabActions>
               <IconButton
                 type="button"
-                title="Add booted iOS simulator"
+                title="Add a mobile device"
                 onClick={() => {
                   setIsChoosing(true)
                   loadSimulators().catch(() => undefined)
+                  loadAndroidDevices().catch(() => undefined)
                 }}
               >
                 <MdAdd size={19} />
@@ -1151,6 +1609,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                 <PreviewPane ref={setPreviewPane}>
                   <DeviceFrame
                     $layout={deviceFrameLayout}
+                    $platform="ios"
                     aria-label={`${activeSurface.name} simulator screen`}
                     onKeyDown={onScreenKeyDown}
                     onPaste={onScreenPaste}
@@ -1171,6 +1630,122 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                       src={activeSurface.streamUrl}
                       alt={`${activeSurface.name} simulator screen`}
                     />
+                  </DeviceFrame>
+                </PreviewPane>
+              </PreviewContainer>
+              {status && <Status $error={isError}>{status}</Status>}
+            </>
+          ) : activeAndroidDevice && !isChoosing ? (
+            <>
+              <ToolBar>
+                <DeviceName title={activeAndroidDevice.id}>
+                  {activeAndroidDevice.model}
+                  <ConnectionStatus $connected>
+                    {activeAndroidDevice.type === "emulator" ? "Emulator" : "Physical device"}
+                  </ConnectionStatus>
+                </DeviceName>
+                <Actions>
+                  <IconButton
+                    type="button"
+                    title="Back"
+                    onClick={() => runAndroidCommand("back").catch(() => undefined)}
+                  >
+                    <MdArrowBack size={19} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Home"
+                    onClick={() => runAndroidCommand("home").catch(() => undefined)}
+                  >
+                    <MdHome size={19} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Recents"
+                    onClick={() => runAndroidCommand("recents").catch(() => undefined)}
+                  >
+                    <MdApps size={19} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Reload app"
+                    onClick={() => runAndroidCommand("reload").catch(() => undefined)}
+                  >
+                    <MdRefresh size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Rotate device"
+                    onClick={() => runAndroidCommand("rotate").catch(() => undefined)}
+                  >
+                    <MdRotateRight size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Configure adb reverse for Reactotron"
+                    onClick={() => runAndroidCommand("reverse").catch(() => undefined)}
+                  >
+                    <MdOutlineLink size={18} />
+                  </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Screenshot: copy or save (Cmd+S)"
+                    onClick={() => takeAndroidScreenshot().catch(() => undefined)}
+                  >
+                    <MdScreenshot size={18} />
+                  </IconButton>
+                  <RecordingButton
+                    $recording={isAndroidRecording}
+                    type="button"
+                    title={
+                      isAndroidRecording
+                        ? "Stop recording and choose where to save (Cmd+R)"
+                        : "Start screen recording (Cmd+R)"
+                    }
+                    onClick={() => toggleAndroidRecording().catch(() => undefined)}
+                  >
+                    <MdFiberManualRecord size={19} />
+                  </RecordingButton>
+                </Actions>
+              </ToolBar>
+              <PreviewContainer>
+                <PreviewPane ref={setPreviewPane}>
+                  <DeviceFrame
+                    $layout={deviceFrameLayout}
+                    $platform="android"
+                    aria-label={`${activeAndroidDevice.model} Android screen`}
+                    onKeyDown={onAndroidKeyDown}
+                    onPaste={onAndroidPaste}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return
+                      event.preventDefault()
+                      const point = androidScreenPoint(event)
+                      androidTouchRef.current = {
+                        pointerId: event.pointerId,
+                        startX: point.x,
+                        startY: point.y,
+                        ...point,
+                      }
+                      event.currentTarget.setPointerCapture(event.pointerId)
+                    }}
+                    onPointerMove={(event) => {
+                      if (androidTouchRef.current?.pointerId !== event.pointerId) return
+                      event.preventDefault()
+                      androidTouchRef.current = {
+                        ...androidTouchRef.current,
+                        ...androidScreenPoint(event),
+                      }
+                    }}
+                    onPointerUp={completeAndroidGesture}
+                    onPointerCancel={(event) => {
+                      if (androidTouchRef.current?.pointerId === event.pointerId) {
+                        androidTouchRef.current = null
+                      }
+                    }}
+                    role="application"
+                    tabIndex={0}
+                  >
+                    <AndroidVideoPreview ref={androidVideoCanvasRef} />
                   </DeviceFrame>
                 </PreviewPane>
               </PreviewContainer>
@@ -1235,13 +1810,43 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                     </ActionSection>
                   </>
                 )}
+                <ActionDivider />
+                <ActionSection>
+                  <ActionLabel>Android emulators and devices</ActionLabel>
+                  <DeviceSelect
+                    aria-label="Available Android devices"
+                    value={selectedAndroidDeviceId}
+                    disabled={isAndroidLoading || androidDevices.length === 0}
+                    onChange={(event) => setSelectedAndroidDeviceId(event.target.value)}
+                  >
+                    {androidDevices.map((device) => (
+                      <option key={device.id} value={device.id}>
+                        {device.model} ({device.type})
+                      </option>
+                    ))}
+                  </DeviceSelect>
+                  <SecondaryButton
+                    type="button"
+                    disabled={isAndroidLoading || !selectedAndroidDeviceId}
+                    onClick={openAndroidDevice}
+                  >
+                    {isAndroidLoading ? "Finding Android devices..." : "Open Android device"}
+                  </SecondaryButton>
+                  <EmptyCopy>
+                    Connect an emulator, USB device, or Wi-Fi ADB device. Opening it configures a
+                    live preview and controls.
+                  </EmptyCopy>
+                </ActionSection>
               </ActionStack>
               <Status $error={isError}>{status}</Status>
               <IconButton
                 type="button"
-                title="Refresh booted simulators"
-                disabled={isLoading}
-                onClick={() => loadSimulators().catch(() => undefined)}
+                title="Refresh mobile devices"
+                disabled={isLoading || isAndroidLoading}
+                onClick={() => {
+                  loadSimulators().catch(() => undefined)
+                  loadAndroidDevices().catch(() => undefined)
+                }}
               >
                 <MdRefresh size={18} />
               </IconButton>

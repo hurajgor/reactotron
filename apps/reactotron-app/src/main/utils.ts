@@ -3,6 +3,7 @@ import fs from "fs"
 import http from "http"
 import net from "net"
 import path from "path"
+import { startAndroidScrcpyStream, type AndroidScrcpyStream } from "./android-scrcpy"
 import {
   app,
   type BrowserWindow,
@@ -27,6 +28,12 @@ type IOSSimulatorCreationOption = {
   runtimeName: string
 }
 
+type AndroidDevice = {
+  id: string
+  model: string
+  type: "emulator" | "physical"
+}
+
 const serveSimProcesses = new Map<
   string,
   { process: childProcess.ChildProcess; previewUrl: string }
@@ -35,7 +42,12 @@ const simulatorRecordings = new Map<
   string,
   { filePath: string; process: childProcess.ChildProcess }
 >()
+const androidRecordings = new Map<
+  string,
+  { remotePath: string; process: childProcess.ChildProcess }
+>()
 const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
+const androidVideoStreams = new Map<string, AndroidScrcpyStream>()
 
 function runCommand(
   command: string,
@@ -63,6 +75,182 @@ function runCommand(
       reject(new Error(errorOutput || output || `${command} exited with code ${code}.`))
     })
   })
+}
+
+function assertAndroidDeviceId(deviceId: unknown): asserts deviceId is string {
+  if (typeof deviceId !== "string" || !/^[A-Za-z0-9._:-]+$/.test(deviceId)) {
+    throw new Error("Invalid Android device identifier.")
+  }
+}
+
+async function getAndroidDevices(): Promise<AndroidDevice[]> {
+  const output = await runCommand("adb", ["devices", "-l"])
+  return output
+    .split("\n")
+    .slice(1)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [id, state, ...details] = line.split(/\s+/)
+      const model = details
+        .find((detail) => detail.startsWith("model:"))
+        ?.replace("model:", "")
+        .replace(/_/g, " ")
+      return { id, state, model: model || id }
+    })
+    .filter((device) => device.state === "device")
+    .map(({ id, model }) => ({
+      id,
+      model,
+      type: id.startsWith("emulator-") ? "emulator" : "physical",
+    }))
+}
+
+async function captureAndroidDeviceScreenshotPng(deviceId: string): Promise<Buffer> {
+  assertAndroidDeviceId(deviceId)
+  return new Promise<Buffer>((resolve, reject) => {
+    const process = childProcess.spawn("adb", ["-s", deviceId, "exec-out", "screencap", "-p"], {
+      shell: false,
+    })
+    const image: Buffer[] = []
+    let errorOutput = ""
+    process.stdout.on("data", (chunk) => image.push(Buffer.from(chunk)))
+    process.stderr.on("data", (chunk) => {
+      errorOutput += chunk.toString()
+    })
+    process.on("error", reject)
+    process.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(errorOutput || `adb screencap exited with code ${code}.`))
+        return
+      }
+      resolve(Buffer.concat(image))
+    })
+  })
+}
+
+async function captureAndroidDeviceScreenshot(deviceId: string) {
+  const screenshot = nativeImage.createFromBuffer(await captureAndroidDeviceScreenshotPng(deviceId))
+  return screenshot.resize({ width: 480 }).toPNG().toString("base64")
+}
+
+async function runAndroidDeviceCommand(
+  deviceId: string,
+  command: "home" | "back" | "recents" | "reload" | "reverse" | "tap" | "swipe" | "rotate" | "type",
+  x?: number,
+  y?: number,
+  reactotronPort?: number,
+  endX?: number,
+  endY?: number,
+  text?: string
+) {
+  assertAndroidDeviceId(deviceId)
+  if (command === "home")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "3"])
+  if (command === "back")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "4"])
+  if (command === "recents")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "187"])
+  if (command === "reload")
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "text", "RR"])
+  if (command === "reverse") {
+    if (!Number.isInteger(reactotronPort) || !reactotronPort || reactotronPort > 65535) {
+      throw new Error("Invalid Reactotron server port.")
+    }
+    return runCommand("adb", [
+      "-s",
+      deviceId,
+      "reverse",
+      `tcp:${reactotronPort}`,
+      `tcp:${reactotronPort}`,
+    ])
+  }
+  if (command === "rotate") {
+    const currentRotation = (
+      await runCommand("adb", [
+        "-s",
+        deviceId,
+        "shell",
+        "settings",
+        "get",
+        "system",
+        "user_rotation",
+      ])
+    ).trim()
+    await runCommand("adb", [
+      "-s",
+      deviceId,
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "accelerometer_rotation",
+      "0",
+    ])
+    return runCommand("adb", [
+      "-s",
+      deviceId,
+      "shell",
+      "settings",
+      "put",
+      "system",
+      "user_rotation",
+      currentRotation === "0" ? "1" : "0",
+    ])
+  }
+  if (command === "type") {
+    if (typeof text !== "string" || !/^[\x20-\x7e]{1,1000}$/.test(text)) {
+      throw new Error("Android keyboard input must be printable ASCII text.")
+    }
+    return runCommand("adb", ["-s", deviceId, "shell", "input", "text", text.replace(/ /g, "%s")])
+  }
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    x! < 0 ||
+    x! > 1 ||
+    y! < 0 ||
+    y! > 1 ||
+    (command === "swipe" &&
+      (!Number.isFinite(endX) ||
+        !Number.isFinite(endY) ||
+        endX! < 0 ||
+        endX! > 1 ||
+        endY! < 0 ||
+        endY! > 1))
+  ) {
+    throw new Error("Invalid Android gesture coordinates.")
+  }
+  const size = await runCommand("adb", ["-s", deviceId, "shell", "wm", "size"])
+  const match = size.match(/(?:Physical size|Override size):\s*(\d+)x(\d+)/)
+  if (!match) throw new Error("Could not determine Android device screen size.")
+  const width = Number(match[1])
+  const height = Number(match[2])
+  const startX = Math.round(x! * (width - 1))
+  const startY = Math.round(y! * (height - 1))
+  if (command === "swipe") {
+    return runCommand("adb", [
+      "-s",
+      deviceId,
+      "shell",
+      "input",
+      "swipe",
+      String(startX),
+      String(startY),
+      String(Math.round(endX! * (width - 1))),
+      String(Math.round(endY! * (height - 1))),
+      "250",
+    ])
+  }
+  return runCommand("adb", [
+    "-s",
+    deviceId,
+    "shell",
+    "input",
+    "tap",
+    String(startX),
+    String(startY),
+  ])
 }
 
 function getServeSimCliPath(): string {
@@ -362,6 +550,227 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
   })
 
 export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("android-device-screenshot-action", async (event, deviceId: unknown) => {
+    try {
+      assertAndroidDeviceId(deviceId)
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const choice = await dialog.showMessageBox(window ?? undefined, {
+        title: "Android Screenshot",
+        message: "What would you like to do with this screenshot?",
+        buttons: ["Save to File", "Copy to Clipboard", "Cancel"],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      })
+      if (choice.response === 2) return { ok: true, canceled: true }
+
+      const png = await captureAndroidDeviceScreenshotPng(deviceId)
+      if (choice.response === 1) {
+        clipboard.writeImage(nativeImage.createFromBuffer(png))
+        return { ok: true, action: "copied" }
+      }
+      const save = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Android Screenshot",
+        defaultPath: "android-screenshot.png",
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      })
+      if (save.canceled || !save.filePath) return { ok: true, canceled: true }
+      await fs.promises.writeFile(save.filePath, png)
+      return { ok: true, action: "saved", filePath: save.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("toggle-android-device-recording", async (event, deviceId: unknown) => {
+    try {
+      assertAndroidDeviceId(deviceId)
+      const activeRecording = androidRecordings.get(deviceId)
+      if (activeRecording) {
+        if (activeRecording.process.exitCode === null) {
+          const finished = new Promise<void>((resolve) => activeRecording.process.once("close", resolve))
+          // Stopping the adb client interrupts the transport and leaves a corrupt
+          // MP4. Signal screenrecord on the device so it writes its trailer first.
+          await runCommand("adb", ["-s", deviceId, "shell", "pkill", "-INT", "screenrecord"])
+          await finished
+        }
+        // Keep naturally completed recordings in the registry until the user
+        // presses stop, so the finalized MP4 can still be saved.
+        androidRecordings.delete(deviceId)
+        const directory = path.join(app.getPath("temp"), "reactotron", "android-recordings")
+        await fs.promises.mkdir(directory, { recursive: true })
+        const temporaryPath = path.join(directory, `android-recording-${Date.now()}.mp4`)
+        await runCommand("adb", ["-s", deviceId, "pull", activeRecording.remotePath, temporaryPath])
+        await runCommand("adb", ["-s", deviceId, "shell", "rm", "-f", activeRecording.remotePath])
+        const window = ElectronBrowserWindow.fromWebContents(event.sender)
+        const save = await dialog.showSaveDialog(window ?? undefined, {
+          title: "Save Android Recording",
+          defaultPath: "android-recording.mp4",
+          filters: [{ name: "MPEG-4 video", extensions: ["mp4"] }],
+        })
+        if (save.canceled || !save.filePath) {
+          await fs.promises.rm(temporaryPath, { force: true })
+          return { ok: true, canceled: true, recording: false }
+        }
+        await fs.promises.copyFile(temporaryPath, save.filePath)
+        await fs.promises.rm(temporaryPath, { force: true })
+        return { ok: true, recording: false, filePath: save.filePath }
+      }
+
+      const remotePath = "/sdcard/reactotron-recording.mp4"
+      const recordingProcess = childProcess.spawn(
+        "adb",
+        ["-s", deviceId, "shell", "screenrecord", "--bit-rate", "12000000", remotePath],
+        { shell: false }
+      )
+      androidRecordings.set(deviceId, { process: recordingProcess, remotePath })
+      recordingProcess.on("error", () => {
+        if (androidRecordings.get(deviceId)?.process === recordingProcess) {
+          androidRecordings.delete(deviceId)
+        }
+      })
+      return { ok: true, recording: true }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    "start-android-video-stream",
+    async (event, deviceId: unknown, streamId: unknown) => {
+      try {
+        assertAndroidDeviceId(deviceId)
+        if (typeof streamId !== "string" || streamId.length > 128) {
+          throw new Error("Invalid Android video stream identifier.")
+        }
+        androidVideoStreams.get(streamId)?.close()
+        const stream = await startAndroidScrcpyStream(
+          deviceId,
+          path.join(app.getPath("userData"), "scrcpy"),
+          {
+            onMeta: (meta) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("android-video-stream-meta", { streamId, deviceId, meta })
+              }
+            },
+            onFrame: (frame) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("android-video-stream-frame", {
+                  streamId,
+                  deviceId,
+                  config: frame.config,
+                  keyFrame: frame.keyFrame,
+                  data: frame.data,
+                })
+              }
+            },
+            onError: (message) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("android-video-stream-error", { streamId, deviceId, message })
+              }
+            },
+            onClose: () => {
+              if (androidVideoStreams.get(streamId) === stream) {
+                androidVideoStreams.delete(streamId)
+              }
+            },
+          }
+        )
+        androidVideoStreams.set(streamId, stream)
+        event.sender.once("destroyed", () => stream.close())
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle("stop-android-video-stream", async (_event, streamId: unknown) => {
+    if (typeof streamId === "string") {
+      androidVideoStreams.get(streamId)?.close()
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle("list-android-devices", async () => {
+    try {
+      return { ok: true, devices: await getAndroidDevices() }
+    } catch (error) {
+      return {
+        ok: false,
+        devices: [],
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+  ipcMain.handle("android-device-screenshot", async (_event, deviceId: unknown) => {
+    try {
+      assertAndroidDeviceId(deviceId)
+      return { ok: true, imageBase64: await captureAndroidDeviceScreenshot(deviceId) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    "android-device-command",
+    async (
+      _event,
+      deviceId: unknown,
+      command: unknown,
+      options?: {
+        x?: unknown
+        y?: unknown
+        endX?: unknown
+        endY?: unknown
+        port?: unknown
+        text?: unknown
+      }
+    ) => {
+      try {
+        assertAndroidDeviceId(deviceId)
+        if (
+          ![
+            "home",
+            "back",
+            "recents",
+            "reload",
+            "reverse",
+            "tap",
+            "swipe",
+            "rotate",
+            "type",
+          ].includes(String(command))
+        ) {
+          throw new Error("Unsupported Android device command.")
+        }
+        await runAndroidDeviceCommand(
+          deviceId,
+          command as
+            | "home"
+            | "back"
+            | "recents"
+            | "reload"
+            | "reverse"
+            | "tap"
+            | "swipe"
+            | "rotate"
+            | "type",
+          Number(options?.x),
+          Number(options?.y),
+          Number(options?.port),
+          Number(options?.endX),
+          Number(options?.endY),
+          typeof options?.text === "string" ? options.text : undefined
+        )
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
   ipcMain.handle("list-booted-ios-simulators", async () => {
     try {
       return { ok: true, simulators: await getAvailableIOSSimulators() }
@@ -413,6 +822,20 @@ export const setupSimulatorIPCCommands = () => {
       }
 
       return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("close-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const existingSurface = serveSimProcesses.get(udid)
+      if (existingSurface) {
+        existingSurface.process.kill()
+        serveSimProcesses.delete(udid)
+      }
+      return { ok: true }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }

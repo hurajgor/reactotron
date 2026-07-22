@@ -11,6 +11,7 @@ Reactotron is a desktop debugger for React and React Native. It brings applicati
 - Explore React Native runtime UI through the Agent screen, using `testID`, labels, text, roles, and placeholders to find nodes and run supported actions.
 - Connect coding agents through MCP for runtime inspection, UI actions, and desktop simulator workflows.
 - Open and control iOS Simulators from Reactotron on macOS, without switching to Simulator.app.
+- Open Android emulators and physical ADB devices directly in Reactotron.
 - Choose a named theme, use a compact sidebar, and tailor the Timeline layout to your workflow.
 - Debug the rest of your app with Reactotron’s established state, Redux, MobX-State-Tree, Async Storage, overlay, Storybook, benchmark, and custom-command tools.
 
@@ -59,6 +60,10 @@ The embedded device supports Home, reload, reconnect, shutdown, rotation, light/
 | `Cmd+S`       | Capture a screenshot and choose Save to File or Copy to Clipboard |
 | `Cmd+R`       | Start recording; press again to stop and choose where to save     |
 | `Cmd+Shift+A` | Toggle the simulator between light and dark appearance            |
+
+## Android emulators and physical devices
+
+The device panel discovers Android emulators, USB devices, and Wi-Fi ADB devices. Open one to see a live screenshot preview, tap the device, and use Back, Home, Recents, and Reload controls. Use the link button to run `adb reverse` for Reactotron's configured server port.
 
 ## Install
 
