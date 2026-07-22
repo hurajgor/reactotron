@@ -3,6 +3,7 @@ import fs from "fs"
 import http from "http"
 import net from "net"
 import path from "path"
+import { startAndroidScrcpyStream, type AndroidScrcpyStream } from "./android-scrcpy"
 import {
   app,
   type BrowserWindow,
@@ -41,7 +42,12 @@ const simulatorRecordings = new Map<
   string,
   { filePath: string; process: childProcess.ChildProcess }
 >()
+const androidRecordings = new Map<
+  string,
+  { remotePath: string; process: childProcess.ChildProcess }
+>()
 const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
+const androidVideoStreams = new Map<string, AndroidScrcpyStream>()
 
 function runCommand(
   command: string,
@@ -100,9 +106,9 @@ async function getAndroidDevices(): Promise<AndroidDevice[]> {
     }))
 }
 
-async function captureAndroidDeviceScreenshot(deviceId: string) {
+async function captureAndroidDeviceScreenshotPng(deviceId: string): Promise<Buffer> {
   assertAndroidDeviceId(deviceId)
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<Buffer>((resolve, reject) => {
     const process = childProcess.spawn("adb", ["-s", deviceId, "exec-out", "screencap", "-p"], {
       shell: false,
     })
@@ -118,11 +124,14 @@ async function captureAndroidDeviceScreenshot(deviceId: string) {
         reject(new Error(errorOutput || `adb screencap exited with code ${code}.`))
         return
       }
-      const screenshot = nativeImage.createFromBuffer(Buffer.concat(image))
-      const preview = screenshot.resize({ width: 480 }).toPNG()
-      resolve(preview.toString("base64"))
+      resolve(Buffer.concat(image))
     })
   })
+}
+
+async function captureAndroidDeviceScreenshot(deviceId: string) {
+  const screenshot = nativeImage.createFromBuffer(await captureAndroidDeviceScreenshotPng(deviceId))
+  return screenshot.resize({ width: 480 }).toPNG().toString("base64")
 }
 
 async function runAndroidDeviceCommand(
@@ -541,6 +550,148 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
   })
 
 export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("android-device-screenshot-action", async (event, deviceId: unknown) => {
+    try {
+      assertAndroidDeviceId(deviceId)
+      const window = ElectronBrowserWindow.fromWebContents(event.sender)
+      const choice = await dialog.showMessageBox(window ?? undefined, {
+        title: "Android Screenshot",
+        message: "What would you like to do with this screenshot?",
+        buttons: ["Save to File", "Copy to Clipboard", "Cancel"],
+        defaultId: 0,
+        cancelId: 2,
+        noLink: true,
+      })
+      if (choice.response === 2) return { ok: true, canceled: true }
+
+      const png = await captureAndroidDeviceScreenshotPng(deviceId)
+      if (choice.response === 1) {
+        clipboard.writeImage(nativeImage.createFromBuffer(png))
+        return { ok: true, action: "copied" }
+      }
+      const save = await dialog.showSaveDialog(window ?? undefined, {
+        title: "Save Android Screenshot",
+        defaultPath: "android-screenshot.png",
+        filters: [{ name: "PNG image", extensions: ["png"] }],
+      })
+      if (save.canceled || !save.filePath) return { ok: true, canceled: true }
+      await fs.promises.writeFile(save.filePath, png)
+      return { ok: true, action: "saved", filePath: save.filePath }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("toggle-android-device-recording", async (event, deviceId: unknown) => {
+    try {
+      assertAndroidDeviceId(deviceId)
+      const activeRecording = androidRecordings.get(deviceId)
+      if (activeRecording) {
+        if (activeRecording.process.exitCode === null) {
+          const finished = new Promise<void>((resolve) => activeRecording.process.once("close", resolve))
+          // Stopping the adb client interrupts the transport and leaves a corrupt
+          // MP4. Signal screenrecord on the device so it writes its trailer first.
+          await runCommand("adb", ["-s", deviceId, "shell", "pkill", "-INT", "screenrecord"])
+          await finished
+        }
+        // Keep naturally completed recordings in the registry until the user
+        // presses stop, so the finalized MP4 can still be saved.
+        androidRecordings.delete(deviceId)
+        const directory = path.join(app.getPath("temp"), "reactotron", "android-recordings")
+        await fs.promises.mkdir(directory, { recursive: true })
+        const temporaryPath = path.join(directory, `android-recording-${Date.now()}.mp4`)
+        await runCommand("adb", ["-s", deviceId, "pull", activeRecording.remotePath, temporaryPath])
+        await runCommand("adb", ["-s", deviceId, "shell", "rm", "-f", activeRecording.remotePath])
+        const window = ElectronBrowserWindow.fromWebContents(event.sender)
+        const save = await dialog.showSaveDialog(window ?? undefined, {
+          title: "Save Android Recording",
+          defaultPath: "android-recording.mp4",
+          filters: [{ name: "MPEG-4 video", extensions: ["mp4"] }],
+        })
+        if (save.canceled || !save.filePath) {
+          await fs.promises.rm(temporaryPath, { force: true })
+          return { ok: true, canceled: true, recording: false }
+        }
+        await fs.promises.copyFile(temporaryPath, save.filePath)
+        await fs.promises.rm(temporaryPath, { force: true })
+        return { ok: true, recording: false, filePath: save.filePath }
+      }
+
+      const remotePath = "/sdcard/reactotron-recording.mp4"
+      const recordingProcess = childProcess.spawn(
+        "adb",
+        ["-s", deviceId, "shell", "screenrecord", "--bit-rate", "12000000", remotePath],
+        { shell: false }
+      )
+      androidRecordings.set(deviceId, { process: recordingProcess, remotePath })
+      recordingProcess.on("error", () => {
+        if (androidRecordings.get(deviceId)?.process === recordingProcess) {
+          androidRecordings.delete(deviceId)
+        }
+      })
+      return { ok: true, recording: true }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle(
+    "start-android-video-stream",
+    async (event, deviceId: unknown, streamId: unknown) => {
+      try {
+        assertAndroidDeviceId(deviceId)
+        if (typeof streamId !== "string" || streamId.length > 128) {
+          throw new Error("Invalid Android video stream identifier.")
+        }
+        androidVideoStreams.get(streamId)?.close()
+        const stream = await startAndroidScrcpyStream(
+          deviceId,
+          path.join(app.getPath("userData"), "scrcpy"),
+          {
+            onMeta: (meta) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("android-video-stream-meta", { streamId, deviceId, meta })
+              }
+            },
+            onFrame: (frame) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("android-video-stream-frame", {
+                  streamId,
+                  deviceId,
+                  config: frame.config,
+                  keyFrame: frame.keyFrame,
+                  data: frame.data,
+                })
+              }
+            },
+            onError: (message) => {
+              if (!event.sender.isDestroyed()) {
+                event.sender.send("android-video-stream-error", { streamId, deviceId, message })
+              }
+            },
+            onClose: () => {
+              if (androidVideoStreams.get(streamId) === stream) {
+                androidVideoStreams.delete(streamId)
+              }
+            },
+          }
+        )
+        androidVideoStreams.set(streamId, stream)
+        event.sender.once("destroyed", () => stream.close())
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : String(error) }
+      }
+    }
+  )
+
+  ipcMain.handle("stop-android-video-stream", async (_event, streamId: unknown) => {
+    if (typeof streamId === "string") {
+      androidVideoStreams.get(streamId)?.close()
+    }
+    return { ok: true }
+  })
+
   ipcMain.handle("list-android-devices", async () => {
     try {
       return { ok: true, devices: await getAndroidDevices() }
@@ -671,6 +822,20 @@ export const setupSimulatorIPCCommands = () => {
       }
 
       return { ok: true, ...(await startServeSim(udid)) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle("close-ios-simulator-surface", async (_event, udid: unknown) => {
+    try {
+      assertIOSSimulatorUdid(udid)
+      const existingSurface = serveSimProcesses.get(udid)
+      if (existingSurface) {
+        existingSurface.process.kill()
+        serveSimProcesses.delete(udid)
+      }
+      return { ok: true }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }

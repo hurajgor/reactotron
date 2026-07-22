@@ -4,6 +4,7 @@ import {
   MdAdd,
   MdApps,
   MdArrowBack,
+  MdClose,
   MdFiberManualRecord,
   MdHome,
   MdOutlineAndroid,
@@ -132,34 +133,38 @@ const Content = styled.div`
 
 const TabBar = styled.div`
   display: flex;
+  height: 44px;
   min-height: 44px;
   align-items: stretch;
   gap: 3px;
-  padding: 7px 44px 7px 8px;
+  box-sizing: border-box;
+  padding: 6px 44px 6px 8px;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
 const TabActions = styled.div`
   display: flex;
+  align-self: center;
   flex-shrink: 0;
   gap: 3px;
   margin-left: auto;
 `
 
-const Tab = styled.button<{ $active: boolean }>`
+const TabGroup = styled.div<{ $active: boolean }>`
   display: flex;
-  min-width: 0;
-  max-width: 180px;
+  height: 30px;
+  min-width: max-content;
+  flex: 0 0 auto;
+  align-self: center;
   align-items: center;
   gap: 5px;
-  padding: 0 8px;
   border: 1px solid ${(props) => (props.$active ? props.theme.highlight : "transparent")};
   border-radius: 4px;
   background-color: ${(props) => (props.$active ? props.theme.backgroundLighter : "transparent")};
   color: ${(props) => (props.$active ? props.theme.foreground : props.theme.foregroundDark)};
-  cursor: pointer;
   font-size: 12px;
   white-space: nowrap;
 
@@ -168,9 +173,43 @@ const Tab = styled.button<{ $active: boolean }>`
   }
 `
 
+const Tab = styled.button`
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 0 0 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+`
+
 const TabName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
+`
+
+const TabClose = styled.button`
+  display: grid;
+  width: 28px;
+  height: 100%;
+  flex: 0 0 auto;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: ${(props) => props.theme.backgroundDarker};
+    color: ${(props) => props.theme.foreground};
+  }
 `
 
 const ToolBar = styled.div`
@@ -208,6 +247,15 @@ const Preview = styled.img<{
   height: ${(props) => (props.$rotation === 0 ? "100%" : `${props.$screenWidth}px`)};
   object-fit: contain;
   transform: translate(-50%, -50%) rotate(${(props) => props.$rotation}deg);
+  user-select: none;
+`
+
+const AndroidVideoPreview = styled.canvas`
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   user-select: none;
 `
 
@@ -268,9 +316,7 @@ const DeviceFrame = styled.div<{
   border-radius: ${(props) =>
     `${Math.min(props.$layout?.outerRadius ?? 48, props.$platform === "android" ? 36 : 48)}px`};
   background: #000;
-  box-shadow:
-    0 8px 16px rgb(0 0 0 / 0.28),
-    0 0 0 1px rgb(255 255 255 / 0.12);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
   outline: none;
   touch-action: none;
 
@@ -498,6 +544,128 @@ function encodeControlFrame(tag: number, payload: object) {
   return frame
 }
 
+type AndroidVideoMeta = { streamId: string; deviceId: string; meta: { width: number; height: number } }
+type AndroidVideoFrame = {
+  streamId: string
+  deviceId: string
+  config: boolean
+  keyFrame: boolean
+  data: ArrayBuffer
+}
+
+function useAndroidVideoStream(deviceId: string | undefined, enabled: boolean, onSize: (size: { width: number; height: number }) => void) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const onSizeRef = useRef(onSize)
+  onSizeRef.current = onSize
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!deviceId || !enabled) return undefined
+    const VideoDecoderConstructor = (globalThis as any).VideoDecoder
+    const EncodedVideoChunkConstructor = (globalThis as any).EncodedVideoChunk
+    if (!VideoDecoderConstructor || !EncodedVideoChunkConstructor) {
+      setError("This build does not support H.264 Android preview.")
+      return undefined
+    }
+
+    const streamId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    let disposed = false
+    let configured = false
+    let timestamp = 0
+    let configData: Uint8Array | null = null
+    const stop = () => {
+      ipcRenderer.invoke("stop-android-video-stream", streamId).catch(() => undefined)
+    }
+    const fail = (message: string) => {
+      if (disposed) return
+      setError(message)
+      stop()
+    }
+    const decoder = new VideoDecoderConstructor({
+      output: (frame: any) => {
+        if (!disposed && canvas && context) {
+          if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+            canvas.width = frame.displayWidth
+            canvas.height = frame.displayHeight
+            onSizeRef.current({ width: frame.displayWidth, height: frame.displayHeight })
+          }
+          context.drawImage(frame, 0, 0)
+        }
+        frame.close()
+      },
+      error: (videoError: Error) => fail(videoError.message),
+    })
+    const onMeta = (_event: unknown, message: AndroidVideoMeta) => {
+      if (!disposed && message.streamId === streamId && message.deviceId === deviceId) {
+        onSizeRef.current(message.meta)
+      }
+    }
+    const onFrame = (_event: unknown, message: AndroidVideoFrame) => {
+      if (disposed || message.streamId !== streamId || message.deviceId !== deviceId) return
+      const data = new Uint8Array(message.data)
+      if (message.config) {
+        try {
+          if (!configured) {
+            decoder.configure({ codec: "avc1.640028", optimizeForLatency: true })
+            configured = true
+          }
+          configData = data
+        } catch (videoError) {
+          fail(videoError instanceof Error ? videoError.message : "Could not configure Android video.")
+        }
+        return
+      }
+      if (!configured || decoder.state === "closed") return
+      let chunkData = data
+      if (message.keyFrame && configData) {
+        chunkData = new Uint8Array(configData.length + data.length)
+        chunkData.set(configData, 0)
+        chunkData.set(data, configData.length)
+      }
+      if (message.keyFrame) configData = null
+      try {
+        // Keep the decode queue bounded if the renderer is briefly busy; the
+        // next keyframe lets the preview catch up instead of accumulating lag.
+        if (decoder.decodeQueueSize > 3 && !message.keyFrame) return
+        decoder.decode(new EncodedVideoChunkConstructor({
+          type: message.keyFrame ? "key" : "delta",
+          timestamp: ++timestamp,
+          data: chunkData,
+        }))
+      } catch (videoError) {
+        fail(videoError instanceof Error ? videoError.message : "Could not decode Android video.")
+      }
+    }
+    const onStreamError = (_event: unknown, message: { streamId: string; deviceId: string; message: string }) => {
+      if (!disposed && message.streamId === streamId && message.deviceId === deviceId) fail(message.message)
+    }
+    ipcRenderer.on("android-video-stream-meta", onMeta)
+    ipcRenderer.on("android-video-stream-frame", onFrame)
+    ipcRenderer.on("android-video-stream-error", onStreamError)
+    setError(null)
+    ipcRenderer
+      .invoke("start-android-video-stream", deviceId, streamId)
+      .then((result: IPCResponse) => {
+        if (!result.ok) fail(result.message || "Could not start Android video stream.")
+      })
+      .catch((error: unknown) =>
+        fail(error instanceof Error ? error.message : "Could not start Android video stream.")
+      )
+    return () => {
+      disposed = true
+      ipcRenderer.removeListener("android-video-stream-meta", onMeta)
+      ipcRenderer.removeListener("android-video-stream-frame", onFrame)
+      ipcRenderer.removeListener("android-video-stream-error", onStreamError)
+      stop()
+      if (decoder.state !== "closed") decoder.close()
+    }
+  }, [deviceId, enabled])
+
+  return { canvasRef, error }
+}
+
 function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const panelRef = useRef<HTMLElement>(null)
   const [previewPane, setPreviewPane] = useState<HTMLDivElement | null>(null)
@@ -508,8 +676,8 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const [androidDevices, setAndroidDevices] = useState<AndroidDevice[]>([])
   const [selectedAndroidDeviceId, setSelectedAndroidDeviceId] = useState("")
   const [activeAndroidDevice, setActiveAndroidDevice] = useState<AndroidDevice | null>(null)
-  const [androidScreenshot, setAndroidScreenshot] = useState<string | null>(null)
   const [androidScreenSize, setAndroidScreenSize] = useState({ width: 1080, height: 1920 })
+  const [isAndroidRecording, setIsAndroidRecording] = useState(false)
   const [isAndroidLoading, setIsAndroidLoading] = useState(false)
   const [creationOptions, setCreationOptions] = useState<SimulatorCreationOption[]>([])
   const [surfaces, setSurfaces] = useState<Surface[]>([])
@@ -524,7 +692,6 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const autoOpenAttemptedRef = useRef(false)
   const controlSocketRef = useRef<WebSocket | null>(null)
   const keyboardTimersRef = useRef<number[]>([])
-  const androidScreenshotInFlightRef = useRef(false)
   const touchRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const androidTouchRef = useRef<{
     pointerId: number
@@ -561,6 +728,11 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const activeScreenHeight = Math.max(
     0,
     (deviceFrameLayout?.height ?? 0) - (deviceFrameLayout?.bezel ?? 0) * 2
+  )
+  const { canvasRef: androidVideoCanvasRef, error: androidVideoError } = useAndroidVideoStream(
+    activeAndroidDevice?.id,
+    isAndroidSurfaceActive && !isChoosing,
+    setAndroidScreenSize
   )
 
   useEffect(() => {
@@ -679,37 +851,18 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     loadAndroidDevices().catch(() => undefined)
   }, [loadAndroidDevices, loadCreationOptions, loadSimulators])
 
-  const refreshAndroidScreenshot = useCallback(async () => {
-    if (!activeAndroidDevice || androidScreenshotInFlightRef.current) return
-    androidScreenshotInFlightRef.current = true
-    try {
-      const result = (await ipcRenderer.invoke(
-        "android-device-screenshot",
-        activeAndroidDevice.id
-      )) as IPCResponse & { imageBase64?: string }
-      if (!result.ok || !result.imageBase64) return
-      setAndroidScreenshot(`data:image/png;base64,${result.imageBase64}`)
-    } finally {
-      androidScreenshotInFlightRef.current = false
-    }
-  }, [activeAndroidDevice])
-
   useEffect(() => {
-    if (!activeAndroidDevice || isChoosing) return undefined
-    refreshAndroidScreenshot().catch(() => undefined)
-    const interval = window.setInterval(
-      () => refreshAndroidScreenshot().catch(() => undefined),
-      1000
-    )
-    return () => window.clearInterval(interval)
-  }, [activeAndroidDevice, isChoosing, refreshAndroidScreenshot])
+    if (androidVideoError) {
+      setStatus(androidVideoError)
+      setIsError(true)
+    }
+  }, [androidVideoError])
 
   const openAndroidDevice = () => {
     const device = androidDevices.find((item) => item.id === selectedAndroidDeviceId)
     if (!device) return
     setActiveAndroidDevice(device)
     setActiveUdid(null)
-    setAndroidScreenshot(null)
     setAndroidScreenSize({ width: 1080, height: 1920 })
     setIsChoosing(false)
   }
@@ -737,9 +890,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     if (!result.ok) {
       setStatus(result.message || "The Android device command failed.")
       setIsError(true)
-      return
     }
-    refreshAndroidScreenshot().catch(() => undefined)
   }
 
   const androidScreenPoint = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -780,6 +931,47 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     event.preventDefault()
     runAndroidCommand("type", { text }).catch(() => undefined)
   }
+
+  const takeAndroidScreenshot = useCallback(async () => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "android-device-screenshot-action",
+      activeAndroidDevice.id
+    )) as IPCResponse & { action?: "copied" | "saved"; canceled?: boolean; filePath?: string }
+    if (!result.canceled) {
+      setStatus(
+        result.message ||
+          (result.ok
+            ? result.action === "copied"
+              ? "Screenshot copied to clipboard."
+              : `Saved screenshot to ${result.filePath}`
+            : "Could not capture Android screenshot.")
+      )
+      setIsError(!result.ok)
+    }
+  }, [activeAndroidDevice])
+
+  const toggleAndroidRecording = useCallback(async () => {
+    if (!activeAndroidDevice) return
+    const result = (await ipcRenderer.invoke(
+      "toggle-android-device-recording",
+      activeAndroidDevice.id
+    )) as IPCResponse & { canceled?: boolean; filePath?: string; recording?: boolean }
+    if (!result.ok) {
+      setStatus(result.message || "Could not change Android recording.")
+      setIsError(true)
+      return
+    }
+    setIsAndroidRecording(Boolean(result.recording))
+    setStatus(
+      result.recording
+        ? "Recording Android video. Press Cmd+R or the red button to stop."
+        : result.canceled
+          ? "Recording discarded."
+          : `Saved recording to ${result.filePath}.`
+    )
+    setIsError(false)
+  }, [activeAndroidDevice])
 
   const openSurface = useCallback(
     async (udid = selectedUdid) => {
@@ -971,6 +1163,42 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     setStatus("")
   }
 
+  const closeSurface = async (udid: string) => {
+    if (surfaces.find((surface) => surface.udid === udid)?.recording) {
+      setStatus("Stop the simulator recording before closing this tab.")
+      setIsError(true)
+      return
+    }
+    const result = (await ipcRenderer.invoke("close-ios-simulator-surface", udid)) as IPCResponse
+    if (!result.ok) {
+      setStatus(result.message || "Could not close the simulator tab.")
+      setIsError(true)
+      return
+    }
+    const activeIndex = surfaces.findIndex((surface) => surface.udid === udid)
+    const remainingSurfaces = surfaces.filter((surface) => surface.udid !== udid)
+    setSurfaces(remainingSurfaces)
+    if (activeUdid === udid) {
+      const nextSurface = remainingSurfaces[Math.max(0, activeIndex - 1)]
+      setActiveUdid(nextSurface?.udid || null)
+      setIsChoosing(!nextSurface && !activeAndroidDevice)
+    }
+    setStatus("")
+    setIsError(false)
+  }
+
+  const closeAndroidSurface = () => {
+    if (isAndroidRecording) {
+      setStatus("Stop the Android recording before closing this tab.")
+      setIsError(true)
+      return
+    }
+    setActiveAndroidDevice(null)
+    setIsChoosing(surfaces.length === 0)
+    setStatus("")
+    setIsError(false)
+  }
+
   const takeScreenshot = useCallback(async () => {
     if (!activeSurface) return
     const result = (await ipcRenderer.invoke(
@@ -1037,17 +1265,30 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
   useEffect(() => {
     const handleShortcut = (_event: unknown, shortcut: string) => {
-      if (!activeSurface) return
-      if (shortcut === "screenshot") takeScreenshot().catch(() => undefined)
-      if (shortcut === "record") toggleRecording().catch(() => undefined)
-      if (shortcut === "appearance") toggleAppearance().catch(() => undefined)
+      if (activeSurface) {
+        if (shortcut === "screenshot") takeScreenshot().catch(() => undefined)
+        if (shortcut === "record") toggleRecording().catch(() => undefined)
+        if (shortcut === "appearance") toggleAppearance().catch(() => undefined)
+      }
+      if (activeAndroidDevice) {
+        if (shortcut === "screenshot") takeAndroidScreenshot().catch(() => undefined)
+        if (shortcut === "record") toggleAndroidRecording().catch(() => undefined)
+      }
     }
 
     ipcRenderer.on("ios-simulator-shortcut", handleShortcut)
     return () => {
       ipcRenderer.removeListener("ios-simulator-shortcut", handleShortcut)
     }
-  }, [activeSurface, takeScreenshot, toggleAppearance, toggleRecording])
+  }, [
+    activeAndroidDevice,
+    activeSurface,
+    takeAndroidScreenshot,
+    takeScreenshot,
+    toggleAndroidRecording,
+    toggleAppearance,
+    toggleRecording,
+  ])
 
   useEffect(() => {
     keyboardTimersRef.current.forEach((timer) => window.clearTimeout(timer))
@@ -1225,33 +1466,59 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
         <Content>
           <TabBar>
             {surfaces.map((surface) => (
-              <Tab
+              <TabGroup
                 key={surface.udid}
-                type="button"
                 $active={surface.udid === activeUdid && !isChoosing}
-                onClick={() => {
-                  setActiveUdid(surface.udid)
-                  setIsChoosing(false)
-                }}
-                title={surface.name}
               >
-                <MdPhoneIphone size={15} />
-                <TabName>{surface.name}</TabName>
-              </Tab>
+                <Tab
+                  type="button"
+                  onClick={() => {
+                    setActiveUdid(surface.udid)
+                    setIsChoosing(false)
+                  }}
+                  title={surface.name}
+                >
+                  <MdPhoneIphone size={15} />
+                  <TabName>{surface.name}</TabName>
+                </Tab>
+                <TabClose
+                  aria-label={`Close ${surface.name} tab`}
+                  title={`Close ${surface.name} tab`}
+                  type="button"
+                  onClick={() => {
+                    closeSurface(surface.udid).catch(() => undefined)
+                  }}
+                >
+                  <MdClose size={14} />
+                </TabClose>
+              </TabGroup>
             ))}
             {activeAndroidDevice && (
-              <Tab
-                type="button"
+              <TabGroup
                 $active={!isChoosing && activeUdid === null}
-                onClick={() => {
-                  setActiveUdid(null)
-                  setIsChoosing(false)
-                }}
-                title={activeAndroidDevice.model}
               >
-                <MdOutlineAndroid size={15} />
-                <TabName>{activeAndroidDevice.model}</TabName>
-              </Tab>
+                <Tab
+                  type="button"
+                  onClick={() => {
+                    setActiveUdid(null)
+                    setIsChoosing(false)
+                  }}
+                  title={activeAndroidDevice.model}
+                >
+                  <MdOutlineAndroid size={15} />
+                  <TabName>{activeAndroidDevice.model}</TabName>
+                </Tab>
+                <TabClose
+                  aria-label={`Close ${activeAndroidDevice.model} tab`}
+                  title={`Close ${activeAndroidDevice.model} tab`}
+                  type="button"
+                  onClick={() => {
+                    closeAndroidSurface()
+                  }}
+                >
+                  <MdClose size={14} />
+                </TabClose>
+              </TabGroup>
             )}
             <TabActions>
               <IconButton
@@ -1420,6 +1687,25 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                   >
                     <MdOutlineLink size={18} />
                   </IconButton>
+                  <IconButton
+                    type="button"
+                    title="Screenshot: copy or save (Cmd+S)"
+                    onClick={() => takeAndroidScreenshot().catch(() => undefined)}
+                  >
+                    <MdScreenshot size={18} />
+                  </IconButton>
+                  <RecordingButton
+                    $recording={isAndroidRecording}
+                    type="button"
+                    title={
+                      isAndroidRecording
+                        ? "Stop recording and choose where to save (Cmd+R)"
+                        : "Start screen recording (Cmd+R)"
+                    }
+                    onClick={() => toggleAndroidRecording().catch(() => undefined)}
+                  >
+                    <MdFiberManualRecord size={19} />
+                  </RecordingButton>
                 </Actions>
               </ToolBar>
               <PreviewContainer>
@@ -1459,24 +1745,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                     role="application"
                     tabIndex={0}
                   >
-                    {androidScreenshot ? (
-                      <Preview
-                        $rotation={0}
-                        $screenWidth={activeScreenWidth}
-                        $screenHeight={activeScreenHeight}
-                        draggable={false}
-                        onLoad={(event) =>
-                          setAndroidScreenSize({
-                            width: event.currentTarget.naturalWidth,
-                            height: event.currentTarget.naturalHeight,
-                          })
-                        }
-                        src={androidScreenshot}
-                        alt={`${activeAndroidDevice.model} Android screen`}
-                      />
-                    ) : (
-                      <EmptyCopy>Capturing Android screen…</EmptyCopy>
-                    )}
+                    <AndroidVideoPreview ref={androidVideoCanvasRef} />
                   </DeviceFrame>
                 </PreviewPane>
               </PreviewContainer>
