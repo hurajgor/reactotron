@@ -2,6 +2,31 @@
 
 This file was generated using [@jscutlery/semver](https://github.com/jscutlery/semver).
 
+## [3.13.0](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.12.2...reactotron-app@3.13.0) (2026-07-22)
+
+
+### Features
+
+* add Android device gestures ([54d1818](https://github.com/hurajgor/reactotron/commit/54d18184ec07b5473193edde98a93c4e96aad0bf))
+* add Android device streaming controls ([94b6763](https://github.com/hurajgor/reactotron/commit/94b67636335b3d0c496f38a3262e5d0c4f11b6a8))
+* add Android device surface ([1d1737e](https://github.com/hurajgor/reactotron/commit/1d1737e02ba166e7e78b1343e5033912443a728e))
+* add selectable light and dark themes ([90c59a1](https://github.com/hurajgor/reactotron/commit/90c59a1134ee769d19212cfd9c29fcc07ef3e7ec))
+* make iOS simulator preview responsive ([297f558](https://github.com/hurajgor/reactotron/commit/297f5580d17eabf054a7e85ea29a17f10ce21170))
+
+
+### Bug Fixes
+
+* align simulator touches after rotation ([a5bbeed](https://github.com/hurajgor/reactotron/commit/a5bbeed86a8c91c19018b4f9b52e4246537910b6))
+* allow supported Android device commands ([a62c987](https://github.com/hurajgor/reactotron/commit/a62c98730896a5cc2ad97f3a4a9eddc07bc20584))
+* **app:** run serve-sim CLI via Electron's bundled Node ([0a7d854](https://github.com/hurajgor/reactotron/commit/0a7d854d5c53778d6665292518db60a02cd3a6a2))
+* migrate retired theme preferences ([47c6673](https://github.com/hurajgor/reactotron/commit/47c66730abea743f4020bbd0018da3c6c1934806))
+* sync simulator preview orientation ([ee8c5a2](https://github.com/hurajgor/reactotron/commit/ee8c5a2fce3ff85be64eacef62194b89aaec767c))
+
+
+### Performance Improvements
+
+* reduce Android preview lag ([ee161be](https://github.com/hurajgor/reactotron/commit/ee161be6211b7c22c10252a0255404daadb18f8a))
+
 ## [3.12.2](https://github.com/hurajgor/reactotron/compare/reactotron-app@3.12.1...reactotron-app@3.12.2) (2026-07-14)
 
 ### Bug Fixes
