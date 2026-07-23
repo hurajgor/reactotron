@@ -7,6 +7,7 @@ import type {
   Reactotron,
   ReactotronCore,
 } from "@hurajgor/reactotron-core-client"
+import type { DebuggerMetadata } from "@hurajgor/reactotron-core-contract"
 import type { AsyncStorageStatic } from "@react-native-async-storage/async-storage"
 // eslint-disable-next-line import/namespace, import/default
 import NativeSourceCode from "react-native/Libraries/NativeModules/specs/NativeSourceCode"
@@ -22,6 +23,7 @@ import devTools from "./plugins/devTools"
 import trackGlobalLogs from "./plugins/trackGlobalLogs"
 import agentRuntime from "./plugins/agentRuntime"
 import { getHostFromUrl } from "./helpers/parseURL"
+import { getDebuggerMetadata } from "./helpers/getDebuggerMetadata"
 import getReactNativePlatformConstants from "./helpers/getReactNativePlatformConstants"
 
 const REACTOTRON_ASYNC_CLIENT_ID = "@REACTOTRON/clientId"
@@ -49,6 +51,31 @@ const getHost = (defaultHost = "localhost") => {
   }
 }
 
+const getDefaultDebuggerMetadata = (): DebuggerMetadata => {
+  let scriptURL: unknown
+  let hermesInternal: unknown
+
+  try {
+    scriptURL = NativeSourceCode.getConstants().scriptURL
+  } catch {
+    // Debugger metadata is supplementary and must never prevent a connection.
+  }
+
+  try {
+    hermesInternal =
+      typeof global === "undefined" ? null : (global as { HermesInternal?: unknown }).HermesInternal
+  } catch {
+    // Some alternate runtimes may not expose React Native's global object.
+  }
+
+  return getDebuggerMetadata({
+    platform: Platform.OS,
+    reactNativeVersion: getReactNativeVersion(),
+    scriptURL,
+    hermesInternal,
+  })
+}
+
 const { osRelease, model, serverHost, forceTouch, interfaceIdiom, systemName, uiMode, serial } =
   getReactNativePlatformConstants()
 
@@ -73,8 +100,12 @@ const DEFAULTS: ClientOptions<ReactotronReactNative> = {
     uiMode,
     serial,
     reactNativeVersion: getReactNativeVersion(),
+    // ClientOptions currently permits scalar custom fields only. The core
+    // transport spreads this value into client.intro, where `debugger` is
+    // explicitly typed as structured metadata by the shared contract.
+    debugger: getDefaultDebuggerMetadata(),
     ...getReactNativeDimensions(),
-  },
+  } as unknown as Record<string, string | number | boolean>,
   /* eslint-disable @typescript-eslint/no-use-before-define */
   getClientId: async (name: string = "") => {
     if (reactotron.asyncStorageHandler) {

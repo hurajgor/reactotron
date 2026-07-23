@@ -2,6 +2,7 @@ import React from "react"
 import {
   MdOutlineAssignment,
   MdOutlineAutoFixHigh,
+  MdOutlineBugReport,
   MdOutlineChevronLeft,
   MdOutlineChevronRight,
   MdOutlineHelpOutline,
@@ -122,6 +123,12 @@ function SideBar({
         isCompact={isCompact}
       />
       <SideBarButton icon={MdOutlineSmartToy} path="/agent" text="Agent" isCompact={isCompact} />
+      <SideBarButton
+        icon={MdOutlineBugReport}
+        path="/debugger"
+        text="Debugger"
+        isCompact={isCompact}
+      />
       <SideBarButton
         icon={MdOutlineAssignment}
         path="/state/subscriptions"

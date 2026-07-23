@@ -1,5 +1,6 @@
 import { useCallback, useReducer, useRef } from "react"
 import { produce } from "immer"
+import type { DebuggerMetadata } from "@hurajgor/reactotron-core-contract"
 
 export enum ActionTypes {
   ServerStarted = "SERVER_STARTED",
@@ -26,6 +27,7 @@ export interface ReactotronConnection {
   platformVersion?: string
   osRelease?: string
   userAgent?: string
+  debugger?: DebuggerMetadata
 }
 
 export interface Connection extends ReactotronConnection {

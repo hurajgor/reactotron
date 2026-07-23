@@ -1,4 +1,4 @@
-import { getHostFromUrl } from "./parseURL"
+import { getHostFromUrl, getPortFromUrl, getProtocolFromUrl } from "./parseURL"
 
 describe("getHostFromUrl", () => {
   it("should throw when no host is found", () => {
@@ -67,5 +67,27 @@ describe("getHostFromUrl", () => {
     expect(() => {
       getHostFromUrl("file:///Users/tron")
     }).toThrow()
+  })
+})
+
+describe("getPortFromUrl", () => {
+  it("gets the port from Metro URLs", () => {
+    expect(getPortFromUrl("http://localhost:8081/index.bundle?platform=ios")).toEqual(8081)
+    expect(getPortFromUrl("https://[::1]:19000/.expo/.virtual-metro-entry.bundle")).toEqual(19000)
+  })
+
+  it("throws when no explicit port is present", () => {
+    expect(() => getPortFromUrl("http://localhost/index.bundle")).toThrow()
+  })
+})
+
+describe("getProtocolFromUrl", () => {
+  it("gets explicit HTTP protocols", () => {
+    expect(getProtocolFromUrl("http://localhost:8081/index.bundle")).toEqual("http")
+    expect(getProtocolFromUrl("https://localhost:8081/index.bundle")).toEqual("https")
+  })
+
+  it("returns undefined when the protocol is unavailable", () => {
+    expect(getProtocolFromUrl("localhost:8081/index.bundle")).toBeUndefined()
   })
 })

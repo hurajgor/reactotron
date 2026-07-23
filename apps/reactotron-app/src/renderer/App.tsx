@@ -1,5 +1,5 @@
-import React, { useContext, useState } from "react"
-import { HashRouter as Router, Route, Routes } from "react-router-dom"
+import React, { useContext, useEffect, useState } from "react"
+import { HashRouter as Router, Route, Routes, useLocation } from "react-router-dom"
 import { LuPanelRight } from "react-icons/lu"
 import styled from "styled-components"
 
@@ -21,6 +21,7 @@ import Storybook from "./pages/reactNative/Storybook"
 import CustomCommands from "./pages/customCommands"
 import Settings from "./pages/settings"
 import Help from "./pages/help"
+import Debugger from "./pages/debugger"
 
 const AppContainer = styled.div`
   position: absolute;
@@ -76,64 +77,78 @@ function TimelineRoute() {
   return enableNewTimeline ? <Network title="Timeline" /> : <Timeline />
 }
 
-function App() {
+function AppContent() {
   const [isDeviceSurfaceOpen, setIsDeviceSurfaceOpen] = useState(true)
+  const location = useLocation()
+
+  useEffect(() => {
+    if (location.pathname === "/debugger") setIsDeviceSurfaceOpen(false)
+  }, [location.pathname])
 
   return (
+    <RootContextProvider>
+      <AppContainer>
+        <TopSection>
+          <SideBar />
+
+          <MainContainer>
+            <Routes>
+              {/* Home */}
+              <Route path="/" element={<Home />} />
+
+              {/* Timeline */}
+              <Route path="/timeline" element={<TimelineRoute />} />
+
+              {/* Network */}
+              <Route path="/network" element={<Network />} />
+
+              {/* Agent */}
+              <Route path="/agent" element={<Agent />} />
+
+              {/* Debugger */}
+              <Route path="/debugger" element={<Debugger />} />
+
+              {/* State */}
+              <Route path="/state/subscriptions" element={<Subscriptions />} />
+              <Route path="/state/snapshots" element={<Snapshots />} />
+
+              {/* React Native */}
+              <Route path="/native/overlay" element={<Overlay />} />
+              <Route path="/native/storybook" element={<Storybook />} />
+
+              {/* Custom Commands */}
+              <Route path="/customCommands" element={<CustomCommands />} />
+
+              {/* Settings */}
+              <Route path="/settings" element={<Settings />} />
+
+              {/* Help */}
+              <Route path="/help" element={<Help />} />
+            </Routes>
+          </MainContainer>
+          <DeviceSurface isOpen={isDeviceSurfaceOpen} />
+          <PanelToggle
+            type="button"
+            $isOpen={isDeviceSurfaceOpen}
+            title={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
+            aria-label={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
+            aria-pressed={isDeviceSurfaceOpen}
+            onClick={() => setIsDeviceSurfaceOpen((isOpen) => !isOpen)}
+          >
+            <LuPanelRight size={18} />
+          </PanelToggle>
+        </TopSection>
+        <Footer />
+      </AppContainer>
+      <RootModals />
+    </RootContextProvider>
+  )
+}
+
+function App() {
+  return (
     <Router>
-      <RootContextProvider>
-        <AppContainer>
-          <TopSection>
-            <SideBar />
-
-            <MainContainer>
-              <Routes>
-                {/* Home */}
-                <Route path="/" element={<Home />} />
-
-                {/* Timeline */}
-                <Route path="/timeline" element={<TimelineRoute />} />
-
-                {/* Network */}
-                <Route path="/network" element={<Network />} />
-
-                {/* Agent */}
-                <Route path="/agent" element={<Agent />} />
-
-                {/* State */}
-                <Route path="/state/subscriptions" element={<Subscriptions />} />
-                <Route path="/state/snapshots" element={<Snapshots />} />
-
-                {/* React Native */}
-                <Route path="/native/overlay" element={<Overlay />} />
-                <Route path="/native/storybook" element={<Storybook />} />
-
-                {/* Custom Commands */}
-                <Route path="/customCommands" element={<CustomCommands />} />
-
-                {/* Settings */}
-                <Route path="/settings" element={<Settings />} />
-
-                {/* Help */}
-                <Route path="/help" element={<Help />} />
-              </Routes>
-            </MainContainer>
-            <DeviceSurface isOpen={isDeviceSurfaceOpen} />
-            <PanelToggle
-              type="button"
-              $isOpen={isDeviceSurfaceOpen}
-              title={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
-              aria-label={isDeviceSurfaceOpen ? "Hide simulator panel" : "Show simulator panel"}
-              aria-pressed={isDeviceSurfaceOpen}
-              onClick={() => setIsDeviceSurfaceOpen((isOpen) => !isOpen)}
-            >
-              <LuPanelRight size={18} />
-            </PanelToggle>
-          </TopSection>
-          <Footer />
-        </AppContainer>
-        <RootModals />
-      </RootContextProvider>
+      <AppContent />
     </Router>
   )
 }

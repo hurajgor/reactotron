@@ -1,6 +1,7 @@
 import childProcess from "child_process"
 import fs from "fs"
 import http from "http"
+import https from "https"
 import net from "net"
 import path from "path"
 import { startAndroidScrcpyStream, type AndroidScrcpyStream } from "./android-scrcpy"
@@ -12,6 +13,7 @@ import {
   dialog,
   ipcMain,
   nativeImage,
+  type WebContents,
 } from "electron"
 
 type IOSSimulator = {
@@ -549,7 +551,946 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
     request.on("error", reject)
   })
 
+export type MetroDebuggerTarget = {
+  id: string
+  title: string
+  description?: string
+  webSocketDebuggerUrl: string
+  reactNative?: {
+    logicalDeviceId?: string
+    capabilities?: {
+      prefersFuseboxFrontend?: boolean
+      nativePageReloads?: boolean
+      nativeSourceCodeFetching?: boolean
+      supportsMultipleDebuggers?: boolean
+    }
+  }
+}
+
+export type MetroDebuggerFrontend = "react-native-devtools" | "legacy-inspector" | "unsupported"
+
+export type ReactotronDebuggerTarget = MetroDebuggerTarget & {
+  frontend: MetroDebuggerFrontend
+  frontendUrl?: string
+  supportMessage: string
+}
+
+type MetroEndpoint = { host: string; port: number; protocol: "http" | "https" }
+
+type DebuggerConnection = {
+  clientId: string
+  platform?: unknown
+  debugger?: { metro?: Partial<MetroEndpoint>; platform?: unknown; jsEngine?: unknown }
+}
+
+type MetroSourceMap = {
+  sources?: unknown
+  sourcesContent?: unknown
+}
+
+type ReactotronDebuggerSource = {
+  path: string
+  content?: string
+}
+
+type CachedSourceMap = {
+  endpoint: MetroEndpoint
+  sourceMap: MetroSourceMap
+}
+
+type NativeDebuggerSession = {
+  clientId: string
+  sender: WebContents
+  socket: import("ws").WebSocket
+  sourceMap?: MetroSourceMap
+  traceMap?: unknown
+  bundleScriptId?: string
+  nextCommandId: number
+  pendingCommands: Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void; timeout: NodeJS.Timeout }
+  >
+}
+
+const MAX_SOURCE_MAP_BYTES = 64 * 1024 * 1024
+const MAX_SOURCE_CONTENT_BYTES = 512 * 1024
+const MAX_INSPECTOR_TARGETS = 5
+const MAX_CDP_MESSAGE_BYTES = 64 * 1024 * 1024
+const nativeDebuggerSessions = new Map<number, NativeDebuggerSession>()
+const sourceMapsByClientId = new Map<string, CachedSourceMap>()
+
+function loadTraceMapping() {
+  // electron-webpack rewrites a static require to this package's ESM entry.
+  // Resolve it at Electron runtime so Node selects the package's CommonJS export.
+  // eslint-disable-next-line no-eval
+  return eval("require")("@jridgewell/trace-mapping") as unknown
+}
+
+function getMetroEndpoint(connection: DebuggerConnection): MetroEndpoint {
+  const fallbackPort = Number(process.env.REACTOTRON_METRO_PORT ?? process.env.METRO_PORT ?? 8081)
+  const metro = connection.debugger?.metro
+  const host =
+    typeof metro?.host === "string" && /^[a-zA-Z0-9.-]+$/.test(metro.host)
+      ? metro.host
+      : "localhost"
+  const port = Number.isInteger(metro?.port) && metro!.port! > 0 ? metro.port! : fallbackPort
+  return { host, port, protocol: metro?.protocol === "https" ? "https" : "http" }
+}
+
+function requestMetro(
+  endpoint: MetroEndpoint,
+  requestPath: string,
+  onResponse: (response: http.IncomingMessage) => void
+) {
+  const get = endpoint.protocol === "https" ? https.get : http.get
+  return get({ host: endpoint.host, port: endpoint.port, path: requestPath }, onResponse)
+}
+
+function readMetroJson<T>(endpoint: MetroEndpoint, requestPath: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = requestMetro(endpoint, requestPath, (response) => {
+      let body = ""
+      response.setEncoding("utf8")
+      response.on("data", (chunk) => {
+        body += chunk
+      })
+      response.on("end", () => {
+        if (!response.statusCode || response.statusCode >= 400) {
+          reject(new Error(`Metro returned ${response.statusCode ?? "an unknown status"}.`))
+          return
+        }
+
+        try {
+          resolve(JSON.parse(body) as T)
+        } catch {
+          reject(new Error("Metro returned an invalid debugger target response."))
+        }
+      })
+    })
+
+    request.setTimeout(3000, () => {
+      request.destroy(new Error(`Metro did not respond at ${endpoint.host}:${endpoint.port}.`))
+    })
+    request.on("error", reject)
+  })
+}
+
+function readMetroText(
+  endpoint: MetroEndpoint,
+  requestPath: string,
+  maxBytes: number
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = requestMetro(endpoint, requestPath, (response) => {
+      if (!response.statusCode || response.statusCode >= 400) {
+        response.resume()
+        reject(new Error(`Metro returned ${response.statusCode ?? "an unknown status"}.`))
+        return
+      }
+
+      let body = ""
+      let bytes = 0
+      response.setEncoding("utf8")
+      response.on("data", (chunk: string) => {
+        bytes += Buffer.byteLength(chunk)
+        if (bytes > maxBytes) {
+          request.destroy(new Error("Metro source map exceeded the debugger size limit."))
+          return
+        }
+        body += chunk
+      })
+      response.on("end", () => resolve(body))
+    })
+
+    request.setTimeout(5000, () => {
+      request.destroy(new Error(`Metro did not respond at ${endpoint.host}:${endpoint.port}.`))
+    })
+    request.on("error", reject)
+  })
+}
+
+function getMetroSourceMapPath(connection: DebuggerConnection) {
+  // Older Reactotron clients expose the platform on the connection itself.
+  // Prefer the debugger metadata when available, but do not make source loading
+  // depend on it after the Electron process or client reconnects.
+  const platform = connection.debugger?.platform ?? connection.platform
+  if (platform !== "ios" && platform !== "android") {
+    throw new Error("The selected app did not report an iOS or Android Metro platform.")
+  }
+
+  const query = new URLSearchParams({ platform, dev: "true", minify: "false" })
+  return `/index.map?${query.toString()}`
+}
+
+function isApplicationSourcePath(value: unknown): value is string {
+  if (typeof value !== "string" || !value || value.length > 1024) return false
+  const normalizedPath = value.replace(/\\\\/g, "/")
+  return (
+    !normalizedPath.includes("/node_modules/") &&
+    !normalizedPath.startsWith("node_modules/") &&
+    !normalizedPath.endsWith("/__prelude__")
+  )
+}
+
+function getReactotronDebuggerSources(sourceMap: MetroSourceMap): ReactotronDebuggerSource[] {
+  if (!Array.isArray(sourceMap.sources)) {
+    throw new Error("Metro returned an invalid source map.")
+  }
+
+  const files: ReactotronDebuggerSource[] = []
+  const paths = new Set<string>()
+
+  for (let index = 0; index < sourceMap.sources.length; index++) {
+    const sourcePath = sourceMap.sources[index]
+    if (!isApplicationSourcePath(sourcePath) || paths.has(sourcePath)) continue
+
+    paths.add(sourcePath)
+    files.push({ path: sourcePath })
+  }
+
+  return files
+}
+
+async function getReactotronDebuggerSourceContent(
+  cachedSourceMap: CachedSourceMap,
+  sourcePath: string
+) {
+  const { sourceMap } = cachedSourceMap
+  if (!Array.isArray(sourceMap.sources) || !sourceMap.sources.includes(sourcePath)) {
+    throw new Error("This file is not part of the current Metro source map.")
+  }
+
+  const index = sourceMap.sources.indexOf(sourcePath)
+  const sourceContent = Array.isArray(sourceMap.sourcesContent)
+    ? sourceMap.sourcesContent[index]
+    : undefined
+  if (typeof sourceContent === "string") {
+    if (Buffer.byteLength(sourceContent) > MAX_SOURCE_CONTENT_BYTES) {
+      throw new Error("This source file exceeds the debugger text size limit.")
+    }
+    return sourceContent
+  }
+
+  return readMetroText(cachedSourceMap.endpoint, encodeURI(sourcePath), MAX_SOURCE_CONTENT_BYTES)
+}
+
+function decodeMetroSourceMapDataUrl(sourceMapUrl: string): MetroSourceMap {
+  const match = sourceMapUrl.match(
+    /^data:application\/json(?:;charset=utf-8)?;base64,([A-Za-z0-9+/=]+)$/i
+  )
+  if (!match) throw new Error("The Metro inspector returned an unsupported source map URL.")
+
+  const sourceMap = Buffer.from(match[1], "base64")
+  if (sourceMap.length > MAX_SOURCE_MAP_BYTES) {
+    throw new Error("Metro source map exceeded the debugger size limit.")
+  }
+
+  try {
+    return JSON.parse(sourceMap.toString("utf8")) as MetroSourceMap
+  } catch {
+    throw new Error("Metro returned an invalid source map.")
+  }
+}
+
+function isMetroBundleScript(value: unknown): value is string {
+  return typeof value === "string" && /\.bundle(?:[/?#]|$)/.test(value)
+}
+
+function readInspectorSourceMap(target: MetroDebuggerTarget): Promise<MetroSourceMap | undefined> {
+  // The inspector endpoint is supplied by Metro's local /json/list response.
+  // It is intentionally closed as soon as the bundle's source map is received.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const WebSocket = require("ws") as typeof import("ws")
+
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(target.webSocketDebuggerUrl, { maxPayload: MAX_CDP_MESSAGE_BYTES })
+    let settled = false
+    const timeout = setTimeout(() => finish(), 5000)
+
+    const finish = (error?: Error, sourceMap?: MetroSourceMap) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      socket.close()
+      if (error) reject(error)
+      else resolve(sourceMap)
+    }
+
+    socket.on("open", () => {
+      socket.send(JSON.stringify({ id: 1, method: "Debugger.enable" }))
+    })
+    socket.on("message", (message) => {
+      const messageBuffer = Array.isArray(message) ? Buffer.concat(message) : Buffer.from(message)
+      if (messageBuffer.length > MAX_CDP_MESSAGE_BYTES) {
+        finish(new Error("Metro inspector message exceeded the debugger size limit."))
+        return
+      }
+
+      try {
+        const event = JSON.parse(messageBuffer.toString("utf8")) as {
+          method?: unknown
+          params?: { url?: unknown; sourceMapURL?: unknown }
+        }
+        if (
+          event.method !== "Debugger.scriptParsed" ||
+          !isMetroBundleScript(event.params?.url) ||
+          typeof event.params?.sourceMapURL !== "string"
+        ) {
+          return
+        }
+
+        finish(undefined, decodeMetroSourceMapDataUrl(event.params.sourceMapURL))
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error("Metro inspector returned invalid data."))
+      }
+    })
+    socket.on("error", (error) => finish(error))
+  })
+}
+
+async function getMetroInspectorSourceMap(
+  endpoint: MetroEndpoint
+): Promise<MetroSourceMap | undefined> {
+  const response = await readMetroJson<unknown>(endpoint, "/json/list")
+  if (!Array.isArray(response)) return undefined
+
+  for (const target of response.filter(isMetroDebuggerTarget).slice(0, MAX_INSPECTOR_TARGETS)) {
+    try {
+      const sourceMap = await readInspectorSourceMap(target)
+      if (sourceMap) return sourceMap
+    } catch {
+      // Older inspector targets and unrelated pages may not expose a source map.
+    }
+  }
+
+  return undefined
+}
+
+async function getMetroSourceMap(connection: DebuggerConnection): Promise<MetroSourceMap> {
+  const cachedSourceMap = sourceMapsByClientId.get(connection.clientId)
+  if (cachedSourceMap) return cachedSourceMap.sourceMap
+
+  const endpoint = getMetroEndpoint(connection)
+  const inspectorSourceMap = await getMetroInspectorSourceMap(endpoint).catch(() => undefined)
+  if (inspectorSourceMap) return inspectorSourceMap
+
+  const sourceMapText = await readMetroText(
+    endpoint,
+    getMetroSourceMapPath(connection),
+    MAX_SOURCE_MAP_BYTES
+  )
+
+  try {
+    return JSON.parse(sourceMapText) as MetroSourceMap
+  } catch (error) {
+    if (error instanceof Error && error.message !== "Unexpected end of JSON input") throw error
+    throw new Error("Metro returned an invalid source map.")
+  }
+}
+
+function sendNativeDebuggerState(
+  session: NativeDebuggerSession,
+  type: "connected" | "paused" | "resumed" | "breakpointResolved" | "disconnected" | "error",
+  details: Record<string, unknown> = {}
+) {
+  if (!session.sender.isDestroyed()) {
+    session.sender.send("react-native-debugger-state", {
+      type,
+      clientId: session.clientId,
+      ...details,
+    })
+  }
+}
+
+function closeNativeDebuggerSession(senderId: number, notify = true) {
+  const session = nativeDebuggerSessions.get(senderId)
+  if (!session) return
+
+  nativeDebuggerSessions.delete(senderId)
+  session.pendingCommands.forEach(({ reject, timeout }) => {
+    clearTimeout(timeout)
+    reject(new Error("React Native debugger disconnected."))
+  })
+  session.pendingCommands.clear()
+  session.socket.close()
+  if (notify) sendNativeDebuggerState(session, "disconnected")
+}
+
+function getReactNativeBridgeTarget(targets: MetroDebuggerTarget[]) {
+  return targets.find(
+    (target) =>
+      `${target.description ?? ""}`.toLowerCase().includes("react native bridge") &&
+      !`${target.title} ${target.description ?? ""}`.toLowerCase().includes("reanimated")
+  )
+}
+
+function getCdpMessageBuffer(message: import("ws").RawData) {
+  return Array.isArray(message) ? Buffer.concat(message) : Buffer.from(message)
+}
+
+function sendCdpCommand(
+  session: NativeDebuggerSession,
+  method: string,
+  params?: Record<string, unknown>
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    if (session.socket.readyState !== 1) {
+      reject(new Error("React Native debugger is not connected."))
+      return
+    }
+
+    const id = session.nextCommandId++
+    const timeout = setTimeout(() => {
+      session.pendingCommands.delete(id)
+      reject(new Error(`Timed out waiting for ${method}.`))
+    }, 5000)
+    session.pendingCommands.set(id, { resolve, reject, timeout })
+    session.socket.send(JSON.stringify({ id, method, params }))
+  })
+}
+
+function getGeneratedPosition(session: NativeDebuggerSession, path: string, line: number) {
+  if (!session.traceMap || !session.bundleScriptId) {
+    throw new Error("React Native debugger source map is not ready.")
+  }
+
+  // trace-mapping is already resolvable by this workspace; keep the optional
+  // dependency local to this main-process feature rather than adding a manifest entry.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { GREATEST_LOWER_BOUND, eachMapping, generatedPositionFor } = loadTraceMapping() as {
+    GREATEST_LOWER_BOUND: number
+    eachMapping: (
+      map: unknown,
+      callback: (mapping: {
+        generatedLine: number
+        generatedColumn: number
+        source: string | null
+        originalLine: number | null
+      }) => void
+    ) => void
+    generatedPositionFor: (
+      map: unknown,
+      position: { source: string; line: number; column: number; bias: number }
+    ) => { line: number | null; column: number | null }
+  }
+  const generated = generatedPositionFor(session.traceMap, {
+    source: path,
+    line,
+    column: 0,
+    bias: GREATEST_LOWER_BOUND,
+  })
+  if (generated.line !== null && generated.column !== null) {
+    return {
+      scriptId: session.bundleScriptId,
+      lineNumber: generated.line - 1,
+      columnNumber: generated.column,
+    }
+  }
+
+  let nextExecutableLocation:
+    | { originalLine: number; generatedLine: number; generatedColumn: number }
+    | undefined
+  eachMapping(session.traceMap, (mapping) => {
+    if (
+      mapping.source !== path ||
+      mapping.originalLine === null ||
+      mapping.originalLine < line ||
+      (nextExecutableLocation && mapping.originalLine >= nextExecutableLocation.originalLine)
+    ) {
+      return
+    }
+    nextExecutableLocation = {
+      originalLine: mapping.originalLine,
+      generatedLine: mapping.generatedLine,
+      generatedColumn: mapping.generatedColumn,
+    }
+  })
+  if (!nextExecutableLocation) {
+    throw new Error("Could not map that source location to the Metro bundle.")
+  }
+
+  return {
+    scriptId: session.bundleScriptId,
+    lineNumber: nextExecutableLocation.generatedLine - 1,
+    columnNumber: nextExecutableLocation.generatedColumn,
+  }
+}
+
+function isExplicitlyJscConnection(connection: DebuggerConnection) {
+  return connection.debugger?.jsEngine === "jsc"
+}
+
+async function connectNativeDebugger(
+  sender: WebContents,
+  connection: DebuggerConnection
+): Promise<void> {
+  if (isExplicitlyJscConnection(connection)) {
+    throw new Error("React Native breakpoints require a Hermes connection.")
+  }
+
+  closeNativeDebuggerSession(sender.id)
+  const endpoint = getMetroEndpoint(connection)
+  const response = await readMetroJson<unknown>(endpoint, "/json/list")
+  const target = Array.isArray(response)
+    ? getReactNativeBridgeTarget(response.filter(isMetroDebuggerTarget))
+    : undefined
+  if (!target) throw new Error("Metro did not expose a React Native Bridge inspector target.")
+
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const WebSocket = require("ws") as typeof import("ws")
+  await new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(target.webSocketDebuggerUrl, { maxPayload: MAX_CDP_MESSAGE_BYTES })
+    const session: NativeDebuggerSession = {
+      clientId: connection.clientId,
+      sender,
+      socket,
+      nextCommandId: 1,
+      pendingCommands: new Map(),
+    }
+    let settled = false
+    const timeout = setTimeout(
+      () => finish(new Error("Timed out loading the Hermes source map.")),
+      5000
+    )
+    const finish = (error?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        socket.close()
+        reject(error)
+      } else {
+        nativeDebuggerSessions.set(sender.id, session)
+        sender.once("destroyed", () => closeNativeDebuggerSession(sender.id, false))
+        resolve()
+      }
+    }
+    const fail = (error: Error) => {
+      sendNativeDebuggerState(session, "error", { message: error.message })
+      if (settled) closeNativeDebuggerSession(sender.id)
+      else finish(error)
+    }
+
+    socket.on("open", () => {
+      socket.send(JSON.stringify({ id: 0, method: "Debugger.enable" }))
+    })
+    socket.on("message", (message) => {
+      const messageBuffer = getCdpMessageBuffer(message)
+      if (messageBuffer.length > MAX_CDP_MESSAGE_BYTES) {
+        fail(new Error("Metro inspector message exceeded the debugger size limit."))
+        return
+      }
+
+      try {
+        const event = JSON.parse(messageBuffer.toString("utf8")) as {
+          id?: unknown
+          method?: unknown
+          params?: {
+            scriptId?: unknown
+            url?: unknown
+            sourceMapURL?: unknown
+            breakpointId?: unknown
+            location?: unknown
+            callFrames?: unknown
+          }
+          result?: unknown
+          error?: { message?: unknown }
+        }
+        if (typeof event.id === "number") {
+          const pending = session.pendingCommands.get(event.id)
+          if (!pending) return
+          session.pendingCommands.delete(event.id)
+          clearTimeout(pending.timeout)
+          if (typeof event.error?.message === "string")
+            pending.reject(new Error(event.error.message))
+          else pending.resolve(event.result)
+          return
+        }
+        if (event.method === "Debugger.scriptParsed" && isMetroBundleScript(event.params?.url)) {
+          if (
+            typeof event.params?.scriptId !== "string" ||
+            typeof event.params.sourceMapURL !== "string"
+          )
+            return
+          const sourceMap = decodeMetroSourceMapDataUrl(event.params.sourceMapURL)
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { TraceMap } = loadTraceMapping() as {
+            TraceMap: new (map: MetroSourceMap) => unknown
+          }
+          session.sourceMap = sourceMap
+          session.traceMap = new TraceMap(sourceMap)
+          session.bundleScriptId = event.params.scriptId
+          sourceMapsByClientId.set(session.clientId, {
+            endpoint,
+            sourceMap,
+          })
+          sendNativeDebuggerState(session, "connected")
+          finish()
+          return
+        }
+        if (event.method === "Debugger.paused") {
+          sendNativeDebuggerState(session, "paused", { callFrames: event.params?.callFrames })
+        } else if (event.method === "Debugger.resumed") {
+          sendNativeDebuggerState(session, "resumed")
+        } else if (event.method === "Debugger.breakpointResolved") {
+          sendNativeDebuggerState(session, "breakpointResolved", {
+            breakpointId: event.params?.breakpointId,
+            location: event.params?.location,
+          })
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Metro inspector returned invalid data."
+        fail(new Error(message))
+      }
+    })
+    socket.on("error", (error) => fail(error))
+    socket.on("close", () => {
+      if (nativeDebuggerSessions.get(sender.id) === session) {
+        closeNativeDebuggerSession(sender.id)
+      } else if (!settled) {
+        finish(new Error("React Native debugger disconnected before loading sources."))
+      }
+    })
+  })
+}
+
+function isDebuggerConnection(value: unknown): value is DebuggerConnection {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    typeof (value as DebuggerConnection).clientId === "string" &&
+    Boolean((value as DebuggerConnection).clientId)
+  )
+}
+
+function sendNativeDebuggerError(
+  sender: WebContents,
+  clientId: string | undefined,
+  error: unknown
+) {
+  if (!sender.isDestroyed()) {
+    sender.send("react-native-debugger-state", {
+      type: "error",
+      clientId,
+      message: error instanceof Error ? error.message : "React Native debugger failed.",
+    })
+  }
+}
+
+function readBreakpointLocation(value: unknown): { path: string; line: number } {
+  if (!value || typeof value !== "object") throw new Error("Invalid breakpoint location.")
+  const location = value as { path?: unknown; line?: unknown }
+  const line = location.line
+  if (
+    typeof location.path !== "string" ||
+    !location.path ||
+    location.path.length > 1024 ||
+    typeof line !== "number" ||
+    !Number.isInteger(line) ||
+    line < 1
+  ) {
+    throw new Error("Invalid breakpoint location.")
+  }
+  return { path: location.path, line }
+}
+
+function readBreakpointId(value: unknown): string {
+  if (typeof value !== "string" || !value || value.length > 256) {
+    throw new Error("Invalid breakpoint identifier.")
+  }
+  return value
+}
+
+function isMetroDebuggerTarget(value: unknown): value is MetroDebuggerTarget {
+  if (!value || typeof value !== "object") return false
+  const target = value as Record<string, unknown>
+  return (
+    typeof target.id === "string" &&
+    typeof target.title === "string" &&
+    typeof target.webSocketDebuggerUrl === "string"
+  )
+}
+
+function metroPathExists(endpoint: MetroEndpoint, requestPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = requestMetro(endpoint, requestPath, (response) => {
+      response.resume()
+      resolve(Boolean(response.statusCode && response.statusCode < 400))
+    })
+
+    request.setTimeout(3000, () => {
+      request.destroy()
+      resolve(false)
+    })
+    request.on("error", () => resolve(false))
+  })
+}
+
+function getMetroDebuggerFrontendUrl(
+  endpoint: MetroEndpoint,
+  target: MetroDebuggerTarget,
+  frontend: Exclude<MetroDebuggerFrontend, "unsupported">
+) {
+  const devServer = new URL(`${endpoint.protocol}://${endpoint.host}:${endpoint.port}`)
+  const debuggerSocket = new URL(target.webSocketDebuggerUrl)
+  const socketValue =
+    debuggerSocket.host === devServer.host
+      ? `${debuggerSocket.pathname}${debuggerSocket.search}${debuggerSocket.hash}`
+      : `${debuggerSocket.host}${debuggerSocket.pathname}${debuggerSocket.search}${debuggerSocket.hash}`
+  const frontendPath =
+    frontend === "react-native-devtools"
+      ? "/debugger-frontend/rn_fusebox.html"
+      : "/debugger-frontend/rn_inspector.html"
+  const query = new URLSearchParams([
+    [debuggerSocket.protocol.slice(0, -1), socketValue],
+    ["sources.hide_add_folder", "true"],
+  ])
+
+  return `${devServer.origin}${frontendPath}?${query.toString()}`
+}
+
+function buildReactotronDebuggerTarget(
+  endpoint: MetroEndpoint,
+  target: MetroDebuggerTarget,
+  frontends: { fusebox: boolean; inspector: boolean }
+): ReactotronDebuggerTarget {
+  const capabilities = target.reactNative?.capabilities
+  const isModernTarget =
+    capabilities?.prefersFuseboxFrontend === true ||
+    (capabilities?.nativePageReloads === true && capabilities?.nativeSourceCodeFetching === true)
+
+  if (isModernTarget && frontends.fusebox) {
+    return {
+      ...target,
+      frontend: "react-native-devtools",
+      frontendUrl: getMetroDebuggerFrontendUrl(endpoint, target, "react-native-devtools"),
+      supportMessage: "React Native DevTools (Hermes/CDP)",
+    }
+  }
+
+  if (frontends.inspector) {
+    return {
+      ...target,
+      frontend: "legacy-inspector",
+      frontendUrl: getMetroDebuggerFrontendUrl(endpoint, target, "legacy-inspector"),
+      supportMessage: "Legacy Hermes inspector (best effort)",
+    }
+  }
+
+  return {
+    ...target,
+    frontend: "unsupported",
+    supportMessage:
+      "Metro did not expose a compatible React Native debugger frontend for this target.",
+  }
+}
+
+async function getMetroDebuggerTargets(
+  endpoint: MetroEndpoint
+): Promise<ReactotronDebuggerTarget[]> {
+  const response = await readMetroJson<unknown>(endpoint, "/json/list")
+  if (!Array.isArray(response)) {
+    throw new Error("Metro did not return a list of debugger targets.")
+  }
+
+  const [fusebox, inspector] = await Promise.all([
+    metroPathExists(endpoint, "/debugger-frontend/rn_fusebox.html"),
+    metroPathExists(endpoint, "/debugger-frontend/rn_inspector.html"),
+  ])
+
+  return response
+    .filter(isMetroDebuggerTarget)
+    .map((target) => buildReactotronDebuggerTarget(endpoint, target, { fusebox, inspector }))
+}
+
 export const setupSimulatorIPCCommands = () => {
+  ipcMain.handle("connect-react-native-debugger", async (event, connection: unknown) => {
+    if (!isDebuggerConnection(connection)) {
+      const message = "Select a React Native app before connecting the debugger."
+      sendNativeDebuggerError(event.sender, undefined, new Error(message))
+      return { ok: false, message }
+    }
+
+    try {
+      await connectNativeDebugger(event.sender, connection)
+      return { ok: true }
+    } catch (error) {
+      sendNativeDebuggerError(event.sender, connection.clientId, error)
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : "Could not connect the React Native debugger.",
+      }
+    }
+  })
+
+  ipcMain.handle("disconnect-react-native-debugger", async (event) => {
+    closeNativeDebuggerSession(event.sender.id)
+    return { ok: true }
+  })
+
+  ipcMain.handle("pause-react-native-debugger", async (event) => {
+    const session = nativeDebuggerSessions.get(event.sender.id)
+    if (!session) return { ok: false, message: "Connect the React Native debugger first." }
+
+    try {
+      await sendCdpCommand(session, "Debugger.pause")
+      return { ok: true }
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : "Could not pause the React Native debugger.",
+      }
+    }
+  })
+
+  ipcMain.handle("resume-react-native-debugger", async (event) => {
+    const session = nativeDebuggerSessions.get(event.sender.id)
+    if (!session) return { ok: false, message: "Connect the React Native debugger first." }
+
+    try {
+      await sendCdpCommand(session, "Debugger.resume")
+      return { ok: true }
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : "Could not resume the React Native debugger.",
+      }
+    }
+  })
+
+  ipcMain.handle("set-react-native-breakpoint", async (event, location: unknown) => {
+    const session = nativeDebuggerSessions.get(event.sender.id)
+    if (!session) return { ok: false, message: "Connect the React Native debugger first." }
+
+    try {
+      const originalLocation = readBreakpointLocation(location)
+      const result = (await sendCdpCommand(session, "Debugger.setBreakpoint", {
+        location: getGeneratedPosition(session, originalLocation.path, originalLocation.line),
+      })) as { breakpointId?: unknown; actualLocation?: unknown }
+      if (typeof result.breakpointId !== "string") {
+        throw new Error("Hermes did not return a breakpoint identifier.")
+      }
+      sendNativeDebuggerState(session, "breakpointResolved", {
+        breakpointId: result.breakpointId,
+        location: result.actualLocation,
+      })
+      return { ok: true, breakpointId: result.breakpointId, location: result.actualLocation }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Could not set React Native breakpoint.",
+      }
+    }
+  })
+
+  ipcMain.handle("remove-react-native-breakpoint", async (event, breakpointId: unknown) => {
+    const session = nativeDebuggerSessions.get(event.sender.id)
+    if (!session) return { ok: false, message: "Connect the React Native debugger first." }
+
+    try {
+      await sendCdpCommand(session, "Debugger.removeBreakpoint", {
+        breakpointId: readBreakpointId(breakpointId),
+      })
+      return { ok: true }
+    } catch (error) {
+      sendNativeDebuggerState(session, "error", {
+        message:
+          error instanceof Error ? error.message : "Could not remove React Native breakpoint.",
+      })
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : "Could not remove React Native breakpoint.",
+      }
+    }
+  })
+
+  ipcMain.handle("list-metro-debugger-targets", async (_event, connection: unknown) => {
+    if (
+      !connection ||
+      typeof connection !== "object" ||
+      typeof (connection as DebuggerConnection).clientId !== "string" ||
+      !(connection as DebuggerConnection).clientId
+    ) {
+      return { ok: false, message: "Select a React Native app before opening the debugger." }
+    }
+
+    try {
+      const targets = await getMetroDebuggerTargets(
+        getMetroEndpoint(connection as DebuggerConnection)
+      )
+      return { ok: true, targets }
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : "Could not discover Metro debugger targets.",
+      }
+    }
+  })
+
+  ipcMain.handle("list-react-native-debugger-sources", async (_event, connection: unknown) => {
+    if (
+      !connection ||
+      typeof connection !== "object" ||
+      typeof (connection as DebuggerConnection).clientId !== "string" ||
+      !(connection as DebuggerConnection).clientId
+    ) {
+      return { ok: false, message: "Select a React Native app before opening the debugger." }
+    }
+
+    try {
+      const debuggerConnection = connection as DebuggerConnection
+      const sourceMap = await getMetroSourceMap(debuggerConnection)
+      sourceMapsByClientId.set(debuggerConnection.clientId, {
+        endpoint: getMetroEndpoint(debuggerConnection),
+        sourceMap,
+      })
+      return { ok: true, files: getReactotronDebuggerSources(sourceMap) }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Could not load Metro source files.",
+      }
+    }
+  })
+
+  ipcMain.handle("get-react-native-debugger-source-content", async (_event, request: unknown) => {
+    if (!request || typeof request !== "object") {
+      return { ok: false, message: "Select a source file before opening it." }
+    }
+
+    const { clientId, path: sourcePath } = request as { clientId?: unknown; path?: unknown }
+    if (
+      typeof clientId !== "string" ||
+      !clientId ||
+      typeof sourcePath !== "string" ||
+      !sourcePath
+    ) {
+      return { ok: false, message: "Select a source file before opening it." }
+    }
+
+    try {
+      const sourceMap = sourceMapsByClientId.get(clientId)
+      if (!sourceMap) {
+        return { ok: false, message: "Refresh source files before opening a file." }
+      }
+      return {
+        ok: true,
+        content: await getReactotronDebuggerSourceContent(sourceMap, sourcePath),
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Could not load source text.",
+      }
+    }
+  })
+
   ipcMain.handle("android-device-screenshot-action", async (event, deviceId: unknown) => {
     try {
       assertAndroidDeviceId(deviceId)
@@ -588,7 +1529,9 @@ export const setupSimulatorIPCCommands = () => {
       const activeRecording = androidRecordings.get(deviceId)
       if (activeRecording) {
         if (activeRecording.process.exitCode === null) {
-          const finished = new Promise<void>((resolve) => activeRecording.process.once("close", resolve))
+          const finished = new Promise<void>((resolve) =>
+            activeRecording.process.once("close", resolve)
+          )
           // Stopping the adb client interrupts the transport and leaves a corrupt
           // MP4. Signal screenrecord on the device so it writes its trailer first.
           await runCommand("adb", ["-s", deviceId, "shell", "pkill", "-INT", "screenrecord"])

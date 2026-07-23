@@ -26,4 +26,8 @@ You plug it into your app as a development dependency so it adds nothing to your
 
 > Reactotron is completely open source and free to use, making it an invaluable tool for developers at all levels of experience.
 
+## React Native Debugger
+
+Reactotron's React Native Debugger integration is currently in progress. For runtime compatibility and connection setup, see the [React Native Debugger guide](./react-native-debugger.md).
+
 [GitHub](https://github.com/hurajgor/reactotron)
