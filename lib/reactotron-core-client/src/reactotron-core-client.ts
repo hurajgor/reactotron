@@ -12,6 +12,20 @@ import serialize from "./serialize"
 import { start } from "./stopwatch"
 import { ClientOptions } from "./client-options"
 
+/**
+ * The console.log implementation captured at module load, before any plugin
+ * (e.g. trackGlobalLogs) can patch the global console.
+ *
+ * Diagnostic logging in this file must never route through a patched
+ * console.log: those patches call back into the client's log/send path, and a
+ * send that is not ready logs again, producing unbounded recursion
+ * (RangeError: Maximum call stack size exceeded) at startup.
+ */
+const originalConsoleLog: typeof console.log =
+  typeof console !== "undefined" && typeof console.log === "function"
+    ? console.log.bind(console)
+    : () => undefined
+
 export type { ClientOptions }
 export { assertHasLoggerPlugin } from "./plugins/logger"
 export type { LoggerPlugin } from "./plugins/logger"
@@ -184,6 +198,11 @@ export class ReactotronImpl
   reconnectAttempts = 0
 
   /**
+   * Re-entrancy guard for reconnect diagnostic logging.
+   */
+  isLoggingReconnect = false
+
+  /**
    * Available plugins.
    */
   plugins: Plugin<this>[] = []
@@ -268,8 +287,16 @@ export class ReactotronImpl
 
   logReconnect(message: string) {
     if (this.options.reconnect === false) return
+    // Guards against re-entrancy in case the captured console.log itself ends
+    // up routing back into the client.
+    if (this.isLoggingReconnect) return
 
-    console.log(`[Reactotron] ${message}`)
+    this.isLoggingReconnect = true
+    try {
+      originalConsoleLog(`[Reactotron] ${message}`)
+    } finally {
+      this.isLoggingReconnect = false
+    }
   }
 
   scheduleReconnect() {
