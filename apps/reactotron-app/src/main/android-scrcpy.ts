@@ -4,6 +4,7 @@ import fs from "fs"
 import https from "https"
 import net from "net"
 import path from "path"
+import { getAdbPath } from "./adb-path"
 
 const VERSION = "2.4"
 const DEVICE_JAR = "/data/local/tmp/reactotron-scrcpy-server.jar"
@@ -28,14 +29,16 @@ export type AndroidScrcpyStream = { close: () => void }
 
 function runAdb(args: string[]) {
   return new Promise<string>((resolve, reject) => {
-    const process = childProcess.spawn("adb", args, { shell: false })
+    const process = childProcess.spawn(getAdbPath(), args, { shell: false })
     let output = ""
     let errorOutput = ""
     process.stdout.on("data", (chunk) => (output += chunk))
     process.stderr.on("data", (chunk) => (errorOutput += chunk))
     process.on("error", reject)
     process.on("close", (code) =>
-      code === 0 ? resolve(output) : reject(new Error(errorOutput || output || `adb exited with ${code}.`))
+      code === 0
+        ? resolve(output)
+        : reject(new Error(errorOutput || output || `adb exited with ${code}.`))
     )
   })
 }
@@ -51,7 +54,12 @@ async function serverJar(directory: string) {
       https
         .get(url, (response) => {
           const redirect = response.headers.location
-          if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && redirect) {
+          if (
+            response.statusCode &&
+            response.statusCode >= 300 &&
+            response.statusCode < 400 &&
+            redirect
+          ) {
             response.resume()
             if (redirects >= 5) {
               reject(new Error("Too many redirects downloading scrcpy server."))
@@ -72,7 +80,9 @@ async function serverJar(directory: string) {
         })
         .on("error", reject)
     })
-  await download(`https://github.com/Genymobile/scrcpy/releases/download/v${VERSION}/scrcpy-server-v${VERSION}`)
+  await download(
+    `https://github.com/Genymobile/scrcpy/releases/download/v${VERSION}/scrcpy-server-v${VERSION}`
+  )
   await fs.promises.rename(temporaryPath, filePath)
   return filePath
 }
@@ -90,14 +100,12 @@ export async function startAndroidScrcpyStream(
   const scid = (crypto.randomBytes(4).readUInt32BE(0) & 0x7fffffff).toString(16).padStart(8, "0")
   await runAdb(["-s", serial, "push", jar, DEVICE_JAR])
   const port = Number(
-    (
-      await runAdb(["-s", serial, "forward", "tcp:0", `localabstract:scrcpy_${scid}`])
-    ).trim()
+    (await runAdb(["-s", serial, "forward", "tcp:0", `localabstract:scrcpy_${scid}`])).trim()
   )
   if (!Number.isInteger(port) || port <= 0) throw new Error("adb did not allocate a scrcpy port.")
 
   const server = childProcess.spawn(
-    "adb",
+    getAdbPath(),
     [
       "-s",
       serial,

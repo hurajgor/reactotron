@@ -3,6 +3,7 @@ import fs from "fs"
 import http from "http"
 import net from "net"
 import path from "path"
+import { getAdbPath } from "./adb-path"
 import { startAndroidScrcpyStream, type AndroidScrcpyStream } from "./android-scrcpy"
 import {
   app,
@@ -84,7 +85,7 @@ function assertAndroidDeviceId(deviceId: unknown): asserts deviceId is string {
 }
 
 async function getAndroidDevices(): Promise<AndroidDevice[]> {
-  const output = await runCommand("adb", ["devices", "-l"])
+  const output = await runCommand(getAdbPath(), ["devices", "-l"])
   return output
     .split("\n")
     .slice(1)
@@ -109,9 +110,13 @@ async function getAndroidDevices(): Promise<AndroidDevice[]> {
 async function captureAndroidDeviceScreenshotPng(deviceId: string): Promise<Buffer> {
   assertAndroidDeviceId(deviceId)
   return new Promise<Buffer>((resolve, reject) => {
-    const process = childProcess.spawn("adb", ["-s", deviceId, "exec-out", "screencap", "-p"], {
-      shell: false,
-    })
+    const process = childProcess.spawn(
+      getAdbPath(),
+      ["-s", deviceId, "exec-out", "screencap", "-p"],
+      {
+        shell: false,
+      }
+    )
     const image: Buffer[] = []
     let errorOutput = ""
     process.stdout.on("data", (chunk) => image.push(Buffer.from(chunk)))
@@ -146,18 +151,18 @@ async function runAndroidDeviceCommand(
 ) {
   assertAndroidDeviceId(deviceId)
   if (command === "home")
-    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "3"])
+    return runCommand(getAdbPath(), ["-s", deviceId, "shell", "input", "keyevent", "3"])
   if (command === "back")
-    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "4"])
+    return runCommand(getAdbPath(), ["-s", deviceId, "shell", "input", "keyevent", "4"])
   if (command === "recents")
-    return runCommand("adb", ["-s", deviceId, "shell", "input", "keyevent", "187"])
+    return runCommand(getAdbPath(), ["-s", deviceId, "shell", "input", "keyevent", "187"])
   if (command === "reload")
-    return runCommand("adb", ["-s", deviceId, "shell", "input", "text", "RR"])
+    return runCommand(getAdbPath(), ["-s", deviceId, "shell", "input", "text", "RR"])
   if (command === "reverse") {
     if (!Number.isInteger(reactotronPort) || !reactotronPort || reactotronPort > 65535) {
       throw new Error("Invalid Reactotron server port.")
     }
-    return runCommand("adb", [
+    return runCommand(getAdbPath(), [
       "-s",
       deviceId,
       "reverse",
@@ -167,7 +172,7 @@ async function runAndroidDeviceCommand(
   }
   if (command === "rotate") {
     const currentRotation = (
-      await runCommand("adb", [
+      await runCommand(getAdbPath(), [
         "-s",
         deviceId,
         "shell",
@@ -177,7 +182,7 @@ async function runAndroidDeviceCommand(
         "user_rotation",
       ])
     ).trim()
-    await runCommand("adb", [
+    await runCommand(getAdbPath(), [
       "-s",
       deviceId,
       "shell",
@@ -187,7 +192,7 @@ async function runAndroidDeviceCommand(
       "accelerometer_rotation",
       "0",
     ])
-    return runCommand("adb", [
+    return runCommand(getAdbPath(), [
       "-s",
       deviceId,
       "shell",
@@ -202,7 +207,14 @@ async function runAndroidDeviceCommand(
     if (typeof text !== "string" || !/^[\x20-\x7e]{1,1000}$/.test(text)) {
       throw new Error("Android keyboard input must be printable ASCII text.")
     }
-    return runCommand("adb", ["-s", deviceId, "shell", "input", "text", text.replace(/ /g, "%s")])
+    return runCommand(getAdbPath(), [
+      "-s",
+      deviceId,
+      "shell",
+      "input",
+      "text",
+      text.replace(/ /g, "%s"),
+    ])
   }
   if (
     !Number.isFinite(x) ||
@@ -221,7 +233,7 @@ async function runAndroidDeviceCommand(
   ) {
     throw new Error("Invalid Android gesture coordinates.")
   }
-  const size = await runCommand("adb", ["-s", deviceId, "shell", "wm", "size"])
+  const size = await runCommand(getAdbPath(), ["-s", deviceId, "shell", "wm", "size"])
   const match = size.match(/(?:Physical size|Override size):\s*(\d+)x(\d+)/)
   if (!match) throw new Error("Could not determine Android device screen size.")
   const width = Number(match[1])
@@ -229,7 +241,7 @@ async function runAndroidDeviceCommand(
   const startX = Math.round(x! * (width - 1))
   const startY = Math.round(y! * (height - 1))
   if (command === "swipe") {
-    return runCommand("adb", [
+    return runCommand(getAdbPath(), [
       "-s",
       deviceId,
       "shell",
@@ -242,7 +254,7 @@ async function runAndroidDeviceCommand(
       "250",
     ])
   }
-  return runCommand("adb", [
+  return runCommand(getAdbPath(), [
     "-s",
     deviceId,
     "shell",
@@ -588,10 +600,12 @@ export const setupSimulatorIPCCommands = () => {
       const activeRecording = androidRecordings.get(deviceId)
       if (activeRecording) {
         if (activeRecording.process.exitCode === null) {
-          const finished = new Promise<void>((resolve) => activeRecording.process.once("close", resolve))
+          const finished = new Promise<void>((resolve) =>
+            activeRecording.process.once("close", resolve)
+          )
           // Stopping the adb client interrupts the transport and leaves a corrupt
           // MP4. Signal screenrecord on the device so it writes its trailer first.
-          await runCommand("adb", ["-s", deviceId, "shell", "pkill", "-INT", "screenrecord"])
+          await runCommand(getAdbPath(), ["-s", deviceId, "shell", "pkill", "-INT", "screenrecord"])
           await finished
         }
         // Keep naturally completed recordings in the registry until the user
@@ -600,8 +614,21 @@ export const setupSimulatorIPCCommands = () => {
         const directory = path.join(app.getPath("temp"), "reactotron", "android-recordings")
         await fs.promises.mkdir(directory, { recursive: true })
         const temporaryPath = path.join(directory, `android-recording-${Date.now()}.mp4`)
-        await runCommand("adb", ["-s", deviceId, "pull", activeRecording.remotePath, temporaryPath])
-        await runCommand("adb", ["-s", deviceId, "shell", "rm", "-f", activeRecording.remotePath])
+        await runCommand(getAdbPath(), [
+          "-s",
+          deviceId,
+          "pull",
+          activeRecording.remotePath,
+          temporaryPath,
+        ])
+        await runCommand(getAdbPath(), [
+          "-s",
+          deviceId,
+          "shell",
+          "rm",
+          "-f",
+          activeRecording.remotePath,
+        ])
         const window = ElectronBrowserWindow.fromWebContents(event.sender)
         const save = await dialog.showSaveDialog(window ?? undefined, {
           title: "Save Android Recording",
@@ -619,7 +646,7 @@ export const setupSimulatorIPCCommands = () => {
 
       const remotePath = "/sdcard/reactotron-recording.mp4"
       const recordingProcess = childProcess.spawn(
-        "adb",
+        getAdbPath(),
         ["-s", deviceId, "shell", "screenrecord", "--bit-rate", "12000000", remotePath],
         { shell: false }
       )
@@ -1080,9 +1107,7 @@ export const setupAndroidDeviceIPCCommands = (mainWindow: BrowserWindow) => {
   // Allows the main renderer to communicate with the main process and get a list of connected android devices.
   ipcMain.on("get-device-list", () => {
     console.log("Getting Android device list")
-    const devicesProcess = childProcess.spawn("adb", ["devices"], {
-      shell: true,
-    })
+    const devicesProcess = childProcess.spawn(getAdbPath(), ["devices"])
     devicesProcess.stdout.setEncoding("utf8")
     devicesProcess.stdout.on("data", (data) => {
       data = data.toString()
@@ -1096,26 +1121,26 @@ export const setupAndroidDeviceIPCCommands = (mainWindow: BrowserWindow) => {
     console.log("Reverse Tunneling Android device", deviceId, reactotronPort, metroPort)
 
     // First do the reverse tunnel for reactotron:
-    const reactotronReverseProcess = childProcess.spawn(
-      "adb",
-      ["-s", deviceId, "reverse", `tcp:${reactotronPort}`, `tcp:${reactotronPort}`],
-      {
-        shell: true,
-      }
-    )
+    const reactotronReverseProcess = childProcess.spawn(getAdbPath(), [
+      "-s",
+      deviceId,
+      "reverse",
+      `tcp:${reactotronPort}`,
+      `tcp:${reactotronPort}`,
+    ])
     reactotronReverseProcess.stdout.setEncoding("utf8")
     reactotronReverseProcess.stdout.on("data", () => {
       console.log(`Reverse Tunneling To Reactotron Port ${reactotronPort} Complete.`)
     })
 
     // Now do the reverse tunnel for react native:
-    const metroReverseProcess = childProcess.spawn(
-      "adb",
-      ["-s", deviceId, "reverse", `tcp:${metroPort}`, `tcp:${metroPort}`],
-      {
-        shell: true,
-      }
-    )
+    const metroReverseProcess = childProcess.spawn(getAdbPath(), [
+      "-s",
+      deviceId,
+      "reverse",
+      `tcp:${metroPort}`,
+      `tcp:${metroPort}`,
+    ])
     metroReverseProcess.stdout.setEncoding("utf8")
     metroReverseProcess.stdout.on("data", () => {
       console.log(`Reverse Tunneling To Metro Port ${metroPort} Complete.`)
@@ -1125,13 +1150,14 @@ export const setupAndroidDeviceIPCCommands = (mainWindow: BrowserWindow) => {
   // Reloads the app on the android device
   ipcMain.on("reload-app", (_event, arg) => {
     console.log("Reloading App on device", arg)
-    const reloadAppProcess = childProcess.spawn(
-      "adb",
-      ["-s", arg, "shell", "input", "text", '"RR"'],
-      {
-        shell: true,
-      }
-    )
+    const reloadAppProcess = childProcess.spawn(getAdbPath(), [
+      "-s",
+      arg,
+      "shell",
+      "input",
+      "text",
+      "RR",
+    ])
     reloadAppProcess.stdout.setEncoding("utf8")
     reloadAppProcess.stdout.on("data", (data) => {
       data = data.toString()
@@ -1142,13 +1168,14 @@ export const setupAndroidDeviceIPCCommands = (mainWindow: BrowserWindow) => {
   // Reloads the app on the android device
   ipcMain.on("shake-device", (_event, arg) => {
     console.log("Showing react-native debug menu", arg)
-    const shakeDeviceProcess = childProcess.spawn(
-      "adb",
-      ["-s", arg, "shell", "input", "keyevent", "82"],
-      {
-        shell: true,
-      }
-    )
+    const shakeDeviceProcess = childProcess.spawn(getAdbPath(), [
+      "-s",
+      arg,
+      "shell",
+      "input",
+      "keyevent",
+      "82",
+    ])
     shakeDeviceProcess.stdout.setEncoding("utf8")
     shakeDeviceProcess.stdout.on("data", (data) => {
       data = data.toString()
@@ -1157,9 +1184,7 @@ export const setupAndroidDeviceIPCCommands = (mainWindow: BrowserWindow) => {
   })
 
   // Now we need to start watching for android devices being plugged and unplugged
-  const trackDevicesProcess = childProcess.spawn("adb", ["track-devices"], {
-    shell: true,
-  })
+  const trackDevicesProcess = childProcess.spawn(getAdbPath(), ["track-devices"])
   trackDevicesProcess.on("error", (error) => {
     dialog.showMessageBox({
       title: "Android communication problem",
