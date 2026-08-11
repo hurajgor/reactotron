@@ -1,18 +1,19 @@
 # ![Reactotron Logo](./docs/plugins/images/readme/Reactotron-128.png) Reactotron
 
-Reactotron is a desktop debugger for React and React Native. It brings application state, network traffic, logs, runtime UI, agent tools, and iOS Simulator control into one focused workspace.
+Reactotron is a desktop debugger for React and React Native. This fork builds on the existing Reactotron debugging tools with an advanced network workspace, semantic agent controls, and embedded iOS and Android device surfaces.
 
 ![Reactotron desktop with Timeline and an embedded iPhone simulator](./docs/plugins/images/readme/desktop-simulator.png)
 
-## What you can do
+## What this fork adds
 
 - Inspect network requests, responses, headers, payloads, and timing alongside application logs.
 - Search and filter traffic by method, status, duration, content type, host, endpoint, time window, and duplicates.
 - Explore React Native runtime UI through the Agent screen, using `testID`, labels, text, roles, and placeholders to find nodes and run supported actions.
-- Connect coding agents through MCP for runtime inspection, UI actions, and desktop simulator workflows.
-- Open and control iOS Simulators from Reactotron on macOS, without switching to Simulator.app.
-- Open Android emulators and physical ADB devices directly in Reactotron.
-- Choose a named theme, use a compact sidebar, and tailor the Timeline layout to your workflow.
+- Connect coding agents through MCP to inspect debug data, operate the runtime UI semantically, and control desktop iOS Simulator workflows.
+- Create, open, stream, and control iOS Simulators from Reactotron on macOS, without switching to Simulator.app.
+- Stream and control Android emulators and physical ADB devices directly in Reactotron.
+- Choose a theme and light, dark, or system appearance; use a compact sidebar; and tailor the Timeline layout to your workflow.
+- Recover dropped app connections, refresh stale device state, and run development and release builds side by side on separate default ports.
 - Debug the rest of your app with Reactotron’s established state, Redux, MobX-State-Tree, Async Storage, overlay, Storybook, benchmark, and custom-command tools.
 
 ## A modern desktop workspace
@@ -34,13 +35,13 @@ Use the Timeline to:
 
 ### Agentic development and MCP
 
-The Agent screen and MCP server give people and coding agents a shared view of a connected React Native app. Inspect the runtime UI, find elements through `testID` or accessibility metadata, and perform supported interactions such as press, fill, and scroll. The MCP server also provides the app's debug data, state tools, and desktop iOS Simulator workflows to a local coding assistant.
+The Agent screen and MCP server give people and coding agents a shared, semantic view of a connected React Native app. Agents can request a UI snapshot, find elements by `testID`, runtime ID, text, accessibility label, role, hint, or placeholder, and perform supported press, fill, and scroll actions without relying on screenshot coordinates. The MCP server also provides timelines, network activity, logs, state tools, custom commands, and desktop iOS Simulator workflows to local coding assistants such as Claude Code and Codex.
 
 See the [MCP guide](./docs/mcp.md) for client setup, redaction, available tools, and iOS Simulator requirements.
 
 ### Themes and layout
 
-Choose Tokyo Night, T3 Code, Catppuccin, GitHub Dark, One Dark Pro, Nord, Rose Pine, Gruvbox Dark, or Ayu Mirage in Settings. The newer Timeline event-table interface and compact sidebar are enabled by default, and both preferences can be changed there.
+Choose Solarized, Kanagawa, Everforest, Gruvbox, Catppuccin, T3 Code, One, or Nord in Settings, then use the system, dark, or light appearance. The newer Timeline event-table interface and compact sidebar are enabled by default, and both preferences can be changed there.
 
 ![Reactotron Settings with theme, Timeline, and sidebar preferences](./docs/plugins/images/readme/desktop-settings.png)
 
@@ -63,11 +64,15 @@ The embedded device supports Home, reload, reconnect, shutdown, rotation, light/
 
 ## Android emulators and physical devices
 
-The device panel discovers Android emulators, USB devices, and Wi-Fi ADB devices. Open one to see a live screenshot preview, tap the device, and use Back, Home, Recents, and Reload controls. Use the link button to run `adb reverse` for Reactotron's configured server port.
+The device panel discovers Android emulators, USB devices, and Wi-Fi ADB devices through ADB. Open a device to start a low-latency H.264 stream powered by scrcpy and interact with it directly inside Reactotron.
+
+The Android surface supports taps, swipes, dragging, keyboard input, and paste, along with Back, Home, Recents, Reload, and rotation controls. You can capture screenshots, record the screen, and use the link button to configure `adb reverse` for Reactotron's active server port.
 
 ## Install
 
 Download the desktop app from the [Releases](https://github.com/hurajgor/reactotron/releases) page for macOS, Linux, or Windows.
+
+Internal macOS builds are code-signed for both Intel and Apple Silicon. They are not notarized, so macOS may require you to move Reactotron to Applications and select **Open Anyway** in **System Settings → Privacy & Security** on first launch.
 
 This fork publishes its client packages under the `@hurajgor` scope. Add the client that matches your application as a development dependency so it does not affect production builds:
 
@@ -81,6 +86,10 @@ npm install --save-dev @hurajgor/reactotron-react-js
 
 Use the scoped `@hurajgor/*` integrations as well, for example `@hurajgor/reactotron-redux`, `@hurajgor/reactotron-mst`, and `@hurajgor/reactotron-apisauce`. Do not mix these with the unscoped upstream Reactotron packages.
 
+Latest desktop release:
+
+- [Reactotron 3.13.0](https://github.com/hurajgor/reactotron/releases/tag/reactotron-app%403.13.0)
+
 ## Get started
 
 - [React Native quick start](./docs/quick-start/react-native.md)
@@ -92,6 +101,15 @@ Use the scoped `@hurajgor/*` integrations as well, for example `@hurajgor/reacto
 ## Plugins and integrations
 
 Reactotron includes integrations for [global errors](./docs/plugins/track-global-errors.md), [global logs](./docs/plugins/track-global-logs.md), [networking](./docs/plugins/networking.md), [Async Storage](./docs/plugins/async-storage.md), [React Native MMKV](./docs/plugins/react-native-mmkv.md), [benchmarks](./docs/plugins/benchmark.md), [apisauce](./docs/plugins/apisauce.md), [overlays](./docs/plugins/overlay.md), [MST](./docs/plugins/mst.md), [Redux](./docs/plugins/redux.md), [Open in Editor](./docs/plugins/open-in-editor.md), [Storybook](./docs/plugins/storybook.md), and [custom commands](./docs/custom-commands.md).
+
+## Roadmap
+
+The following capabilities are planned and are not part of the current releases:
+
+- **Test-case execution:** discover, run, monitor, and review test cases from Reactotron.
+- **Chrome DevTools integration:** combine network inspection, logs, JavaScript debugging, and breakpoints in one desktop application.
+- **Physical iOS device mirroring:** extend the embedded simulator experience to connected physical iOS devices.
+- **End-to-end agentic testing:** build on the existing semantic MCP runtime so agents can execute test flows, interact through stable `testID` and accessibility selectors, perform assertions, and report results without depending primarily on screenshot coordinates.
 
 ## Contributing
 
