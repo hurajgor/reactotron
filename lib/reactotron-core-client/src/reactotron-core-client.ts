@@ -399,6 +399,11 @@ export class ReactotronImpl
     const onError = (error?: unknown) => {
       this.isReady = false
       this.logReconnect(`WebSocket error while connecting to ${socketPath}: ${String(error)}`)
+      // Not every implementation follows an error with a close event, and
+      // without one nothing else would schedule the next attempt. Retries are
+      // idempotent: scheduleReconnect no-ops when a timer is already pending,
+      // so a following close does not double up.
+      this.scheduleReconnect()
     }
 
     const decodeCommandData = (data: unknown) => {
