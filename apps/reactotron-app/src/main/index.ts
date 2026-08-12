@@ -7,6 +7,7 @@ import { autoUpdater } from "electron-updater"
 import windowStateKeeper from "electron-window-state"
 
 import createMenu from "./menu"
+import { killOrphanedServeSimProcesses } from "./serve-sim-cleanup"
 import {
   setupAndroidDeviceIPCCommands,
   setupSimulatorIPCCommands,
@@ -143,11 +144,29 @@ app.on("activate", () => {
   }
 })
 
-// create main BrowserWindow when electron is ready
-app.on("ready", () => {
-  mainWindow = createMainWindow()
+// A second copy would bind its own simulator preview servers and race the first
+// one for ports, so hand focus back to the window that is already open. The dev
+// app sets its own name above and therefore takes a separate lock, which keeps
+// it usable alongside an installed Reactotron.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  })
 
-  // Sets up the electron IPC commands for android functionality on the Help screen.
-  setupAndroidDeviceIPCCommands(mainWindow)
-  setupSimulatorIPCCommands()
-})
+  // create main BrowserWindow when electron is ready
+  app.on("ready", () => {
+    // Runs before any surface starts so a stranded server from a previous run
+    // cannot keep holding the port this one is about to ask for.
+    killOrphanedServeSimProcesses()
+
+    mainWindow = createMainWindow()
+
+    // Sets up the electron IPC commands for android functionality on the Help screen.
+    setupAndroidDeviceIPCCommands(mainWindow)
+    setupSimulatorIPCCommands(mainWindow)
+  })
+}

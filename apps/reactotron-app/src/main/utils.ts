@@ -47,7 +47,15 @@ const androidRecordings = new Map<
   string,
   { remotePath: string; process: childProcess.ChildProcess }
 >()
+const serveSimStarts = new Map<
+  string,
+  Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }>
+>()
+let simulatorSurfaceWindow: BrowserWindow | null = null
 const iosSimulatorUdid = /^[A-Fa-f0-9-]{36}$/
+const SERVE_SIM_PORT_ATTEMPTS = 5
+const SERVE_SIM_EXIT_TIMEOUT = 3000
+const SERVE_SIM_FORCE_KILL_TIMEOUT = 500
 const androidVideoStreams = new Map<string, AndroidScrcpyStream>()
 
 function runCommand(
@@ -348,6 +356,32 @@ function getAvailablePort(startingPort = 3200): Promise<number> {
   })
 }
 
+/**
+ * Find a port for a new serve-sim process.
+ *
+ * Probing can only report that a port was free a moment ago: the probe socket
+ * has to close before serve-sim can bind, and the previous process for this
+ * surface may still be releasing the same port. Ports already handed to a live
+ * serve-sim are skipped so that two surfaces starting at once cannot both be
+ * told to use the lowest free port, and the caller retries when serve-sim
+ * reports the port taken anyway.
+ */
+async function getServeSimPort(): Promise<number> {
+  const portsInUse = new Set<number>()
+  serveSimProcesses.forEach(({ previewUrl, process: serveSimProcess }) => {
+    if (serveSimProcess.exitCode !== null) return
+    const assignedPort = Number(new URL(previewUrl).port)
+    if (Number.isInteger(assignedPort)) portsInUse.add(assignedPort)
+  })
+
+  let candidate = await getAvailablePort()
+  while (portsInUse.has(candidate)) {
+    candidate = await getAvailablePort(candidate + 1)
+  }
+
+  return candidate
+}
+
 async function captureIOSSimulatorScreenshot(udid: string) {
   assertIOSSimulatorUdid(udid)
   const directory = path.join(app.getPath("temp"), "reactotron", "simulator-screenshots")
@@ -414,7 +448,65 @@ async function getIOSSimulatorCreationOptions(): Promise<IOSSimulatorCreationOpt
     }))
 }
 
-async function startServeSim(
+function startServeSim(
+  udid: string
+): Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }> {
+  // Opening a surface and reconnecting it can both be in flight at once, and a
+  // process is only registered after it reports a successful start. Two callers
+  // arriving before that point would each see no server and spawn their own,
+  // leaving a pair of them fighting over the same port while the renderer
+  // watches the connection reset. Sharing the in-flight start keeps one server
+  // per surface.
+  const pending = serveSimStarts.get(udid)
+  if (pending) return pending
+
+  const start = startServeSimUnguarded(udid).finally(() => {
+    if (serveSimStarts.get(udid) === start) serveSimStarts.delete(udid)
+  })
+  serveSimStarts.set(udid, start)
+  return start
+}
+
+/**
+ * Bring a surface back after its server exited on its own, and tell the
+ * renderer which address to use now.
+ */
+function restartServeSimForSurface(udid: string): void {
+  startServeSim(udid)
+    .then((surface) => {
+      const target = simulatorSurfaceWindow
+      if (!target || target.isDestroyed()) return
+      console.log(`[Reactotron Desktop] simulator preview moved to ${surface.previewUrl}.`)
+      target.webContents.send("ios-simulator-surface-moved", { udid, ...surface })
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.log(`[Reactotron Desktop] could not restart the simulator preview. ${message}`)
+    })
+}
+
+/**
+ * Replace the server behind a surface, sharing the guard with `startServeSim`
+ * so the teardown and the spawn cannot be interleaved with another start.
+ */
+function restartServeSim(
+  udid: string
+): Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }> {
+  const restart = stopServeSim(udid)
+    .then(() => {
+      // stopServeSim clears the guard, so claim it again for the spawn that
+      // follows rather than leaving a window with no entry set.
+      serveSimStarts.set(udid, restart)
+      return startServeSimUnguarded(udid)
+    })
+    .finally(() => {
+      if (serveSimStarts.get(udid) === restart) serveSimStarts.delete(udid)
+    })
+  serveSimStarts.set(udid, restart)
+  return restart
+}
+
+async function startServeSimUnguarded(
   udid: string
 ): Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }> {
   const existingSurface = serveSimProcesses.get(udid)
@@ -427,7 +519,30 @@ async function startServeSim(
     }
   }
 
-  const port = await getAvailablePort()
+  // A port that probed as free can still be taken by the time serve-sim binds,
+  // most often by the process this surface just replaced. Losing that race used
+  // to surface a preview URL for a server that never started, so retry on the
+  // next port rather than handing the renderer somewhere to fail.
+  let lastError: Error | undefined
+  for (let attempt = 0; attempt < SERVE_SIM_PORT_ATTEMPTS; attempt += 1) {
+    try {
+      return await spawnServeSim(udid)
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      console.log(
+        `[Reactotron Desktop] serve-sim attempt ${attempt + 1} failed: ${lastError.message}`
+      )
+      if (!/already in use/i.test(lastError.message)) throw lastError
+    }
+  }
+
+  throw lastError ?? new Error("Could not start the simulator preview.")
+}
+
+async function spawnServeSim(
+  udid: string
+): Promise<{ previewUrl: string; streamUrl: string; wsUrl: string }> {
+  const port = await getServeSimPort()
   const previewUrl = `http://127.0.0.1:${port}?device=${udid}&session=${Date.now()}`
   const runner = getServeSimRunner(["--port", String(port), "--codec", "auto", udid])
   const serveSimProcess = childProcess.spawn(runner.command, runner.args, {
@@ -447,7 +562,15 @@ async function startServeSim(
       settled = true
       clearTimeout(timeout)
       if (error) {
+        // A half-started serve-sim has been seen ignoring SIGTERM and staying
+        // attached to the simulator, which starves the attempt that replaces
+        // it, so make sure this one cannot survive its own failure.
         serveSimProcess.kill()
+        setTimeout(() => {
+          if (serveSimProcess.exitCode === null && serveSimProcess.signalCode === null) {
+            serveSimProcess.kill("SIGKILL")
+          }
+        }, SERVE_SIM_EXIT_TIMEOUT).unref()
         reject(error)
       } else {
         serveSimProcesses.set(udid, { process: serveSimProcess, previewUrl })
@@ -460,7 +583,23 @@ async function startServeSim(
     }
 
     const receiveOutput = (data: Buffer) => {
-      output += data.toString()
+      const chunk = data.toString()
+      output += chunk
+      // serve-sim reports its capture and encoder state on stdout. Forwarding it
+      // is the only view into why a stream answers with headers and then no
+      // frames, which is otherwise invisible from the Reactotron side.
+      chunk
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .forEach((line) => console.log(`[serve-sim ${port}] ${line}`))
+      // serve-sim prints its banner from the requested port before the listen
+      // succeeds, so the banner alone does not mean the port was actually
+      // claimed. Fail fast when it reports the collision instead.
+      if (/already in use/i.test(output)) {
+        finish(new Error(`Port ${port} is already in use.`))
+        return
+      }
       if (output.includes(`http://localhost:${port}`)) finish()
     }
 
@@ -468,11 +607,64 @@ async function startServeSim(
     serveSimProcess.stderr.on("data", receiveOutput)
     serveSimProcess.on("error", (error) => finish(error))
     serveSimProcess.on("close", (code) => {
-      if (serveSimProcesses.get(udid)?.process === serveSimProcess) {
-        serveSimProcesses.delete(udid)
+      console.log(`[serve-sim ${port}] exited with code ${code}.`)
+      const wasCurrent = serveSimProcesses.get(udid)?.process === serveSimProcess
+      if (wasCurrent) serveSimProcesses.delete(udid)
+      if (!settled) {
+        finish(new Error(output || `serve-sim exited with code ${code}.`))
+        return
       }
-      if (!settled) finish(new Error(output || `serve-sim exited with code ${code}.`))
+
+      // serve-sim shuts itself down when its helper child exits, and the
+      // replacement rarely reclaims the same port. The renderer is still
+      // pointed at the old one, so it would retry a dead address forever
+      // unless it is told where the preview moved to.
+      if (wasCurrent) restartServeSimForSurface(udid)
     })
+  })
+}
+
+/**
+ * Stop the serve-sim process backing a simulator surface and wait for it to
+ * exit.
+ *
+ * Reconnecting spawns a replacement immediately afterwards, so returning
+ * before the old process has released its port leaves the two racing: the
+ * orphan keeps serving the port the surface is still pointed at while the
+ * replacement binds somewhere else. Escalate to SIGKILL for a process that
+ * ignores SIGTERM, which is how these end up running long after the surface
+ * that started them has closed.
+ */
+async function stopServeSim(udid: string): Promise<void> {
+  // Drop any shared in-flight start so a reconnect cannot hand back the server
+  // being torn down here.
+  serveSimStarts.delete(udid)
+  const existingSurface = serveSimProcesses.get(udid)
+  serveSimProcesses.delete(udid)
+  if (!existingSurface) return
+
+  const { process: serveSimProcess } = existingSurface
+  if (serveSimProcess.exitCode !== null || serveSimProcess.signalCode !== null) return
+
+  await new Promise<void>((resolve) => {
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(forceKillTimeout)
+      resolve()
+    }
+
+    const forceKillTimeout = setTimeout(() => {
+      serveSimProcess.kill("SIGKILL")
+      // A killed process still has to be reaped before the port is free, so
+      // keep waiting for the exit rather than resolving on the signal.
+      setTimeout(finish, SERVE_SIM_FORCE_KILL_TIMEOUT)
+    }, SERVE_SIM_EXIT_TIMEOUT)
+
+    serveSimProcess.once("exit", finish)
+    serveSimProcess.once("error", finish)
+    serveSimProcess.kill()
   })
 }
 
@@ -561,7 +753,8 @@ const reloadReactNativeViaMetro = (metroPort: number) =>
     request.on("error", reject)
   })
 
-export const setupSimulatorIPCCommands = () => {
+export const setupSimulatorIPCCommands = (mainWindow?: BrowserWindow) => {
+  simulatorSurfaceWindow = mainWindow ?? null
   ipcMain.handle("android-device-screenshot-action", async (event, deviceId: unknown) => {
     try {
       assertAndroidDeviceId(deviceId)
@@ -842,13 +1035,10 @@ export const setupSimulatorIPCCommands = () => {
   ipcMain.handle("reconnect-ios-simulator-surface", async (_event, udid: unknown) => {
     try {
       assertIOSSimulatorUdid(udid)
-      const existingSurface = serveSimProcesses.get(udid)
-      if (existingSurface) {
-        existingSurface.process.kill()
-        serveSimProcesses.delete(udid)
-      }
-
-      return { ok: true, ...(await startServeSim(udid)) }
+      // Stopping and starting has to be a single in-flight operation: clearing
+      // the guard first would let a start that arrives in between spawn its own
+      // server alongside this one.
+      return { ok: true, ...(await restartServeSim(udid)) }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }
@@ -857,11 +1047,7 @@ export const setupSimulatorIPCCommands = () => {
   ipcMain.handle("close-ios-simulator-surface", async (_event, udid: unknown) => {
     try {
       assertIOSSimulatorUdid(udid)
-      const existingSurface = serveSimProcesses.get(udid)
-      if (existingSurface) {
-        existingSurface.process.kill()
-        serveSimProcesses.delete(udid)
-      }
+      await stopServeSim(udid)
       return { ok: true }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
@@ -871,11 +1057,7 @@ export const setupSimulatorIPCCommands = () => {
   ipcMain.handle("shutdown-ios-simulator-surface", async (_event, udid: unknown) => {
     try {
       assertIOSSimulatorUdid(udid)
-      const existingSurface = serveSimProcesses.get(udid)
-      if (existingSurface) {
-        existingSurface.process.kill()
-        serveSimProcesses.delete(udid)
-      }
+      await stopServeSim(udid)
       await runCommand("xcrun", ["simctl", "shutdown", udid])
       return { ok: true }
     } catch (error) {
@@ -1094,7 +1276,10 @@ export const setupSimulatorIPCCommands = () => {
 }
 
 export const stopIOSSimulatorSurfaces = () => {
-  serveSimProcesses.forEach(({ process }) => process.kill())
+  // "before-quit" does not await, so there is no opportunity to check whether
+  // a serve-sim process honoured SIGTERM before the app goes away. Send
+  // SIGKILL outright rather than risk leaving one running after quit.
+  serveSimProcesses.forEach(({ process }) => process.kill("SIGKILL"))
   serveSimProcesses.clear()
   simulatorRecordings.forEach(({ process }) => process.kill("SIGINT"))
   simulatorRecordings.clear()
