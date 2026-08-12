@@ -62,6 +62,20 @@ type IPCResponse = {
   message?: string
 }
 
+const CONTROL_SOCKET_RETRY_DELAY = 2000
+const CONTROL_SOCKET_RETRY_LIMIT = 5
+const PREVIEW_RETRY_DELAY = 1000
+const PREVIEW_RETRY_LIMIT = 4
+const MAX_PREVIEW_FRAME_BYTES = 16 * 1024 * 1024
+
+/** Index of a two-byte JPEG marker (0xff followed by `marker`), or -1. */
+function indexOfMarker(data: Uint8Array, marker: number, from: number) {
+  for (let index = from; index < data.length - 1; index += 1) {
+    if (data[index] === 0xff && data[index + 1] === marker) return index
+  }
+  return -1
+}
+
 const Panel = styled.aside<{ $isOpen: boolean; $isResizing: boolean; $width: number }>`
   display: flex;
   position: relative;
@@ -235,7 +249,7 @@ const Actions = styled.div`
   gap: 3px;
 `
 
-const Preview = styled.img<{
+const Preview = styled.canvas<{
   $rotation: -90 | 0 | 90
   $screenWidth: number
   $screenHeight: number
@@ -544,7 +558,11 @@ function encodeControlFrame(tag: number, payload: object) {
   return frame
 }
 
-type AndroidVideoMeta = { streamId: string; deviceId: string; meta: { width: number; height: number } }
+type AndroidVideoMeta = {
+  streamId: string
+  deviceId: string
+  meta: { width: number; height: number }
+}
 type AndroidVideoFrame = {
   streamId: string
   deviceId: string
@@ -553,7 +571,129 @@ type AndroidVideoFrame = {
   data: ArrayBuffer
 }
 
-function useAndroidVideoStream(deviceId: string | undefined, enabled: boolean, onSize: (size: { width: number; height: number }) => void) {
+/**
+ * Draw an MJPEG stream into a canvas.
+ *
+ * The obvious approach — pointing an <img> at the stream URL — fails in the
+ * renderer: when the multipart response ends abnormally, which serve-sim does
+ * whenever it restarts or a frame write is interrupted, Chromium marks the load
+ * complete and *discards the decoded bitmap*. The element is left reporting
+ * complete: true with naturalWidth 0, so the preview goes black even though the
+ * server is still streaming and the element is laid out correctly.
+ *
+ * Reading the stream here keeps every decoded frame under our control: a broken
+ * connection leaves the last frame on the canvas and the next one simply paints
+ * over it.
+ */
+function useIOSVideoStream(streamUrl: string | undefined, enabled: boolean) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isStreaming, setIsStreaming] = useState(false)
+
+  useEffect(() => {
+    if (!streamUrl || !enabled) {
+      setIsStreaming(false)
+      return undefined
+    }
+
+    let disposed = false
+    let retryTimer: number | undefined
+    let attempts = 0
+    let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null
+    const controller = new AbortController()
+
+    const paint = async (frame: Uint8Array) => {
+      const canvas = canvasRef.current
+      if (disposed || !canvas) return
+      try {
+        const bitmap = await createImageBitmap(new Blob([frame], { type: "image/jpeg" }))
+        if (disposed) {
+          bitmap.close()
+          return
+        }
+        if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+          canvas.width = bitmap.width
+          canvas.height = bitmap.height
+        }
+        canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
+        bitmap.close()
+        setIsStreaming(true)
+        attempts = 0
+      } catch {
+        // A partial frame at the tail of a broken response is expected; the
+        // next whole frame repaints.
+      }
+    }
+
+    const read = async () => {
+      try {
+        const response = await fetch(streamUrl, { signal: controller.signal })
+        if (!response.body) throw new Error("The simulator preview returned no stream.")
+        const reader = response.body.getReader()
+        let buffer = new Uint8Array(0)
+
+        activeReader = reader
+
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done || disposed) break
+          const next = new Uint8Array(buffer.length + value.length)
+          next.set(buffer, 0)
+          next.set(value, buffer.length)
+          buffer = next
+
+          // Frames are delimited by the JPEG start- and end-of-image markers
+          // rather than the multipart boundary, which keeps this independent of
+          // how the parts are chunked across reads.
+          for (;;) {
+            const start = indexOfMarker(buffer, 0xd8, 0)
+            if (start === -1) break
+            const end = indexOfMarker(buffer, 0xd9, start + 2)
+            if (end === -1) {
+              if (start > 0) buffer = buffer.slice(start)
+              break
+            }
+            paint(buffer.slice(start, end + 2)).catch(() => undefined)
+            buffer = buffer.slice(end + 2)
+          }
+
+          // Never let an unterminated frame grow without bound.
+          if (buffer.length > MAX_PREVIEW_FRAME_BYTES) buffer = new Uint8Array(0)
+        }
+      } catch {
+        // Fall through to the retry below.
+      }
+
+      if (disposed || controller.signal.aborted) return
+      setIsStreaming(false)
+      if (attempts >= PREVIEW_RETRY_LIMIT) return
+      const delay = PREVIEW_RETRY_DELAY * Math.pow(2, attempts)
+      attempts += 1
+      retryTimer = window.setTimeout(read, delay)
+    }
+
+    read().catch(() => undefined)
+
+    return () => {
+      disposed = true
+      window.clearTimeout(retryTimer)
+      // Cancelling the reader closes the socket immediately. Aborting alone can
+      // leave the previous connection draining, which shows up as a second
+      // stream still attached to serve-sim.
+      activeReader?.cancel().catch(() => undefined)
+      activeReader = null
+      controller.abort()
+      setIsStreaming(false)
+    }
+  }, [enabled, streamUrl])
+
+  return { canvasRef, isStreaming }
+}
+
+function useAndroidVideoStream(
+  deviceId: string | undefined,
+  enabled: boolean,
+  onSize: (size: { width: number; height: number }) => void
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const onSizeRef = useRef(onSize)
   onSizeRef.current = onSize
@@ -613,7 +753,9 @@ function useAndroidVideoStream(deviceId: string | undefined, enabled: boolean, o
           }
           configData = data
         } catch (videoError) {
-          fail(videoError instanceof Error ? videoError.message : "Could not configure Android video.")
+          fail(
+            videoError instanceof Error ? videoError.message : "Could not configure Android video."
+          )
         }
         return
       }
@@ -629,17 +771,23 @@ function useAndroidVideoStream(deviceId: string | undefined, enabled: boolean, o
         // Keep the decode queue bounded if the renderer is briefly busy; the
         // next keyframe lets the preview catch up instead of accumulating lag.
         if (decoder.decodeQueueSize > 3 && !message.keyFrame) return
-        decoder.decode(new EncodedVideoChunkConstructor({
-          type: message.keyFrame ? "key" : "delta",
-          timestamp: ++timestamp,
-          data: chunkData,
-        }))
+        decoder.decode(
+          new EncodedVideoChunkConstructor({
+            type: message.keyFrame ? "key" : "delta",
+            timestamp: ++timestamp,
+            data: chunkData,
+          })
+        )
       } catch (videoError) {
         fail(videoError instanceof Error ? videoError.message : "Could not decode Android video.")
       }
     }
-    const onStreamError = (_event: unknown, message: { streamId: string; deviceId: string; message: string }) => {
-      if (!disposed && message.streamId === streamId && message.deviceId === deviceId) fail(message.message)
+    const onStreamError = (
+      _event: unknown,
+      message: { streamId: string; deviceId: string; message: string }
+    ) => {
+      if (!disposed && message.streamId === streamId && message.deviceId === deviceId)
+        fail(message.message)
     }
     ipcRenderer.on("android-video-stream-meta", onMeta)
     ipcRenderer.on("android-video-stream-frame", onFrame)
@@ -707,6 +855,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   )
   const isAndroidSurfaceActive = activeAndroidDevice !== null && activeUdid === null
   const activeWsUrl = activeSurface?.wsUrl
+  const activePreviewStreamUrl = activeSurface?.streamUrl
   const activeScreenAspectRatio = isAndroidSurfaceActive
     ? androidScreenSize.width / androidScreenSize.height
     : resolveVisualScreenAspectRatio(
@@ -728,6 +877,10 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   const activeScreenHeight = Math.max(
     0,
     (deviceFrameLayout?.height ?? 0) - (deviceFrameLayout?.bezel ?? 0) * 2
+  )
+  const { canvasRef: iosVideoCanvasRef } = useIOSVideoStream(
+    activePreviewStreamUrl,
+    Boolean(activeSurface) && !isChoosing
   )
   const { canvasRef: androidVideoCanvasRef, error: androidVideoError } = useAndroidVideoStream(
     activeAndroidDevice?.id,
@@ -1290,37 +1443,108 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     toggleRecording,
   ])
 
+  // serve-sim exits on its own when its helper stops, and the replacement
+  // usually lands on a different port. The main process restarts it and reports
+  // the new address here so the preview follows it instead of retrying a dead
+  // one forever.
   useEffect(() => {
-    keyboardTimersRef.current.forEach((timer) => window.clearTimeout(timer))
-    keyboardTimersRef.current = []
-    const socket = activeWsUrl ? new WebSocket(activeWsUrl) : null
-    controlSocketRef.current = socket
-    setIsControlConnected(false)
-    if (!socket) return undefined
-
-    socket.binaryType = "arraybuffer"
-    socket.onopen = () => setIsControlConnected(true)
-    socket.onmessage = (event) => {
-      const config = parseSimulatorScreenConfigFrame(event.data)
-      if (!config || !activeUdid) return
-
+    const handleMoved = (
+      _event: unknown,
+      moved: { udid: string; previewUrl: string; streamUrl: string; wsUrl: string }
+    ) => {
       setSurfaces((current) =>
         current.map((surface) =>
-          surface.udid === activeUdid
+          surface.udid === moved.udid
             ? {
                 ...surface,
-                screenSize: config.screenSize,
-                orientation: config.orientation ?? surface.orientation,
+                previewUrl: moved.previewUrl,
+                streamUrl: moved.streamUrl,
+                wsUrl: moved.wsUrl,
               }
             : surface
         )
       )
     }
-    socket.onerror = () => setIsControlConnected(false)
-    socket.onclose = () => setIsControlConnected(false)
+
+    ipcRenderer.on("ios-simulator-surface-moved", handleMoved)
     return () => {
-      socket.close()
-      if (controlSocketRef.current === socket) controlSocketRef.current = null
+      ipcRenderer.removeListener("ios-simulator-surface-moved", handleMoved)
+    }
+  }, [])
+
+  useEffect(() => {
+    keyboardTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+    keyboardTimersRef.current = []
+    setIsControlConnected(false)
+    if (!activeWsUrl) {
+      controlSocketRef.current = null
+      return undefined
+    }
+
+    let disposed = false
+    let retryTimer: number | undefined
+    let attempts = 0
+
+    // The control socket drops whenever serve-sim restarts or the machine
+    // sleeps. Without a retry the surface stays on "Connecting" forever,
+    // because this effect only re-runs when the device or its URL changes.
+    //
+    // Retrying is bounded and backs off: when serve-sim is not running at all
+    // every attempt is refused immediately, and an unbounded retry turns that
+    // into a console full of identical failures for as long as the surface
+    // stays open. The manual reconnect control restarts serve-sim itself and is
+    // the way back from an exhausted budget.
+    const connect = () => {
+      if (disposed) return
+
+      const socket = new WebSocket(activeWsUrl)
+      controlSocketRef.current = socket
+      socket.binaryType = "arraybuffer"
+
+      const scheduleRetry = () => {
+        if (disposed) return
+        setIsControlConnected(false)
+        if (controlSocketRef.current === socket) controlSocketRef.current = null
+        if (attempts >= CONTROL_SOCKET_RETRY_LIMIT) return
+        const delay = CONTROL_SOCKET_RETRY_DELAY * Math.pow(2, attempts)
+        attempts += 1
+        window.clearTimeout(retryTimer)
+        retryTimer = window.setTimeout(connect, delay)
+      }
+
+      socket.onopen = () => {
+        if (disposed) return
+        attempts = 0
+        setIsControlConnected(true)
+      }
+      socket.onmessage = (event) => {
+        const config = parseSimulatorScreenConfigFrame(event.data)
+        if (!config || !activeUdid) return
+
+        setSurfaces((current) =>
+          current.map((surface) =>
+            surface.udid === activeUdid
+              ? {
+                  ...surface,
+                  screenSize: config.screenSize,
+                  orientation: config.orientation ?? surface.orientation,
+                }
+              : surface
+          )
+        )
+      }
+      socket.onerror = scheduleRetry
+      socket.onclose = scheduleRetry
+    }
+
+    connect()
+
+    return () => {
+      disposed = true
+      window.clearTimeout(retryTimer)
+      const socket = controlSocketRef.current
+      socket?.close()
+      controlSocketRef.current = null
       setIsControlConnected(false)
     }
   }, [activeUdid, activeWsUrl])
@@ -1411,20 +1635,6 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     }
   }
 
-  const onPreviewLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
-    if (!activeSurface) return
-    const { naturalHeight, naturalWidth } = event.currentTarget
-    if (naturalWidth === 0 || naturalHeight === 0) return
-    setSurfaces((current) =>
-      current.map((surface) =>
-        surface.udid === activeSurface.udid &&
-        (surface.screenSize?.width !== naturalWidth || surface.screenSize?.height !== naturalHeight)
-          ? { ...surface, screenSize: { width: naturalWidth, height: naturalHeight } }
-          : surface
-      )
-    )
-  }
-
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -1466,10 +1676,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
         <Content>
           <TabBar>
             {surfaces.map((surface) => (
-              <TabGroup
-                key={surface.udid}
-                $active={surface.udid === activeUdid && !isChoosing}
-              >
+              <TabGroup key={surface.udid} $active={surface.udid === activeUdid && !isChoosing}>
                 <Tab
                   type="button"
                   onClick={() => {
@@ -1494,9 +1701,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
               </TabGroup>
             ))}
             {activeAndroidDevice && (
-              <TabGroup
-                $active={!isChoosing && activeUdid === null}
-              >
+              <TabGroup $active={!isChoosing && activeUdid === null}>
                 <Tab
                   type="button"
                   onClick={() => {
@@ -1621,14 +1826,12 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
                     tabIndex={0}
                   >
                     <Preview
-                      key={activeSurface.streamUrl}
+                      ref={iosVideoCanvasRef}
                       $rotation={activeStreamRotation}
                       $screenWidth={activeScreenWidth}
                       $screenHeight={activeScreenHeight}
-                      draggable={false}
-                      onLoad={onPreviewLoad}
-                      src={activeSurface.streamUrl}
-                      alt={`${activeSurface.name} simulator screen`}
+                      aria-label={`${activeSurface.name} simulator screen`}
+                      role="img"
                     />
                   </DeviceFrame>
                 </PreviewPane>
