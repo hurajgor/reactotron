@@ -130,6 +130,12 @@
       "src/main.prod.js.map",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "static/scrcpy",
+        "to": "scrcpy"
+      }
+    ],
     "dmg": {
       "sign": false,
       "contents": [

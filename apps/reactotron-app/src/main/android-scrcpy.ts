@@ -43,9 +43,37 @@ function runAdb(args: string[]) {
   })
 }
 
+/**
+ * Locations the scrcpy server is shipped to, in a packaged app and when run
+ * from the repository.
+ */
+function bundledServerJarPaths() {
+  const fileName = `scrcpy-server-v${VERSION}`
+  // electron-webpack exposes the static directory as __static while running
+  // from source; a packaged build carries the same files under resourcesPath.
+  const staticDirectory = (global as unknown as { __static?: string }).__static
+  return [
+    path.join(process.resourcesPath ?? "", "scrcpy", fileName),
+    ...(staticDirectory ? [path.join(staticDirectory, "scrcpy", fileName)] : []),
+    path.join(__dirname, "..", "..", "static", "scrcpy", fileName),
+  ]
+}
+
 async function serverJar(directory: string) {
   const filePath = path.join(directory, `scrcpy-server-v${VERSION}`)
   if (fs.existsSync(filePath)) return filePath
+
+  // Downloading needs a trusted certificate chain, and an app opened from the
+  // Dock does not inherit the CA configuration a shell provides. That failure
+  // leaves the Android preview permanently black, so prefer the copy shipped
+  // with the app and treat the download as a fallback for other versions.
+  const bundled = bundledServerJarPaths().find((candidate) => fs.existsSync(candidate))
+  if (bundled) {
+    await fs.promises.mkdir(directory, { recursive: true })
+    await fs.promises.copyFile(bundled, filePath)
+    return filePath
+  }
+
   await fs.promises.mkdir(directory, { recursive: true })
   const temporaryPath = `${filePath}.tmp`
   await fs.promises.rm(temporaryPath, { force: true })
