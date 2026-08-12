@@ -1,6 +1,6 @@
 {
   "name": "@hurajgor/reactotron-core-client",
-  "version": "2.11.1",
+  "version": "2.11.2",
   "description": "Grants Reactotron clients the ability to talk to a Reactotron server.",
   "author": "Infinite Red",
   "license": "MIT",
@@ -111,6 +111,6 @@
     ]
   },
   "dependencies": {
-    "@hurajgor/reactotron-core-contract": "workspace:*"
+    "@hurajgor/reactotron-core-contract": "0.5.0"
   }
 }
