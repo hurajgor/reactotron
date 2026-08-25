@@ -6,6 +6,8 @@ import {
   type Plugin,
 } from "@hurajgor/reactotron-core-client"
 
+type ConsoleMethod = "log" | "info" | "warn" | "debug"
+
 /**
  * Track calls to console.log, console.info, console.warn, and console.debug and send them to Reactotron logger
  */
@@ -14,33 +16,64 @@ const trackGlobalLogs = () => (reactotron: ReactotronCore) => {
   const client = reactotron as ReactotronCore & InferFeatures<ReactotronCore, LoggerPlugin>
   const serializeArgs = (args: unknown[]) => (args.length === 1 ? args[0] : args)
 
+  /**
+   * The console methods as they were before this plugin patched them.
+   *
+   * onConnect fires again on every reconnect. Without tracking the originals
+   * and restoring them, each reconnect wraps the already-patched console, so
+   * the underlying console and the client both receive one call per layer.
+   */
+  let originals: Pick<Console, ConsoleMethod> | null = null
+
+  const restore = () => {
+    if (!originals) return
+
+    console.log = originals.log
+    console.info = originals.info
+    console.warn = originals.warn
+    console.debug = originals.debug
+    originals = null
+  }
+
   return {
     onConnect: () => {
-      const originalConsoleLog = console.log
+      // a reconnect without an intervening disconnect must not stack patches
+      restore()
+
+      originals = {
+        log: console.log,
+        info: console.info,
+        warn: console.warn,
+        debug: console.debug,
+      }
+
+      const { log: originalConsoleLog, info: originalConsoleInfo } = originals
+      const { warn: originalConsoleWarn, debug: originalConsoleDebug } = originals
+
       console.log = (...args: Parameters<typeof console.log>) => {
         originalConsoleLog(...args)
         client.log(...args)
       }
 
-      const originalConsoleInfo = console.info
       console.info = (...args: Parameters<typeof console.info>) => {
         originalConsoleInfo(...args)
         client.send("log", { level: "info", message: serializeArgs(args) as any }, false)
       }
 
-      const originalConsoleWarn = console.warn
       console.warn = (...args: Parameters<typeof console.warn>) => {
         originalConsoleWarn(...args)
         client.warn(serializeArgs(args))
       }
 
-      const originalConsoleDebug = console.debug
       console.debug = (...args: Parameters<typeof console.debug>) => {
         originalConsoleDebug(...args)
         client.debug(serializeArgs(args))
       }
 
       // console.error is taken care of by ./trackGlobalErrors.ts
+    },
+    onDisconnect: () => {
+      restore()
     },
   } satisfies Plugin<ReactotronCore>
 }
