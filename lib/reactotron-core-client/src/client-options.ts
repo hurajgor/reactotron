@@ -76,8 +76,22 @@ export interface ClientOptions<Client> extends Omit<LifeCycleMethods, "onCommand
 
   /**
    * Delay between reconnect attempts in milliseconds. Default: 2000.
+   * Attempts back off from here up to a ten-times multiple of this value.
    */
   reconnectDelay?: number
+
+  /**
+   * How many consecutive failed reconnects before the client gives up.
+   * Default: 20. Zero or a negative value retries without limit.
+   */
+  maxReconnectAttempts?: number
+
+  /**
+   * How many commands to hold while the socket is unavailable. Default: 1000.
+   * The oldest are dropped once full, so an unreachable server cannot grow
+   * memory without bound. Zero or a negative value queues without limit.
+   */
+  maxSendQueueSize?: number
 
   /**
    * The NODE_ENV environment, if any.
