@@ -23,10 +23,7 @@ import trackGlobalLogs from "./plugins/trackGlobalLogs"
 import agentRuntime from "./plugins/agentRuntime"
 import { getHostFromUrl } from "./helpers/parseURL"
 import getReactNativePlatformConstants from "./helpers/getReactNativePlatformConstants"
-
-const REACTOTRON_ASYNC_CLIENT_ID = "@REACTOTRON/clientId"
-
-let tempClientId: string | null = null
+import { getClientIdWithFallback, setClientIdWithStorage } from "./client-id"
 
 /**
  * Most of the time, host should be 'localhost'.
@@ -76,36 +73,26 @@ const DEFAULTS: ClientOptions<ReactotronReactNative> = {
     ...getReactNativeDimensions(),
   },
   /* eslint-disable @typescript-eslint/no-use-before-define */
-  getClientId: async (name: string = "") => {
-    if (reactotron.asyncStorageHandler) {
-      return reactotron.asyncStorageHandler.getItem(REACTOTRON_ASYNC_CLIENT_ID)
-    }
+  getClientId: async (name: string = "") =>
+    getClientIdWithFallback(reactotron.asyncStorageHandler, () => {
+      // Generate clientId based on the device info
+      const { screenWidth, screenHeight, screenScale } = getReactNativeDimensions()
 
-    // Generate clientId based on the device info
-    const { screenWidth, screenHeight, screenScale } = getReactNativeDimensions()
+      // Accounting for screen rotation
+      const dimensions = [screenWidth, screenHeight].sort().join("-")
 
-    // Accounting for screen rotation
-    const dimensions = [screenWidth, screenHeight].sort().join("-")
+      const additionalInfo = Platform.select({
+        ios: systemName,
+        android: model,
+        default: "",
+      })
 
-    const additionalInfo = Platform.select({
-      ios: systemName,
-      android: model,
-      default: "",
-    })
-
-    tempClientId = [name, Platform.OS, Platform.Version, additionalInfo, dimensions, screenScale]
-      .filter(Boolean)
-      .join("-")
-
-    return tempClientId
-  },
-  setClientId: async (clientId: string) => {
-    if (reactotron.asyncStorageHandler) {
-      return reactotron.asyncStorageHandler.setItem(REACTOTRON_ASYNC_CLIENT_ID, clientId)
-    }
-
-    tempClientId = clientId
-  },
+      return [name, Platform.OS, Platform.Version, additionalInfo, dimensions, screenScale]
+        .filter(Boolean)
+        .join("-")
+    }),
+  setClientId: async (clientId: string) =>
+    setClientIdWithStorage(reactotron.asyncStorageHandler, clientId),
   proxyHack: true,
 }
 
