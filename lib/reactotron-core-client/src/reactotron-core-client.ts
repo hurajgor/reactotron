@@ -183,15 +183,6 @@ export class ReactotronImpl
   connected = false
 
   /**
-   * Whether the client should hold a connection open.
-   *
-   * `connected` tracks the live socket, so it cannot also gate reconnects: a
-   * close clears it, and a cleared flag would stop the client retrying. This
-   * stays true from connect() until an explicit close().
-   */
-  shouldReconnect = false
-
-  /**
    * The socket we're using.
    */
   socket: WebSocket = null as never
@@ -205,11 +196,6 @@ export class ReactotronImpl
    * Number of reconnect attempts since the last successful connection.
    */
   reconnectAttempts = 0
-
-  /**
-   * The delay used for the pending reconnect, after backoff.
-   */
-  currentReconnectDelay = 0
 
   /**
    * Re-entrancy guard for reconnect diagnostic logging.
@@ -274,8 +260,6 @@ export class ReactotronImpl
         onDisconnect: () => null,
         reconnect: false,
         reconnectDelay: 2000,
-        maxReconnectAttempts: 20,
-        maxSendQueueSize: 1000,
       } satisfies ClientOptions<ReactotronCore>,
       this.options,
       options
@@ -294,7 +278,6 @@ export class ReactotronImpl
 
   close() {
     this.connected = false
-    this.shouldReconnect = false
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -317,52 +300,19 @@ export class ReactotronImpl
   }
 
   scheduleReconnect() {
-    if (!this.shouldReconnect || this.options.reconnect === false || this.reconnectTimer) return
-
-    const maxAttempts = this.options.maxReconnectAttempts ?? 0
-
-    // a server that never comes back must not be retried forever: each attempt
-    // burns CPU, logs, and leaves queued commands behind it
-    if (maxAttempts > 0 && this.reconnectAttempts >= maxAttempts) {
-      this.shouldReconnect = false
-      this.logReconnect(
-        `Giving up after ${this.reconnectAttempts} reconnect attempt(s). Call connect() to retry.`
-      )
-      return
-    }
+    if (!this.connected || this.options.reconnect === false || this.reconnectTimer) return
 
     this.reconnectAttempts += 1
-
-    // back off so a long outage settles into occasional probes
-    const baseDelay = this.options.reconnectDelay!
-    this.currentReconnectDelay = Math.min(
-      baseDelay * this.reconnectAttempts,
-      baseDelay * 10
-    )
-
     this.logReconnect(
-      `Disconnected. Reconnect attempt ${this.reconnectAttempts} scheduled in ${this.currentReconnectDelay}ms.`
+      `Disconnected. Reconnect attempt ${this.reconnectAttempts} scheduled in ${this.options.reconnectDelay}ms.`
     )
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
-      if (this.shouldReconnect) {
+      if (this.connected) {
         this.connect()
       }
-    }, this.currentReconnectDelay)
-  }
-
-  /**
-   * Queue a message for a socket that is not ready, dropping the oldest once
-   * the cap is reached so an unreachable server cannot grow memory unbounded.
-   */
-  enqueueSend(serializedMessage: string) {
-    this.sendQueue.push(serializedMessage)
-
-    const maxQueueSize = this.options.maxSendQueueSize ?? 0
-    if (maxQueueSize > 0 && this.sendQueue.length > maxQueueSize) {
-      this.sendQueue = this.sendQueue.slice(this.sendQueue.length - maxQueueSize)
-    }
+    }, this.options.reconnectDelay)
   }
 
   /**
@@ -374,7 +324,7 @@ export class ReactotronImpl
       this.reconnectTimer = null
     }
 
-    this.shouldReconnect = true
+    this.connected = true
     const {
       createSocket,
       secure,
@@ -405,7 +355,6 @@ export class ReactotronImpl
           : `Connected to ${socketPath}.`
       )
       this.reconnectAttempts = 0
-      this.currentReconnectDelay = 0
       // fire our optional onConnect handler
       onConnect && onConnect()
 
@@ -438,7 +387,6 @@ export class ReactotronImpl
     // fires when we disconnect
     const onClose = () => {
       this.isReady = false
-      this.connected = false
       // trigger our disconnect handler
       onDisconnect && onDisconnect()
 
@@ -553,14 +501,14 @@ export class ReactotronImpl
         this.socket.send(serializedMessage)
       } catch {
         this.isReady = false
-        this.enqueueSend(serializedMessage)
+        this.sendQueue.push(serializedMessage)
         this.logReconnect(`Send failed; queued ${type} and closing socket before reconnect.`)
         this.socket?.close?.()
         this.scheduleReconnect()
       }
     } else {
       // queue it up until we can connect
-      this.enqueueSend(serializedMessage)
+      this.sendQueue.push(serializedMessage)
       this.logReconnect(`Queued ${type}; socket is not ready.`)
       this.scheduleReconnect()
     }
