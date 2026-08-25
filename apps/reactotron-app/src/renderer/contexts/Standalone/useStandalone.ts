@@ -50,9 +50,21 @@ type Action =
     }
   | { type: ActionTypes.SyncConnections; payload: ReactotronConnection[] }
   | { type: ActionTypes.ChangeSelectedClientId; payload: string }
-  | { type: ActionTypes.CommandReceived; payload: any } // TODO: Type this better!
+  | { type: ActionTypes.CommandReceived; payload: any; maxCommands?: number } // TODO: Type this better!
   | { type: ActionTypes.ClearConnectionCommands }
   | { type: ActionTypes.PortUnavailable; payload: undefined }
+
+/**
+ * Commands accumulate for the life of a connection, so a long session grows the
+ * timeline without bound - costing memory and, because the list is rebuilt on
+ * every command, steadily more work per command. Keep only the newest ones.
+ */
+function purgeToCap(commands: any[], maxCommands?: number) {
+  if (!maxCommands || maxCommands <= 0) return commands
+  if (commands.length <= maxCommands) return commands
+
+  return commands.slice(0, maxCommands)
+}
 
 export function reducer(state: State, action: Action) {
   switch (action.type) {
@@ -170,7 +182,10 @@ export function reducer(state: State, action: Action) {
           return
         }
 
-        connection.commands = [action.payload, ...connection.commands]
+        connection.commands = purgeToCap(
+          [action.payload, ...connection.commands],
+          action.maxCommands
+        )
       })
     case ActionTypes.ClearConnectionCommands:
       return produce(state, (draftState) => {
@@ -202,7 +217,14 @@ export function reducer(state: State, action: Action) {
   }
 }
 
-function useStandalone() {
+interface UseStandaloneOptions {
+  /**
+   * Maximum commands retained per connection. Omitted or zero keeps everything.
+   */
+  maxCommands?: number
+}
+
+function useStandalone({ maxCommands }: UseStandaloneOptions = {}) {
   const commandListeners = useRef<((command: any) => void)[]>([])
   const [state, dispatch] = useReducer(reducer, {
     serverStatus: "stopped",
@@ -230,13 +252,16 @@ function useStandalone() {
   }, [])
 
   // Called when commands are flowing in.
-  const commandReceived = useCallback((command: any) => {
-    // First dispatch to update state
-    dispatch({ type: ActionTypes.CommandReceived, payload: command })
+  const commandReceived = useCallback(
+    (command: any) => {
+      // First dispatch to update state
+      dispatch({ type: ActionTypes.CommandReceived, payload: command, maxCommands })
 
-    // Then notify listeners
-    commandListeners.current.forEach((cl) => cl(command))
-  }, [])
+      // Then notify listeners
+      commandListeners.current.forEach((cl) => cl(command))
+    },
+    [maxCommands]
+  )
 
   // Called when a client disconnects. NOTE: They could be coming back. This could happen with a reload of the simulator!
   const connectionDisconnected = useCallback((connection: ReactotronConnection) => {

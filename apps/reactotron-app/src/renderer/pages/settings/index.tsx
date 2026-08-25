@@ -1,8 +1,12 @@
-import React, { useContext } from "react"
+import React, { useContext, useEffect, useState } from "react"
 import { Header, type ThemeStyle } from "@hurajgor/reactotron-core-ui"
 import styled from "styled-components"
 
-import AppPreferencesContext, { ThemeAppearance } from "../../contexts/AppPreferences"
+import AppPreferencesContext, {
+  ThemeAppearance,
+  maxMaxCommands,
+  minMaxCommands,
+} from "../../contexts/AppPreferences"
 
 const Container = styled.div`
   display: flex;
@@ -44,6 +48,22 @@ const Section = styled.section`
     grid-template-columns: 1fr;
     gap: 12px;
     align-items: start;
+  }
+`
+
+const NumberInput = styled.input`
+  width: 120px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  color: ${(props) => props.theme.foreground};
+  background-color: ${(props) => props.theme.backgroundSubtleLight};
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 4px;
+  font-size: 14px;
+
+  &:focus {
+    outline: none;
+    border-color: ${(props) => props.theme.bold};
   }
 `
 
@@ -215,7 +235,27 @@ function Settings() {
     setEnableNewTimeline,
     startWithCompactSidebar,
     setStartWithCompactSidebar,
+    maxCommands,
+    setMaxCommands,
   } = useContext(AppPreferencesContext)
+
+  const [maxCommandsDraft, setMaxCommandsDraft] = useState(String(maxCommands))
+
+  useEffect(() => {
+    setMaxCommandsDraft(String(maxCommands))
+  }, [maxCommands])
+
+  // commit on blur so a half-typed number never clamps mid-edit
+  const commitMaxCommands = () => {
+    const parsed = Number(maxCommandsDraft)
+
+    if (!Number.isFinite(parsed)) {
+      setMaxCommandsDraft(String(maxCommands))
+      return
+    }
+
+    setMaxCommands(parsed)
+  }
 
   return (
     <Container>
@@ -292,6 +332,27 @@ function Settings() {
               <ToggleTrack $isEnabled={startWithCompactSidebar}>
                 <ToggleThumb $isEnabled={startWithCompactSidebar} />
               </ToggleTrack>
+            </PreferenceRow>
+          </Section>
+
+          <Section>
+            <div>
+              <SectionTitle>Command history</SectionTitle>
+              <SectionDescription>
+                Maximum logs and network calls kept per connection. Older entries are purged
+                automatically so long sessions stay responsive. Between {minMaxCommands} and{" "}
+                {maxMaxCommands}.
+              </SectionDescription>
+            </div>
+            <PreferenceRow>
+              <NumberInput
+                type="number"
+                min={minMaxCommands}
+                max={maxMaxCommands}
+                value={maxCommandsDraft}
+                onChange={(event) => setMaxCommandsDraft(event.target.value)}
+                onBlur={commitMaxCommands}
+              />
             </PreferenceRow>
           </Section>
         </SettingsContent>

@@ -375,4 +375,71 @@ describe("contexts/Standalone/useStandalone", () => {
       expect(mockListener).toHaveBeenCalledWith({ clientId: "1234", payload: true })
     })
   })
+  describe("Command Retention", () => {
+    function establish(result: any) {
+      act(() => {
+        result.current.connectionEstablished({
+          clientId: "1234",
+          id: 0,
+          platform: "ios",
+        })
+      })
+    }
+
+    it("should purge the oldest commands once the cap is reached", () => {
+      const { result } = renderHook(() => useStandalone({ maxCommands: 3 }))
+      establish(result)
+
+      act(() => {
+        for (let i = 0; i < 5; i++) {
+          result.current.commandReceived({ clientId: "1234", payload: i })
+        }
+      })
+
+      const commands = result.current.connections[0].commands
+
+      expect(commands.length).toEqual(3)
+      // newest first, oldest two (0 and 1) dropped
+      expect(commands.map((c: any) => c.payload)).toEqual([4, 3, 2])
+    })
+
+    it("should keep every command while under the cap", () => {
+      const { result } = renderHook(() => useStandalone({ maxCommands: 10 }))
+      establish(result)
+
+      act(() => {
+        for (let i = 0; i < 4; i++) {
+          result.current.commandReceived({ clientId: "1234", payload: i })
+        }
+      })
+
+      expect(result.current.connections[0].commands.length).toEqual(4)
+    })
+
+    it("should apply a lowered cap to commands already retained", () => {
+      const { result, rerender } = renderHook(
+        ({ maxCommands }) => useStandalone({ maxCommands }),
+        { initialProps: { maxCommands: 10 } }
+      )
+      establish(result)
+
+      act(() => {
+        for (let i = 0; i < 8; i++) {
+          result.current.commandReceived({ clientId: "1234", payload: i })
+        }
+      })
+
+      expect(result.current.connections[0].commands.length).toEqual(8)
+
+      rerender({ maxCommands: 2 })
+
+      act(() => {
+        result.current.commandReceived({ clientId: "1234", payload: 99 })
+      })
+
+      const commands = result.current.connections[0].commands
+      expect(commands.length).toEqual(2)
+      expect(commands.map((c: any) => c.payload)).toEqual([99, 7])
+    })
+  })
 })

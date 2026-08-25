@@ -13,7 +13,17 @@ const themeStyleStorageKey = "reactotron.themeStyle"
 const themeAppearanceStorageKey = "reactotron.themeAppearance"
 const newTimelineStorageKey = "reactotron.enableNewTimeline"
 const startWithCompactSidebarStorageKey = "reactotron.startWithCompactSidebar"
+const maxCommandsStorageKey = "reactotron.maxCommands"
 const themeModeChangeEvent = "reactotron-theme-mode-changed"
+
+/**
+ * How many commands each connection retains before the oldest are purged.
+ * Long sessions otherwise grow the timeline without bound, which costs both
+ * memory and per-command render work.
+ */
+export const defaultMaxCommands = 2000
+export const minMaxCommands = 100
+export const maxMaxCommands = 50000
 
 const legacyThemeMigrations: Record<string, { themeStyle: ThemeStyle; themeAppearance: ThemeAppearance }> = {
   tokyoNight: { themeStyle: "kanagawa", themeAppearance: "dark" },
@@ -32,6 +42,8 @@ interface Context {
   setEnableNewTimeline: (isEnabled: boolean) => void
   startWithCompactSidebar: boolean
   setStartWithCompactSidebar: (isEnabled: boolean) => void
+  maxCommands: number
+  setMaxCommands: (maxCommands: number) => void
 }
 
 const noop = (): void => {
@@ -113,6 +125,22 @@ function readStartWithCompactSidebar(): boolean {
   return savedStartWithCompactSidebar === "true"
 }
 
+function clampMaxCommands(value: number): number {
+  return Math.min(maxMaxCommands, Math.max(minMaxCommands, Math.round(value)))
+}
+
+function readMaxCommands(): number {
+  if (typeof window === "undefined") return defaultMaxCommands
+
+  const savedMaxCommands = window.localStorage.getItem(maxCommandsStorageKey)
+  if (savedMaxCommands === null) return defaultMaxCommands
+
+  const parsed = Number(savedMaxCommands)
+  if (!Number.isFinite(parsed)) return defaultMaxCommands
+
+  return clampMaxCommands(parsed)
+}
+
 const AppPreferencesContext = React.createContext<Context>({
   themeMode: "solarizedDark",
   themeStyle: "solarized",
@@ -123,6 +151,8 @@ const AppPreferencesContext = React.createContext<Context>({
   setEnableNewTimeline: noop,
   startWithCompactSidebar: true,
   setStartWithCompactSidebar: noop,
+  maxCommands: defaultMaxCommands,
+  setMaxCommands: noop,
 })
 
 const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -133,6 +163,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [startWithCompactSidebar, setStartWithCompactSidebarState] = useState(
     readStartWithCompactSidebar
   )
+  const [maxCommands, setMaxCommandsState] = useState(readMaxCommands)
 
   React.useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
@@ -180,6 +211,14 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     window.localStorage.setItem(startWithCompactSidebarStorageKey, isEnabled ? "true" : "false")
   }, [])
 
+  const setMaxCommands = useCallback((nextMaxCommands: number) => {
+    const clamped = clampMaxCommands(nextMaxCommands)
+    setMaxCommandsState(clamped)
+    if (typeof window === "undefined") return
+
+    window.localStorage.setItem(maxCommandsStorageKey, String(clamped))
+  }, [])
+
   const value = useMemo(
     () => ({
       themeMode,
@@ -191,9 +230,13 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       setEnableNewTimeline,
       startWithCompactSidebar,
       setStartWithCompactSidebar,
+      maxCommands,
+      setMaxCommands,
     }),
     [
       enableNewTimeline,
+      maxCommands,
+      setMaxCommands,
       setEnableNewTimeline,
       setStartWithCompactSidebar,
       setThemeAppearance,
@@ -209,6 +252,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 }
 
 export {
+  maxCommandsStorageKey,
   startWithCompactSidebarStorageKey,
   themeAppearanceStorageKey,
   themeModeChangeEvent,

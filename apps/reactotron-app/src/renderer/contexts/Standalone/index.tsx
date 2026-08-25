@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState, useMemo } from "react"
+import React, { useRef, useEffect, useCallback, useState, useMemo, useContext } from "react"
 import { ipcRenderer } from "electron"
 import Server, { createServer } from "reactotron-core-server"
 import {
@@ -12,6 +12,7 @@ import type { McpRedactionConfig } from "@hurajgor/reactotron-core-contract"
 import ReactotronBrain from "../../ReactotronBrain"
 import config, { getConfiguredMcpPort, getConfiguredServerPort } from "../../config"
 
+import AppPreferencesContext from "../AppPreferences"
 import useStandalone, { Connection, ReactotronConnection, ServerStatus } from "./useStandalone"
 
 export type McpStatus = "stopped" | "started" | "error"
@@ -93,6 +94,8 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const portRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const { maxCommands } = useContext(AppPreferencesContext)
+
   const {
     serverStatus,
     connections,
@@ -108,7 +111,7 @@ const Provider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     syncConnections,
     addCommandListener,
     portUnavailable,
-  } = useStandalone()
+  } = useStandalone({ maxCommands })
 
   const refreshConnections = useCallback(() => {
     if (!reactotronServer.current) return
