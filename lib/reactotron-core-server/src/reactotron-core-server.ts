@@ -278,7 +278,11 @@ export default class Server {
             )
 
             for (let i = 0; i < currentClientConnections.length; i++) {
-              setTimeout(currentClientConnections[i].close, 500) // Defer this for a small amount of time because reasons.
+              const staleConnection = currentClientConnections[i]
+              // Defer this for a small amount of time because reasons. Close through a
+              // closure so `this` stays bound to the socket; passing the bare method
+              // throws once the timer fires and never severs the stale connection.
+              setTimeout(() => staleConnection.close(), 500)
 
               const severingConnection = find(
                 propEq("clientId", connectionClientId),
