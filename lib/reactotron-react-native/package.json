@@ -1,6 +1,6 @@
 {
   "name": "@hurajgor/reactotron-react-native",
-  "version": "5.3.4",
+  "version": "5.3.5",
   "description": "A development tool to explore, inspect, and diagnose your React Native apps.",
   "author": "Infinite Red",
   "license": "MIT",
@@ -46,7 +46,7 @@
     "react-native": ">=0.40.0"
   },
   "dependencies": {
-    "@hurajgor/reactotron-core-client": "2.11.4",
+    "@hurajgor/reactotron-core-client": "2.11.5",
     "@hurajgor/reactotron-core-contract": "0.5.0",
     "mitt": "^3.0.1"
   },
