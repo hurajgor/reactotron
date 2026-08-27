@@ -6,6 +6,8 @@ import {
   MdOutlineExpandMore,
   MdOutlineInsertDriveFile,
   MdOutlineNetworkWifi,
+  MdOutlineArrowDownward,
+  MdOutlineArrowUpward,
   MdOutlineSearch,
 } from "react-icons/md"
 import styled from "styled-components"
@@ -426,6 +428,23 @@ const TableHeader = styled(TableGrid)`
 const TableHeaderCell = styled.span`
   position: relative;
   min-width: 0;
+`
+
+const SortButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: ${(props) => props.theme.foreground};
+  }
 `
 
 const ColumnResizeHandle = styled.button`
@@ -1102,6 +1121,7 @@ function Network({ title = "Network" }: { title?: string }) {
   const [logLevels, setLogLevels] = useState<LogLevelSelection>(defaultLogLevels)
   const [networkFilters, setNetworkFilters] = useState<NetworkFilters>(defaultNetworkFilters)
   const [selectedId, setSelectedId] = useState<string>("")
+  const [newestFirst, setNewestFirst] = useState(true)
   const [inspectorWidth, setInspectorWidth] = useState(560)
   const [tableColumns, setTableColumns] = useState<TableColumns>(defaultTableColumns)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
@@ -1154,8 +1174,10 @@ function Network({ title = "Network" }: { title?: string }) {
         }
         return acc
       }, [])
+      .sort((a, b) => (newestFirst ? b.timestamp - a.timestamp : a.timestamp - b.timestamp))
   }, [
     activeNetworkFilters,
+    newestFirst,
     duplicateNetworkKeys,
     isRegexSearch,
     items,
@@ -1300,7 +1322,22 @@ function Network({ title = "Network" }: { title?: string }) {
               />
             </TableHeaderCell>
             <TableHeaderCell>
-              Time
+              <SortButton
+                type="button"
+                title={
+                  newestFirst
+                    ? "Newest first — click for oldest first"
+                    : "Oldest first — click for newest first"
+                }
+                onClick={() => setNewestFirst((value) => !value)}
+              >
+                Time
+                {newestFirst ? (
+                  <MdOutlineArrowDownward size={12} />
+                ) : (
+                  <MdOutlineArrowUpward size={12} />
+                )}
+              </SortButton>
               <ColumnResizeHandle
                 type="button"
                 title="Resize time column"
@@ -1395,7 +1432,7 @@ function Network({ title = "Network" }: { title?: string }) {
                 </Time>
                 <Time className="row-time">
                   {item.time}
-                  <em>{relativeTime(item, visibleItems[index + 1])}</em>
+                  <em>{relativeTime(item, visibleItems[newestFirst ? index + 1 : index - 1])}</em>
                 </Time>
                 {item.kind === "log" && expandedIds.has(item.id) ? (
                   <ExpandedBody onClick={(event) => event.stopPropagation()}>
