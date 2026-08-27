@@ -1,8 +1,9 @@
-import React, { ReactNode, useContext, useMemo, useState } from "react"
+import React, { ReactNode, useCallback, useContext, useMemo, useState } from "react"
 import { clipboard } from "electron"
 import {
   MdOutlineContentCopy,
   MdOutlineDeleteSweep,
+  MdOutlineExpandMore,
   MdOutlineInsertDriveFile,
   MdOutlineNetworkWifi,
   MdOutlineSearch,
@@ -44,6 +45,8 @@ type ConsoleItem = {
   time: string
   duration?: number
   timestamp: number
+  source: string
+  count: number
 }
 
 type ApiRequest = Partial<ApiResponsePayload["request"]>
@@ -102,6 +105,7 @@ const treeValueColor: Record<TreeValueType, string> = {
 }
 
 const treePreviewLimit = 80
+const monoFont = `ui-monospace, "SF Mono", Menlo, Consolas, monospace`
 
 const Container = styled.div`
   display: flex;
@@ -339,17 +343,23 @@ const LogLevelOption = styled.label`
   }
 `
 
-const Workspace = styled.div<{ $inspectorWidth: number }>`
+const Workspace = styled.div<{ $inspectorWidth: number; $paneVisible: boolean }>`
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7px minmax(240px, ${(props) => props.$inspectorWidth}px);
+  grid-template-columns: ${(props) =>
+    props.$paneVisible
+      ? `minmax(0, 1fr) 7px minmax(240px, ${props.$inspectorWidth}px)`
+      : "minmax(0, 1fr) 0 0"};
   width: 100%;
   max-width: 100%;
   min-height: 0;
   overflow: hidden;
 
   @media (max-width: 520px) {
-    grid-template-columns: minmax(0, 1fr) 7px minmax(220px, ${(props) => props.$inspectorWidth}px);
+    grid-template-columns: ${(props) =>
+      props.$paneVisible
+        ? `minmax(0, 1fr) 7px minmax(220px, ${props.$inspectorWidth}px)`
+        : "minmax(0, 1fr) 0 0"};
   }
 `
 
@@ -439,8 +449,10 @@ const EventRow = styled(TableGrid)<{ $selected: boolean; $tone: ConsoleItem["ton
   display: grid;
   gap: 12px;
   width: 100%;
-  min-height: 54px;
-  padding: 10px 14px;
+  position: relative;
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 6px 12px;
   border: 0;
   border-bottom: 1px solid ${(props) => props.theme.line};
   border-left: 2px solid ${(props) => toneColor(props.$tone)};
@@ -454,6 +466,124 @@ const EventRow = styled(TableGrid)<{ $selected: boolean; $tone: ConsoleItem["ton
     background-color: ${(props) =>
       props.$selected ? "rgba(122, 162, 247, 0.24)" : props.theme.backgroundSubtleLight};
   }
+
+  &:hover .row-actions,
+  &:focus-within .row-actions {
+    opacity: 1;
+  }
+
+  &:hover .row-time,
+  &:focus-within .row-time {
+    visibility: hidden;
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 1px ${(props) => props.theme.highlight};
+  }
+`
+
+const Chevron = styled.span<{ $open: boolean }>`
+  display: inline-flex;
+  flex-shrink: 0;
+  color: ${(props) => props.theme.foregroundDark};
+  transform: rotate(${(props) => (props.$open ? 0 : -90)}deg);
+  transition: transform 100ms ease;
+`
+
+const ChevronSpacer = styled.span`
+  display: inline-block;
+  width: 14px;
+`
+
+const ExpandedBody = styled.div`
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 4px 0 2px 24px;
+  padding: 8px 10px;
+  border-left: 2px solid ${(props) => props.theme.line};
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  color: ${(props) => props.theme.foreground};
+  font-family: ${monoFont};
+  font-size: 12px;
+  line-height: 20px;
+  cursor: auto;
+  user-select: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+`
+
+const RowActions = styled.span`
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid ${(props) => props.theme.chromeLine};
+  border-radius: 6px;
+  background-color: ${(props) => props.theme.backgroundSubtleDark};
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+`
+
+const RowAction = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  color: ${(props) => props.theme.foregroundDark};
+  cursor: pointer;
+
+  & + & {
+    border-left: 1px solid ${(props) => props.theme.chromeLine};
+  }
+
+  &:hover {
+    background-color: ${(props) => props.theme.backgroundHighlight};
+    color: ${(props) => props.theme.foreground};
+  }
+`
+
+const CountBadge = styled.span`
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 999px;
+  background-color: rgba(65, 72, 104, 0.6);
+  color: ${(props) => props.theme.foregroundLight};
+  font-family: ${monoFont};
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+`
+
+const SourceChip = styled.button`
+  flex-shrink: 0;
+  max-width: 220px;
+  overflow: hidden;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background-color: rgba(122, 162, 247, 0.12);
+  color: ${(props) => props.theme.support};
+  font-family: ${monoFont};
+  font-size: 10.5px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba(122, 162, 247, 0.24);
+  }
+`
+
+const TitleLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 `
 
 const Method = styled.strong<{ $kind: ConsoleKind }>`
@@ -462,7 +592,8 @@ const Method = styled.strong<{ $kind: ConsoleKind }>`
   gap: 6px;
   min-width: 0;
   color: ${(props) => (props.$kind === "network" ? props.theme.support : props.theme.keyword)};
-  font-size: 12px;
+  font-family: ${monoFont};
+  font-size: 11px;
   line-height: 18px;
 `
 
@@ -470,7 +601,8 @@ const EventTitle = styled.span`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
+  font-family: ${monoFont};
 
   b,
   small {
@@ -480,13 +612,15 @@ const EventTitle = styled.span`
   }
 
   b {
-    font-size: 13px;
+    font-size: 12px;
+    font-weight: 500;
     line-height: 18px;
   }
 
   small {
     color: ${(props) => props.theme.foregroundDark};
-    font-size: 11px;
+    font-size: 10.5px;
+    line-height: 14px;
   }
 `
 
@@ -513,7 +647,8 @@ const EndpointSlash = styled.span`
 const Status = styled.i<{ $tone: ConsoleItem["tone"] }>`
   align-self: center;
   justify-self: start;
-  padding: 3px 7px;
+  padding: 1px 7px;
+  font-family: ${monoFont};
   border-radius: 999px;
   color: ${(props) => toneColor(props.$tone)};
   background-color: rgba(65, 72, 104, 0.42);
@@ -529,13 +664,24 @@ const EmptyStatus = styled.span`
 const Time = styled.small`
   align-self: center;
   justify-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   color: ${(props) => props.theme.foregroundDark};
-  font-size: 11px;
+  font-family: ${monoFont};
+  font-size: 10.5px;
+  line-height: 14px;
+
+  em {
+    font-style: normal;
+    opacity: 0.6;
+  }
 `
 
 const Inspector = styled.aside`
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background-color: ${(props) => props.theme.backgroundDarker};
@@ -581,12 +727,6 @@ const InspectorEndpoint = styled.strong`
   text-overflow: ellipsis;
   white-space: nowrap;
   user-select: text;
-`
-
-const InspectorMeta = styled.div`
-  margin-top: 6px;
-  color: ${(props) => props.theme.foregroundDark};
-  font-size: 12px;
 `
 
 const ActionBar = styled.div`
@@ -882,60 +1022,6 @@ const TreeMoreButton = styled.button`
   }
 `
 
-const ArgumentList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const LogHighlights = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
-`
-
-const LogHighlightItem = styled.button`
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 4px;
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
-  color: ${(props) => props.theme.foreground};
-  font-family: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${(props) => props.theme.foregroundDark};
-    background-color: ${(props) => props.theme.backgroundHighlight};
-  }
-
-  span {
-    margin-right: 6px;
-    color: ${(props) => props.theme.foregroundDark};
-  }
-`
-
-const ArgumentHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  color: ${(props) => props.theme.foregroundDark};
-  font-size: 12px;
-`
-
-const ArgumentBadge = styled.span`
-  padding: 2px 6px;
-  border: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 3px;
-  color: ${(props) => props.theme.foreground};
-  background-color: ${(props) => props.theme.backgroundSubtleDark};
-  font-size: 11px;
-`
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
@@ -1018,15 +1104,27 @@ function Network({ title = "Network" }: { title?: string }) {
   const [selectedId, setSelectedId] = useState<string>("")
   const [inspectorWidth, setInspectorWidth] = useState(560)
   const [tableColumns, setTableColumns] = useState<TableColumns>(defaultTableColumns)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
+
+  const toggleExpanded = useCallback((id: string, force?: boolean) => {
+    setExpandedIds((current) => {
+      const open = force ?? !current.has(id)
+      if (open === current.has(id)) return current
+      const next = new Set(current)
+      if (open) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
 
   const items = useMemo(() => buildItems(commands), [commands])
   const networkItems = useMemo(() => items.filter((item) => item.kind === "network"), [items])
-  const networkCount = useMemo(
-    () => networkItems.length,
+  const networkCount = useMemo(() => networkItems.length, [networkItems])
+  const logCount = useMemo(() => items.filter((item) => item.kind === "log").length, [items])
+  const networkFilterOptions = useMemo(
+    () => buildNetworkFilterOptions(networkItems),
     [networkItems]
   )
-  const logCount = useMemo(() => items.filter((item) => item.kind === "log").length, [items])
-  const networkFilterOptions = useMemo(() => buildNetworkFilterOptions(networkItems), [networkItems])
   const activeNetworkFilters = useMemo(
     () => normalizeNetworkFilters(networkFilters, networkFilterOptions),
     [networkFilters, networkFilterOptions]
@@ -1047,6 +1145,15 @@ function Network({ title = "Network" }: { title?: string }) {
         if (!searchMatcher) return true
         return searchMatcher(item.searchText)
       })
+      .reduce<ConsoleItem[]>((acc, item) => {
+        const previous = acc[acc.length - 1]
+        if (previous && isCollapsible(previous, item)) {
+          acc[acc.length - 1] = { ...item, count: previous.count + 1 }
+        } else {
+          acc.push(item)
+        }
+        return acc
+      }, [])
   }, [
     activeNetworkFilters,
     duplicateNetworkKeys,
@@ -1060,8 +1167,34 @@ function Network({ title = "Network" }: { title?: string }) {
   const filteredItemCount = items.length - visibleItems.length
 
   const selectedItem = selectedId
-    ? visibleItems.find((item) => item.id === selectedId) ?? null
+    ? visibleItems.find((item) => item.id === selectedId && item.kind === "network") ?? null
     : null
+  const paneVisible = showNetwork
+
+  const handleTableKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const row = (event.target as HTMLElement).closest<HTMLElement>("[data-row-id]")
+    if (!row) return
+    const id = row.dataset.rowId ?? ""
+    const item = visibleItems.find((entry) => entry.id === id)
+    if (!item) return
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      const sibling =
+        event.key === "ArrowDown" ? row.nextElementSibling : row.previousElementSibling
+      if (sibling instanceof HTMLElement && sibling.dataset.rowId) sibling.focus()
+    } else if (event.key === "ArrowRight" && item.kind === "log") {
+      event.preventDefault()
+      toggleExpanded(id, true)
+    } else if (event.key === "ArrowLeft" && item.kind === "log") {
+      event.preventDefault()
+      toggleExpanded(id, false)
+    } else if (event.key === "Enter") {
+      event.preventDefault()
+      if (item.kind === "network") setSelectedId(id)
+      else toggleExpanded(id)
+    }
+  }
 
   return (
     <Container>
@@ -1132,8 +1265,8 @@ function Network({ title = "Network" }: { title?: string }) {
           </FilterGroup>
         </FilterRow>
       </Toolbar>
-      <Workspace $inspectorWidth={inspectorWidth}>
-        <EventTable>
+      <Workspace $inspectorWidth={inspectorWidth} $paneVisible={paneVisible}>
+        <EventTable onKeyDown={handleTableKeyDown}>
           <TableHeader $columns={tableColumns}>
             <TableHeaderCell>
               Kind
@@ -1186,17 +1319,31 @@ function Network({ title = "Network" }: { title?: string }) {
               </EmptyState>
             </EmptyTableState>
           ) : (
-            visibleItems.map((item) => (
+            visibleItems.map((item, index) => (
               <EventRow
                 key={item.id}
-                as="button"
-                type="button"
+                role="button"
+                tabIndex={0}
+                data-row-id={item.id}
                 $columns={tableColumns}
                 $selected={selectedItem?.id === item.id}
                 $tone={item.tone}
-                onClick={() => setSelectedId(item.id)}
+                onClick={() => {
+                  if (item.kind === "network") {
+                    setSelectedId(item.id)
+                  } else {
+                    toggleExpanded(item.id)
+                  }
+                }}
               >
                 <Method $kind={item.kind}>
+                  {item.kind === "network" ? (
+                    <ChevronSpacer />
+                  ) : (
+                    <Chevron $open={expandedIds.has(item.id)}>
+                      <MdOutlineExpandMore size={14} />
+                    </Chevron>
+                  )}
                   {item.kind === "network" ? (
                     <MdOutlineNetworkWifi size={14} />
                   ) : (
@@ -1205,9 +1352,37 @@ function Network({ title = "Network" }: { title?: string }) {
                   {item.method}
                 </Method>
                 <EventTitle>
-                  {item.kind === "network" ? renderEndpointPath(item.title) : <b>{item.title}</b>}
+                  <TitleLine>
+                    {item.source ? (
+                      <SourceChip
+                        as="span"
+                        title={`Filter by ${item.source}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setQuery(item.source)
+                        }}
+                      >
+                        {item.source}
+                      </SourceChip>
+                    ) : null}
+                    {item.kind === "network" ? renderEndpointPath(item.title) : <b>{item.title}</b>}
+                    {item.count > 1 ? (
+                      <CountBadge title="Consecutive identical events">×{item.count}</CountBadge>
+                    ) : null}
+                  </TitleLine>
                   {item.subtitle ? <small>{item.subtitle}</small> : null}
                 </EventTitle>
+                <RowActions className="row-actions">
+                  <RowAction
+                    title={item.kind === "network" ? "Copy as cURL" : "Copy log"}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      clipboard.writeText(rowCopyText(item))
+                    }}
+                  >
+                    <MdOutlineContentCopy size={13} />
+                  </RowAction>
+                </RowActions>
                 {item.kind === "network" ? (
                   <Status $tone={item.tone}>{item.status}</Status>
                 ) : (
@@ -1218,7 +1393,15 @@ function Network({ title = "Network" }: { title?: string }) {
                     ? formatDuration(item.duration)
                     : ""}
                 </Time>
-                <Time>{item.time}</Time>
+                <Time className="row-time">
+                  {item.time}
+                  <em>{relativeTime(item, visibleItems[index + 1])}</em>
+                </Time>
+                {item.kind === "log" && expandedIds.has(item.id) ? (
+                  <ExpandedBody onClick={(event) => event.stopPropagation()}>
+                    <InlineLogBody item={item} />
+                  </ExpandedBody>
+                ) : null}
               </EventRow>
             ))
           )}
@@ -1231,10 +1414,10 @@ function Network({ title = "Network" }: { title?: string }) {
         />
         <Inspector>
           {selectedItem ? (
-            <ConsoleInspector item={selectedItem} />
+            <NetworkInspector item={selectedItem} />
           ) : (
-            <EmptyState icon={MdOutlineNetworkWifi} title="Select An Event">
-              Choose a request or log to inspect its details.
+            <EmptyState icon={MdOutlineNetworkWifi} title="Select A Request">
+              Choose a network request to inspect it. Logs expand inline.
             </EmptyState>
           )}
         </Inspector>
@@ -1458,8 +1641,27 @@ function DuplicateFilterToggle({
   )
 }
 
-function ConsoleInspector({ item }: { item: ConsoleItem }) {
-  return item.kind === "network" ? <NetworkInspector item={item} /> : <LogInspector item={item} />
+function InlineLogBody({ item }: { item: ConsoleItem }) {
+  const payload = item.command.payload as LogPayload
+  const args = useMemo(
+    () => normalizeLogArgs(payload.message).map(normalizeLogArgument),
+    [payload.message]
+  )
+  const bodyArgs = args.length > 1 ? args.slice(1) : args
+
+  return (
+    <>
+      {bodyArgs.map((arg, index) => {
+        const value = parseBody(arg.value)
+        return value && typeof value === "object" ? (
+          <JsonTree key={index} value={value} />
+        ) : (
+          <div key={index}>{formatBody(arg.value)}</div>
+        )
+      })}
+      {"stack" in payload && payload.stack ? <div>{String(payload.stack)}</div> : null}
+    </>
+  )
 }
 
 function NetworkInspector({ item }: { item: ConsoleItem }) {
@@ -1506,58 +1708,6 @@ function NetworkInspector({ item }: { item: ConsoleItem }) {
   )
 }
 
-function LogInspector({ item }: { item: ConsoleItem }) {
-  const [tab, setTab] = useState<"message" | "raw">("message")
-  const payload = item.command.payload as LogPayload
-  const args = useMemo(
-    () => normalizeLogArgs(payload.message).map(normalizeLogArgument),
-    [payload.message]
-  )
-  const logCopyText = useMemo(() => formatLogForCopy(args), [args])
-  const eventCopyText = useMemo(() => JSON.stringify(item.command, null, 2), [item.command])
-
-  return (
-    <>
-      <InspectorHeader>
-        <InspectorEyebrow>Log event</InspectorEyebrow>
-        <InspectorTitle>
-          <strong>{item.title}</strong>
-        </InspectorTitle>
-        <InspectorMeta>
-          {displayLogLevel(payload.level)} - {formatDate(item.command.date)} - message{" "}
-          {item.command.messageId}
-        </InspectorMeta>
-      </InspectorHeader>
-      <ActionBar>
-        <CopyButton text={logCopyText}>Copy log</CopyButton>
-        <CopyButton text={eventCopyText}>Copy event</CopyButton>
-      </ActionBar>
-      <Tabs>
-        <TabButton type="button" $active={tab === "message"} onClick={() => setTab("message")}>
-          Message
-        </TabButton>
-        <TabButton type="button" $active={tab === "raw"} onClick={() => setTab("raw")}>
-          Raw
-        </TabButton>
-      </Tabs>
-      <ScrollPane>
-        {tab === "message" ? (
-          <>
-            {args.length > 1 ? (
-              <LogDetails args={args} />
-            ) : (
-              <PayloadViewer label="Message" value={args[0]?.value} />
-            )}
-            {"stack" in payload && <PayloadViewer label="Stack" value={payload.stack} />}
-          </>
-        ) : (
-          <PayloadViewer label="Raw event" value={item.command} />
-        )}
-      </ScrollPane>
-    </>
-  )
-}
-
 type LogArgument = {
   value: unknown
   parsedFromString: boolean
@@ -1571,78 +1721,12 @@ type ExpandedLogPart = {
   value: unknown
 }
 
-function logParts(args: LogArgument[]) {
-  const payload =
-    args.find((arg) => arg.role === "payload") ??
-    args.find((arg, index) => index > 0 && arg.value && typeof arg.value === "object")
-  const event =
-    args.find((arg) => arg.role === "event") ??
-    args.find((arg, index) => index > 0 && arg !== payload && typeof arg.value === "string")
-  const rest = args.filter((arg, index) => index > 0 && arg !== event && arg !== payload)
-
-  return { event, payload, rest }
-}
-
-function LogDetails({ args }: { args: LogArgument[] }) {
-  const parts = logParts(args)
-  const highlightItems = buildLogHighlightItems(parts.event?.value, parts.payload?.value)
-
-  return (
-    <>
-      {highlightItems.length > 0 ? (
-        <Section>
-          <SectionTitle>Highlights</SectionTitle>
-          <LogHighlights>
-            {highlightItems.map((item) => (
-              <LogHighlightChip key={item.label} label={item.label} value={item.value} />
-            ))}
-          </LogHighlights>
-        </Section>
-      ) : null}
-      <PayloadViewer label="Payload" value={parts.payload?.value ?? args[args.length - 1]?.value} />
-      {parts.rest.length > 0 ? (
-        <Section>
-          <SectionTitle>More</SectionTitle>
-          <ArgumentList>
-            {parts.rest.map((arg, index) => (
-              <div key={index}>
-                <ArgumentHeader>
-                  <ArgumentBadge>{logArgumentLabel(index + 3, args.length)}</ArgumentBadge>
-                  <span>{argumentTypeLabel(arg)}</span>
-                </ArgumentHeader>
-                <PayloadViewer label="" value={arg.value} />
-              </div>
-            ))}
-          </ArgumentList>
-        </Section>
-      ) : null}
-    </>
-  )
-}
-
-function LogHighlightChip({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false)
-
-  return (
-    <LogHighlightItem
-      type="button"
-      title={`Copy ${label}`}
-      onClick={() => {
-        clipboard.writeText(value)
-        setCopied(true)
-        window.setTimeout(() => setCopied(false), 900)
-      }}
-    >
-      <span>{label}</span>
-      {copied ? "Copied" : value}
-    </LogHighlightItem>
-  )
-}
-
 function PayloadViewer({ label, value }: { label: string; value: unknown }) {
-  const [mode, setMode] = useState<BodyMode>("pretty")
   const [search, setSearch] = useState("")
   const parsed = useMemo(() => parseBody(value), [value])
+  const [mode, setMode] = useState<BodyMode>(() =>
+    parsed && typeof parsed === "object" ? "tree" : "pretty"
+  )
   const prettyText = useMemo(() => formatBody(value), [value])
   const rawText = useMemo(
     () => (typeof value === "string" ? value : JSON.stringify(value, null, 2)),
@@ -1963,7 +2047,10 @@ function matchesTimeWindowFilter(timestamp: number, filter: string, now: number)
 }
 
 function parseWindowDuration(value: string) {
-  const match = value.trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)?$/)
+  const match = value
+    .trim()
+    .toLowerCase()
+    .match(/^(\d+(?:\.\d+)?)\s*(ms|s|m)?$/)
   if (!match) return undefined
 
   const amount = Number(match[1])
@@ -2028,7 +2115,18 @@ function networkItem(command: Command): ConsoleItem {
     command,
     title: urlPath(url),
     subtitle: hostName(url),
-    searchText: [request.method, url, hostName(url), response.status, payload.duration, contentType]
+    searchText: [
+      request.method,
+      url,
+      hostName(url),
+      response.status,
+      payload.duration,
+      contentType,
+      request.headers,
+      request.data,
+      response.headers,
+      response.body,
+    ]
       .map(searchableText)
       .join(" "),
     method: String(request.method ?? "HTTP").toUpperCase(),
@@ -2038,6 +2136,8 @@ function networkItem(command: Command): ConsoleItem {
     time: formatTime(command.date),
     duration: payload.duration,
     timestamp: command.date.getTime(),
+    source: "",
+    count: 1,
   }
 }
 
@@ -2045,7 +2145,7 @@ function logItem(command: Command): ConsoleItem {
   const payload = command.payload as LogPayload
   const level = payload?.level ?? "log"
   const message = payload?.message
-  const title = formatLogPreview(message)
+  const { source, title } = splitLogSource(formatLogPreview(message))
   const subtitle = formatLogSubtitlePreview(message)
 
   return {
@@ -2054,7 +2154,15 @@ function logItem(command: Command): ConsoleItem {
     command,
     title,
     subtitle,
-    searchText: [displayLogLevel(level), normalizeLogLevel(level), title, subtitle]
+    searchText: [
+      displayLogLevel(level),
+      normalizeLogLevel(level),
+      source,
+      title,
+      subtitle,
+      message,
+      "stack" in payload ? payload.stack : "",
+    ]
       .map(searchableText)
       .join(" "),
     method: displayLogLevel(level),
@@ -2063,7 +2171,44 @@ function logItem(command: Command): ConsoleItem {
     tone: toneForLogLevel(level),
     time: formatTime(command.date),
     timestamp: command.date.getTime(),
+    source,
+    count: 1,
   }
+}
+
+// "MqttClusterManager [slc1] - _dispatchMessage - received ..." => chip + message
+function splitLogSource(title: string) {
+  const match = /^([A-Za-z_$][\w$]*(?:\s*\[[^\]]*\])?)\s+[-–—:]\s+(.+)$/s.exec(title)
+  if (!match) return { source: "", title }
+  return { source: match[1].replace(/\s+/g, " "), title: match[2] }
+}
+
+function isCollapsible(previous: ConsoleItem, next: ConsoleItem) {
+  return (
+    previous.kind === "log" &&
+    next.kind === "log" &&
+    previous.status === next.status &&
+    previous.source === next.source &&
+    previous.title === next.title &&
+    previous.subtitle === next.subtitle
+  )
+}
+
+function relativeTime(item: ConsoleItem, previous?: ConsoleItem) {
+  if (!previous) return ""
+  const delta = item.timestamp - previous.timestamp
+  if (!Number.isFinite(delta) || delta === 0) return "+0ms"
+  const sign = delta > 0 ? "+" : "-"
+  const abs = Math.abs(delta)
+  if (abs < 1000) return `${sign}${abs}ms`
+  if (abs < 60000) return `${sign}${(abs / 1000).toFixed(1)}s`
+  return `${sign}${Math.round(abs / 60000)}m`
+}
+
+function rowCopyText(item: ConsoleItem) {
+  if (item.kind === "network") return apiRequestToCurl(item.command.payload as ApiResponsePayload)
+  const payload = item.command.payload as LogPayload
+  return formatLogForCopy(normalizeLogArgs(payload.message).map(normalizeLogArgument))
 }
 
 function labelForTab(tab: InspectorTab) {
@@ -2267,21 +2412,6 @@ function findJsonEnd(text: string, start: number) {
   return -1
 }
 
-function argumentTypeLabel(arg: LogArgument) {
-  if (arg.role === "payload") return "JSON parsed from message"
-  if (arg.parsedFromString) return "JSON string parsed for viewing"
-  if (Array.isArray(arg.value)) return "array"
-  if (arg.value === null) return "null"
-  return typeof arg.value
-}
-
-function logArgumentLabel(index: number, total: number) {
-  if (total > 1 && index === 0) return "message"
-  if (total > 1 && index === total - 1) return "payload"
-  if (total > 1 && index === 1) return "event"
-  return `arg ${index + 1}`
-}
-
 function formatLogForCopy(args: LogArgument[]) {
   return args.map((arg) => formatBody(arg.value)).join(" ")
 }
@@ -2318,60 +2448,17 @@ function formatLogSubtitlePreview(message: unknown) {
     .join(" | ")
 }
 
-function buildLogHighlightItems(event: unknown, payload: unknown) {
-  const items: Array<{ label: string; value: string }> = []
-  const eventName = formatCompactLogValue(event)
-  if (eventName) items.push({ label: "event", value: eventName })
-
-  for (const item of payloadSignalEntries(payload).slice(0, 6)) {
-    items.push(item)
-  }
-
-  return items
-}
-
-function payloadSignalEntries(value: unknown): Array<{ label: string; value: string }> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return []
-
-  const record = value as Record<string, unknown>
-  const preferredKeys = [
-    "FORMATNAME",
-    "BID",
-    "ASK",
-    "CURBID",
-    "LOTNO",
-    "ITEMNO",
-    "BUYERNO",
-    "BUYERST",
-    "MINMET",
-    "TYPE",
-  ]
-
-  const preferredEntries = preferredKeys
-    .filter((key) => record[key] != null && String(record[key]) !== "")
-    .map((key) => ({ label: key, value: String(record[key]) }))
-
-  if (preferredEntries.length > 0) return preferredEntries
-
-  return Object.entries(record)
-    .filter(([, entryValue]) => isCompactSignalValue(entryValue))
-    .slice(0, 8)
-    .map(([key, entryValue]) => ({ label: key, value: String(entryValue) }))
-}
-
-function isCompactSignalValue(value: unknown) {
-  if (value == null || value === "") return false
-  return ["string", "number", "boolean"].includes(typeof value)
-}
-
 function formatCompactLogValue(value: unknown) {
   if (typeof value === "string") return value
   if (value instanceof Error) return value.message
   if (Array.isArray(value)) return `Array(${value.length})`
   if (value && typeof value === "object") {
-    const keys = Object.keys(value).slice(0, 4)
-    const suffix = Object.keys(value).length > keys.length ? ", ..." : ""
-    return `{ ${keys.join(", ")}${suffix} }`
+    try {
+      const json = JSON.stringify(value)
+      return json.length > 160 ? `${json.slice(0, 160)}…` : json
+    } catch {
+      return `{ ${Object.keys(value).slice(0, 4).join(", ")} }`
+    }
   }
   return String(value)
 }
