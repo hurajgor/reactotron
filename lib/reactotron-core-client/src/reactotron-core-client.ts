@@ -21,6 +21,16 @@ import { ClientOptions } from "./client-options"
  * send that is not ready logs again, producing unbounded recursion
  * (RangeError: Maximum call stack size exceeded) at startup.
  */
+/**
+ * The WebSocket OPEN readyState.
+ *
+ * `ws` resolves to its browser shim under React Native - a throwing function
+ * with no OPEN constant - so reading it from the package yields `undefined`
+ * and every readyState comparison fails. The value is fixed by the WebSocket
+ * standard, so compare against it directly.
+ */
+const SOCKET_OPEN = 1
+
 const originalConsoleLog: typeof console.log =
   typeof console !== "undefined" && typeof console.log === "function"
     ? console.log.bind(console)
@@ -361,10 +371,19 @@ export class ReactotronImpl
       // trigger our plugins onConnect
       this.plugins.forEach((p) => p.onConnect && p.onConnect())
 
+      // An open socket is usable immediately. getClientId may be async (React
+      // Native reads it from AsyncStorage), and marking readiness only after it
+      // settles left a window where the socket was open but every send - the
+      // client.intro included - was queued and scheduled a reconnect, which
+      // reopened and raced again.
+      this.isReady = true
+
       const getClientIdPromise = getClientId || emptyPromise
 
       getClientIdPromise(name!).then((clientId) => {
-        this.isReady = true
+        // a close during the handshake means this socket is no longer ours
+        if (socket !== this.socket) return
+
         // introduce ourselves
         this.send("client.intro", {
           environment,
@@ -495,7 +514,7 @@ export class ReactotronImpl
 
     const serializedMessage = serialize(fullMessage, this.options.proxyHack)
 
-    if (this.isReady && this.socket.readyState === WebSocket.OPEN) {
+    if (this.isReady && this.socket.readyState === SOCKET_OPEN) {
       // send this command
       try {
         this.socket.send(serializedMessage)
