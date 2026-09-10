@@ -7,7 +7,6 @@ import {
   MdClose,
   MdFiberManualRecord,
   MdHome,
-  MdOutlineAndroid,
   MdOutlineLink,
   MdOutlinePowerSettingsNew,
   MdPhoneIphone,
@@ -26,6 +25,7 @@ import {
   resolveVisualScreenAspectRatio,
   type DeviceFrameLayout,
 } from "./layout"
+import { createLatestFrameProcessor } from "./latestFrameProcessor"
 
 import { getConfiguredServerPort } from "../../config"
 
@@ -145,84 +145,34 @@ const Content = styled.div`
   flex-direction: column;
 `
 
-const TabBar = styled.div`
+const DeviceBar = styled.div`
   display: flex;
   height: 44px;
   min-height: 44px;
-  align-items: stretch;
+  align-items: center;
   gap: 3px;
   box-sizing: border-box;
   padding: 6px 44px 6px 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   border-bottom: 1px solid ${(props) => props.theme.chromeLine};
   background-color: ${(props) => props.theme.backgroundSubtleLight};
 `
 
-const TabActions = styled.div`
-  display: flex;
-  align-self: center;
-  flex-shrink: 0;
-  gap: 3px;
-  margin-left: auto;
-`
-
-const TabGroup = styled.div<{ $active: boolean }>`
-  display: flex;
+const ActiveDeviceSelect = styled.select`
+  width: 220px;
   height: 30px;
-  min-width: max-content;
-  flex: 0 0 auto;
-  align-self: center;
-  align-items: center;
-  gap: 5px;
-  border: 1px solid ${(props) => (props.$active ? props.theme.highlight : "transparent")};
+  flex: 0 0 220px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid ${(props) => props.theme.chromeLine};
   border-radius: 4px;
-  background-color: ${(props) => (props.$active ? props.theme.backgroundLighter : "transparent")};
-  color: ${(props) => (props.$active ? props.theme.foreground : props.theme.foregroundDark)};
+  outline: none;
+  background: ${(props) => props.theme.backgroundLighter};
+  color: ${(props) => props.theme.foreground};
   font-size: 12px;
-  white-space: nowrap;
 
-  &:hover {
-    color: ${(props) => props.theme.foreground};
-  }
-`
-
-const Tab = styled.button`
-  display: flex;
-  height: 100%;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 5px;
-  padding: 0 0 0 8px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-`
-
-const TabName = styled.span`
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-const TabClose = styled.button`
-  display: grid;
-  width: 28px;
-  height: 100%;
-  flex: 0 0 auto;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-left: 1px solid ${(props) => props.theme.chromeLine};
-  border-radius: 0 3px 3px 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-
-  &:hover {
-    background: ${(props) => props.theme.backgroundDarker};
-    color: ${(props) => props.theme.foreground};
+  &:focus-visible {
+    border-color: ${(props) => props.theme.highlight};
   }
 `
 
@@ -599,30 +549,29 @@ function useIOSVideoStream(streamUrl: string | undefined, enabled: boolean) {
     let retryTimer: number | undefined
     let attempts = 0
     let activeReader: ReadableStreamDefaultReader<Uint8Array> | null = null
+    let hasPaintedFrame = false
     const controller = new AbortController()
 
-    const paint = async (frame: Uint8Array) => {
-      const canvas = canvasRef.current
-      if (disposed || !canvas) return
+    const frameProcessor = createLatestFrameProcessor(async (frame: Uint8Array) => {
+      let bitmap: ImageBitmap | undefined
       try {
-        const bitmap = await createImageBitmap(new Blob([frame], { type: "image/jpeg" }))
-        if (disposed) {
-          bitmap.close()
-          return
-        }
+        bitmap = await createImageBitmap(new Blob([frame], { type: "image/jpeg" }))
+        const canvas = canvasRef.current
+        if (disposed || !canvas) return
         if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
           canvas.width = bitmap.width
           canvas.height = bitmap.height
         }
         canvas.getContext("2d")?.drawImage(bitmap, 0, 0)
-        bitmap.close()
-        setIsStreaming(true)
+        if (!hasPaintedFrame) {
+          hasPaintedFrame = true
+          setIsStreaming(true)
+        }
         attempts = 0
-      } catch {
-        // A partial frame at the tail of a broken response is expected; the
-        // next whole frame repaints.
+      } finally {
+        bitmap?.close()
       }
-    }
+    })
 
     const read = async () => {
       try {
@@ -652,7 +601,7 @@ function useIOSVideoStream(streamUrl: string | undefined, enabled: boolean) {
               if (start > 0) buffer = buffer.slice(start)
               break
             }
-            paint(buffer.slice(start, end + 2)).catch(() => undefined)
+            frameProcessor.push(buffer.slice(start, end + 2))
             buffer = buffer.slice(end + 2)
           }
 
@@ -664,6 +613,7 @@ function useIOSVideoStream(streamUrl: string | undefined, enabled: boolean) {
       }
 
       if (disposed || controller.signal.aborted) return
+      hasPaintedFrame = false
       setIsStreaming(false)
       if (attempts >= PREVIEW_RETRY_LIMIT) return
       const delay = PREVIEW_RETRY_DELAY * Math.pow(2, attempts)
@@ -675,6 +625,7 @@ function useIOSVideoStream(streamUrl: string | undefined, enabled: boolean) {
 
     return () => {
       disposed = true
+      frameProcessor.stop()
       window.clearTimeout(retryTimer)
       // Cancelling the reader closes the socket immediately. Aborting alone can
       // leave the previous connection draining, which shows up as a second
@@ -854,7 +805,7 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
     [activeUdid, surfaces]
   )
   const isAndroidSurfaceActive = activeAndroidDevice !== null && activeUdid === null
-  const activeWsUrl = activeSurface?.wsUrl
+  const activeWsUrl = isOpen ? activeSurface?.wsUrl : undefined
   const activePreviewStreamUrl = activeSurface?.streamUrl
   const activeScreenAspectRatio = isAndroidSurfaceActive
     ? androidScreenSize.width / androidScreenSize.height
@@ -880,11 +831,11 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
   )
   const { canvasRef: iosVideoCanvasRef } = useIOSVideoStream(
     activePreviewStreamUrl,
-    Boolean(activeSurface) && !isChoosing
+    isOpen && Boolean(activeSurface) && !isChoosing
   )
   const { canvasRef: androidVideoCanvasRef, error: androidVideoError } = useAndroidVideoStream(
     activeAndroidDevice?.id,
-    isAndroidSurfaceActive && !isChoosing,
+    isOpen && isAndroidSurfaceActive && !isChoosing,
     setAndroidScreenSize
   )
 
@@ -1318,13 +1269,13 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
   const closeSurface = async (udid: string) => {
     if (surfaces.find((surface) => surface.udid === udid)?.recording) {
-      setStatus("Stop the simulator recording before closing this tab.")
+      setStatus("Stop the simulator recording before closing this simulator.")
       setIsError(true)
       return
     }
     const result = (await ipcRenderer.invoke("close-ios-simulator-surface", udid)) as IPCResponse
     if (!result.ok) {
-      setStatus(result.message || "Could not close the simulator tab.")
+      setStatus(result.message || "Could not close the simulator.")
       setIsError(true)
       return
     }
@@ -1342,14 +1293,48 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
 
   const closeAndroidSurface = () => {
     if (isAndroidRecording) {
-      setStatus("Stop the Android recording before closing this tab.")
+      setStatus("Stop the Android recording before closing this device.")
       setIsError(true)
       return
     }
     setActiveAndroidDevice(null)
+    setActiveUdid(surfaces[0]?.udid ?? null)
     setIsChoosing(surfaces.length === 0)
     setStatus("")
     setIsError(false)
+  }
+
+  const activeDeviceValue = isChoosing
+    ? ""
+    : activeSurface
+      ? `ios:${activeSurface.udid}`
+      : activeAndroidDevice
+        ? `android:${activeAndroidDevice.id}`
+        : ""
+  const openDeviceCount = surfaces.length + (activeAndroidDevice ? 1 : 0)
+  const activeDeviceName = activeSurface?.name ?? activeAndroidDevice?.model
+
+  const selectActiveDevice = (value: string) => {
+    if (value.startsWith("ios:")) {
+      setActiveUdid(value.slice("ios:".length))
+      setIsChoosing(false)
+      return
+    }
+    if (
+      value.startsWith("android:") &&
+      activeAndroidDevice?.id === value.slice("android:".length)
+    ) {
+      setActiveUdid(null)
+      setIsChoosing(false)
+    }
+  }
+
+  const closeActiveDevice = () => {
+    if (activeSurface) {
+      closeSurface(activeSurface.udid).catch(() => undefined)
+      return
+    }
+    if (activeAndroidDevice && !isChoosing) closeAndroidSurface()
   }
 
   const takeScreenshot = useCallback(async () => {
@@ -1674,71 +1659,55 @@ function DeviceSurface({ isOpen }: { isOpen: boolean }) {
       )}
       {isOpen && (
         <Content>
-          <TabBar>
-            {surfaces.map((surface) => (
-              <TabGroup key={surface.udid} $active={surface.udid === activeUdid && !isChoosing}>
-                <Tab
-                  type="button"
-                  onClick={() => {
-                    setActiveUdid(surface.udid)
-                    setIsChoosing(false)
-                  }}
-                  title={surface.name}
-                >
-                  <MdPhoneIphone size={15} />
-                  <TabName>{surface.name}</TabName>
-                </Tab>
-                <TabClose
-                  aria-label={`Close ${surface.name} tab`}
-                  title={`Close ${surface.name} tab`}
-                  type="button"
-                  onClick={() => {
-                    closeSurface(surface.udid).catch(() => undefined)
-                  }}
-                >
-                  <MdClose size={14} />
-                </TabClose>
-              </TabGroup>
-            ))}
-            {activeAndroidDevice && (
-              <TabGroup $active={!isChoosing && activeUdid === null}>
-                <Tab
-                  type="button"
-                  onClick={() => {
-                    setActiveUdid(null)
-                    setIsChoosing(false)
-                  }}
-                  title={activeAndroidDevice.model}
-                >
-                  <MdOutlineAndroid size={15} />
-                  <TabName>{activeAndroidDevice.model}</TabName>
-                </Tab>
-                <TabClose
-                  aria-label={`Close ${activeAndroidDevice.model} tab`}
-                  title={`Close ${activeAndroidDevice.model} tab`}
-                  type="button"
-                  onClick={() => {
-                    closeAndroidSurface()
-                  }}
-                >
-                  <MdClose size={14} />
-                </TabClose>
-              </TabGroup>
-            )}
-            <TabActions>
-              <IconButton
-                type="button"
-                title="Add a mobile device"
-                onClick={() => {
-                  setIsChoosing(true)
-                  loadSimulators().catch(() => undefined)
-                  loadAndroidDevices().catch(() => undefined)
-                }}
-              >
-                <MdAdd size={19} />
-              </IconButton>
-            </TabActions>
-          </TabBar>
+          <DeviceBar>
+            <ActiveDeviceSelect
+              aria-label="Active simulator or device"
+              disabled={openDeviceCount === 0}
+              value={activeDeviceValue}
+              onChange={(event) => selectActiveDevice(event.target.value)}
+            >
+              <option value="" disabled>
+                {openDeviceCount === 0 ? "No open devices" : "Select a device"}
+              </option>
+              {surfaces.length > 0 && (
+                <optgroup label="iOS Simulators">
+                  {surfaces.map((surface) => (
+                    <option key={surface.udid} value={`ios:${surface.udid}`}>
+                      {surface.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {activeAndroidDevice && (
+                <optgroup label="Android">
+                  <option value={`android:${activeAndroidDevice.id}`}>
+                    {activeAndroidDevice.model}
+                  </option>
+                </optgroup>
+              )}
+            </ActiveDeviceSelect>
+            <IconButton
+              type="button"
+              aria-label={activeDeviceName ? `Close ${activeDeviceName}` : "Close active device"}
+              title={activeDeviceName ? `Close ${activeDeviceName}` : "Close active device"}
+              disabled={!activeDeviceName || isChoosing}
+              onClick={closeActiveDevice}
+            >
+              <MdClose size={14} />
+            </IconButton>
+            <IconButton
+              type="button"
+              aria-label="Add a mobile device"
+              title="Add a mobile device"
+              onClick={() => {
+                setIsChoosing(true)
+                loadSimulators().catch(() => undefined)
+                loadAndroidDevices().catch(() => undefined)
+              }}
+            >
+              <MdAdd size={19} />
+            </IconButton>
+          </DeviceBar>
           {activeSurface && !isChoosing ? (
             <>
               <ToolBar>
