@@ -17,6 +17,22 @@ claude mcp add --transport http reactotron http://localhost:4567/mcp
 
 That's it. Claude Code can now read your app's timeline, inspect state, dispatch actions, and more. The development desktop app, **Reactotron Dev**, uses port `4568` by default, so use `http://localhost:4568/mcp` when that is the app you started.
 
+## Agent CLI
+
+Reactotron also provides a scriptable CLI for coding agents, CI scripts, and terminal workflows. It uses the same local MCP server and redaction boundary, but it does not require configuring a specific coding assistant.
+
+```bash
+npx @hurajgor/reactotron-cli agent status --json
+npx @hurajgor/reactotron-cli agent timeline --type api.response --limit 20 --json
+npx @hurajgor/reactotron-cli agent network failures --json
+npx @hurajgor/reactotron-cli agent ui press --test-id submit-button --json
+npx @hurajgor/reactotron-cli agent tap --type log --json
+```
+
+The CLI discovers the release port (`4567`) and development port (`4568`) automatically. Use `--client-id` when more than one app is connected, `--port` to choose one server, or `--url` for a custom MCP endpoint. Run `reactotron agent --help` for the full command list.
+
+Most commands emit a stable envelope containing `status`, `summary`, `data`, optional `next_actions`, and optional `artifacts`. With `--json`, `tap` emits newline-delimited JSON events until interrupted. The CLI supports timeline, logs, network, state, AsyncStorage, benchmarks, semantic UI actions, custom commands, Redux dispatch, overlays, and the existing desktop iOS Simulator operations.
+
 ## Enable the React Native agent runtime
 
 The state and timeline tools work with a regular Reactotron connection. To let an MCP client inspect and operate React Native UI, add `agentRuntime()` to your development configuration:
@@ -91,8 +107,8 @@ Reactotron applies a default-on redaction pass to every MCP response, replacing 
 
 Out of the box, the following are replaced with `[REDACTED]`:
 
-- **Sensitive keys** (matched at any nesting level, case-insensitive) — credentials like `password`/`passwd`/`pwd`, `secret`, `client_secret`, `private_key`, `credentials`, `ssn`, `creditcard`; API keys like `api_key`/`apikey`/`x-api-key`; auth tokens like `token`, `bearer`, `jwt`, `access_token`, `refresh_token`, `id_token`; session/CSRF like `session`/`sessionid`, `csrf`/`xsrf`; HTTP header names like `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-Auth-Token`, `X-CSRF-Token`, `X-XSRF-Token`, `X-Forwarded-For`, `X-Real-IP`; and common variants
-- **String values** matching common token formats — Bearer tokens, JWTs (`eyJ...`), OpenAI keys (`sk-...`), Anthropic keys (`sk-ant-...`), GitHub PATs/OAuth/user-to-server tokens (`ghp_/ghs_/gho_/ghu_/ghr_...`), Slack tokens (`xoxb-...`), AWS access key IDs (`AKIA...`), Google API keys (`AIza...`), Stripe keys (`sk_live_/pk_test_/...`), and PEM-encoded private key blocks
+- **Sensitive keys** (matched at any nesting level, case-insensitive) — credentials like `password`/`passwd`/`pwd`, `secret`, `client_secret`, `private_key`, `credentials`, `ssn`, `creditcard`; API keys like `api_key`/`apikey`/`x-api-key`; auth tokens like `token`, `bearer`, `jwt`, `access_token`, `refresh_token`, `id_token`; session/CSRF like `session`/`sessionid`, `csrf`/`xsrf`; device/network identifiers like `deviceid`/`device_id` and `ipaddress`/`ip_address`; HTTP header names like `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`, `X-Auth-Token`, `X-CSRF-Token`, `X-XSRF-Token`, `X-Forwarded-For`, `X-Real-IP`; and common variants
+- **String values** matching common token formats — Bearer tokens, JWTs (`eyJ...`), OpenAI keys (`sk-...`), Anthropic keys (`sk-ant-...`), GitHub PATs/OAuth/user-to-server tokens (`ghp_/ghs_/gho_/ghu_/ghr_...`), Slack tokens (`xoxb-...`), AWS access key IDs (`AKIA...`), Google API keys (`AIza...`), Stripe keys (`sk_live_/pk_test_/...`), PEM-encoded private key blocks, and private IPv4 addresses
 - **URL query parameters** whose names match any sensitive key (e.g. `?api_key=abc` becomes `?api_key=[REDACTED]`)
 - **Form-urlencoded bodies** — strings shaped like `k=v&k=v` (e.g. `application/x-www-form-urlencoded` request bodies) get the same per-field redaction as URL query parameters
 

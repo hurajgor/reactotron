@@ -84,6 +84,60 @@ describe("agentRuntime", () => {
     )
   })
 
+  test("falls back to captured elements when a devtools renderer rejects fiber access", async () => {
+    const originalHook = (globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__
+    ;(globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      renderers: new Map([[1, {}]]),
+      getFiberRoots: () => {
+        throw new Error("No compatible navigation context")
+      },
+    }
+
+    try {
+      const { plugin, sent } = createPlugin()
+      React.createElement("Pressable", { testID: "fallback-button", children: "Continue" })
+
+      plugin.onCommand?.({
+        type: "agent.ui.snapshot.request",
+        payload: { requestId: "snapshot-fallback" },
+      } as any)
+      await flush()
+
+      expect(sent[0].payload.status).toBe("success")
+      expect(sent[0].payload.snapshot.nodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ testID: "fallback-button", text: "Continue" }),
+        ])
+      )
+    } finally {
+      ;(globalThis as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = originalHook
+    }
+  })
+
+  test("snapshots captured elements whose refs reject capability access", async () => {
+    const { plugin, sent } = createPlugin()
+    React.createElement("ScrollView", { testID: "guarded-ref" })
+    const captured = (globalThis as any).__REACTOTRON_AGENT_RUNTIME_CAPTURE__.elements.get(
+      "guarded-ref"
+    )[0]
+    captured.ref = new Proxy({}, {
+      get: () => {
+        throw new Error("Couldn't find a navigation context")
+      },
+    })
+
+    plugin.onCommand?.({
+      type: "agent.ui.snapshot.request",
+      payload: { requestId: "snapshot-guarded-ref" },
+    } as any)
+    await flush()
+
+    expect(sent[0].payload.status).toBe("success")
+    expect(sent[0].payload.snapshot.nodes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ testID: "guarded-ref" })])
+    )
+  })
+
   test("infers press from captured onPress props", async () => {
     const { plugin, sent } = createPlugin()
     const onPress = jest.fn(() => ({ pressed: true }))

@@ -35,6 +35,14 @@ describe("redact()", () => {
     expect(result.user.password).toBe(REDACTED)
   })
 
+  test("preserves Date values for JSON serialization", () => {
+    const date = new Date("2026-09-10T12:34:56.000Z")
+    const result = redact({ date }, rules) as any
+
+    expect(result.date).toBe(date)
+    expect(JSON.stringify(result)).toBe('{"date":"2026-09-10T12:34:56.000Z"}')
+  })
+
   test("redacts header names in objects under 'headers' keys", () => {
     const data = {
       request: {
@@ -365,6 +373,23 @@ describe("DEFAULT_REDACTION_RULES", () => {
     const keys = DEFAULT_REDACTION_RULES.sensitiveKeys ?? []
     expect(keys).toContain("x-forwarded-for")
     expect(keys).toContain("x-real-ip")
+  })
+
+  test("includes device and IP identifier variants", () => {
+    const keys = DEFAULT_REDACTION_RULES.sensitiveKeys ?? []
+    expect(keys).toContain("deviceid")
+    expect(keys).toContain("device_id")
+    expect(keys).toContain("ipaddress")
+    expect(keys).toContain("ip_address")
+  })
+
+  test("redacts private IPv4 addresses but preserves public addresses", () => {
+    const rules: McpRedactionRules = { valuePatterns: DEFAULT_REDACTION_RULES.valuePatterns }
+    const value = "http://10.1.2.3:8081 172.16.4.5 172.31.4.5 192.168.1.9 8.8.8.8"
+
+    expect(redact(value, rules)).toBe(
+      `http://${REDACTED}:8081 ${REDACTED} ${REDACTED} ${REDACTED} 8.8.8.8`
+    )
   })
 
   test("has expected default sensitive keys", () => {

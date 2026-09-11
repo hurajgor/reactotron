@@ -8,6 +8,7 @@ type StoreType = {
   mcpRedactionSensitiveKeys: string[]
   mcpRedactionStatePathPatterns: string[]
   mcpRedactionValuePatterns: string[]
+  mcpRedactionRulesVersion: number
   mcpAllowClientDisable: boolean
   mcpAllowClientRemoveRules: boolean
 }
@@ -60,6 +61,10 @@ const config = new Store<StoreType>({
       items: { type: "string" },
       default: DEFAULT_REDACTION_RULES.valuePatterns,
     },
+    mcpRedactionRulesVersion: {
+      type: "number",
+      default: 0,
+    },
     mcpAllowClientDisable: {
       type: "boolean",
       default: DEFAULT_SERVER_CONFIG.allowClientDisable,
@@ -80,6 +85,29 @@ if (!config.has("commandHistory")) {
 }
 if (!config.has("mcpPort")) {
   config.set("mcpPort", defaultMcpPort)
+}
+
+const currentRedactionRulesVersion = 1
+if (config.get("mcpRedactionRulesVersion") < currentRedactionRulesVersion) {
+  config.set(
+    "mcpRedactionSensitiveKeys",
+    Array.from(
+      new Set([
+        ...(config.get("mcpRedactionSensitiveKeys") ?? []),
+        ...(DEFAULT_REDACTION_RULES.sensitiveKeys ?? []),
+      ])
+    )
+  )
+  config.set(
+    "mcpRedactionValuePatterns",
+    Array.from(
+      new Set([
+        ...(config.get("mcpRedactionValuePatterns") ?? []),
+        ...(DEFAULT_REDACTION_RULES.valuePatterns ?? []),
+      ])
+    )
+  )
+  config.set("mcpRedactionRulesVersion", currentRedactionRulesVersion)
 }
 
 // The dev app must run beside the released app. Keep its saved defaults pinned

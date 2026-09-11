@@ -24,6 +24,9 @@ export const DEFAULT_REDACTION_RULES: McpRedactionRules = {
     "authorization", "cookie", "set-cookie", "proxy-authorization",
     "x-auth-token", "x-csrf-token", "x-xsrf-token", "csrf-token",
     "x-forwarded-for", "x-real-ip",
+    // Device and network identifiers
+    "deviceid", "device_id", "device-id",
+    "ipaddress", "ip_address", "ip-address",
   ],
   statePathPatterns: [],
   valuePatterns: [
@@ -47,6 +50,8 @@ export const DEFAULT_REDACTION_RULES: McpRedactionRules = {
     "(?:sk|pk|rk)_(?:test|live)_[A-Za-z0-9]{24,}",
     // PEM-encoded private key blocks (RSA, EC, DSA, OPENSSH, or generic)
     "-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\\s\\S]+?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----",
+    // Private IPv4 addresses
+    "\\b(?:10(?:\\.\\d{1,3}){3}|192\\.168(?:\\.\\d{1,3}){2}|172\\.(?:1[6-9]|2\\d|3[01])(?:\\.\\d{1,3}){2})\\b",
   ],
 }
 
@@ -265,6 +270,9 @@ function redactValue(data: unknown, ctx: RedactionContext, currentPath: string):
   }
 
   if (typeof data !== "object") return data
+
+  // Preserve Date values so the final JSON serializer can emit their ISO form.
+  if (data instanceof Date) return data
 
   if (Array.isArray(data)) {
     if (!ctx.parsed.trackPaths) {

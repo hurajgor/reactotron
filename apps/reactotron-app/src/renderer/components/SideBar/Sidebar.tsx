@@ -10,7 +10,6 @@ import {
   MdOutlinePhoneIphone,
   MdOutlinePhonelinkSetup,
   MdOutlineSettings,
-  MdOutlineSmartToy,
   MdOutlineTimeline,
   MdOutlineWarningAmber,
 } from "react-icons/md"
@@ -121,7 +120,6 @@ function SideBar({
         text="Timeline"
         isCompact={isCompact}
       />
-      <SideBarButton icon={MdOutlineSmartToy} path="/agent" text="Agent" isCompact={isCompact} />
       <SideBarButton
         icon={MdOutlineAssignment}
         path="/state/subscriptions"

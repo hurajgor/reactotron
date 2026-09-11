@@ -8,8 +8,8 @@ Reactotron is a desktop debugger for React and React Native. This fork builds on
 
 - Inspect network requests, responses, headers, payloads, and timing alongside application logs.
 - Search and filter traffic by method, status, duration, content type, host, endpoint, time window, and duplicates.
-- Explore React Native runtime UI through the Agent screen, using `testID`, labels, text, roles, and placeholders to find nodes and run supported actions.
-- Connect coding agents through MCP to inspect debug data, operate the runtime UI semantically, and control desktop iOS Simulator workflows.
+- Explore and operate React Native runtime UI through the Agent CLI or MCP, using `testID`, labels, text, roles, and placeholders.
+- Connect coding agents through MCP or terminal workflows to inspect debug data and control desktop iOS Simulator workflows.
 - Create, open, stream, and control iOS Simulators from Reactotron on macOS, without switching to Simulator.app.
 - Stream and control Android emulators and physical ADB devices directly in Reactotron.
 - Choose a theme and light, dark, or system appearance; use a compact sidebar; and tailor the Timeline layout to your workflow.
@@ -35,9 +35,9 @@ Use the Timeline to:
 
 ### Agentic development and MCP
 
-The Agent screen and MCP server give people and coding agents a shared, semantic view of a connected React Native app. Agents can request a UI snapshot, find elements by `testID`, runtime ID, text, accessibility label, role, hint, or placeholder, and perform supported press, fill, and scroll actions without relying on screenshot coordinates. The MCP server also provides timelines, network activity, logs, state tools, custom commands, and desktop iOS Simulator workflows to local coding assistants such as Claude Code and Codex.
+The Agent CLI and MCP server give coding agents a semantic view of a connected React Native app. Agents can request a UI snapshot, find elements by `testID`, runtime ID, text, accessibility label, role, hint, or placeholder, and perform supported press, fill, and scroll actions without relying on screenshot coordinates. They also provide timelines, network activity, logs, state tools, custom commands, and desktop iOS Simulator workflows to local coding assistants such as Claude Code and Codex.
 
-See the [MCP guide](./docs/mcp.md) for client setup, redaction, available tools, and iOS Simulator requirements.
+See the [MCP and Agent CLI guide](./docs/mcp.md) for client setup, redaction, available tools, and iOS Simulator requirements.
 
 ### Themes and layout
 

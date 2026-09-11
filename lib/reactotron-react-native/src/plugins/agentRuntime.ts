@@ -134,12 +134,16 @@ function hasFillHandler(props: Record<string, any>) {
 }
 
 function hasScrollRef(candidate: CapturedElement) {
-  return Boolean(
-    candidate.ref &&
-      (typeof candidate.ref.scrollTo === "function" ||
-        typeof candidate.ref.scrollToOffset === "function" ||
-        typeof candidate.ref.scrollToLocation === "function")
-  )
+  try {
+    return Boolean(
+      candidate.ref &&
+        (typeof candidate.ref.scrollTo === "function" ||
+          typeof candidate.ref.scrollToOffset === "function" ||
+          typeof candidate.ref.scrollToLocation === "function")
+    )
+  } catch {
+    return false
+  }
 }
 
 function scoreCandidate(candidate: CapturedElement, action?: string) {
@@ -444,9 +448,13 @@ function collectFiberNodes(): { nodes: AgentUiNode[]; elements: Map<string, Capt
   }
 
   for (const rendererId of hook.renderers.keys()) {
-    const roots = hook.getFiberRoots(rendererId)
-    for (const root of roots) {
-      visitFiber(root.current)
+    try {
+      const roots = hook.getFiberRoots(rendererId)
+      for (const root of roots) {
+        visitFiber(root.current)
+      }
+    } catch {
+      // Some devtools integrations register renderers without exposing compatible fiber roots.
     }
   }
 
